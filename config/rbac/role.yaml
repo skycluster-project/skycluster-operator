@@ -1,0 +1,35 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders
+  - skyvms
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/finalizers
+  - skyvms/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/status
+  - skyvms/status
+  verbs:
+  - get
+  - patch
+  - update
