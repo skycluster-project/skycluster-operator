@@ -42,11 +42,6 @@ type ProviderRefSpec struct {
 	ProviderZone        string `json:"providerZone,omitempty"`
 }
 
-type SkyDependency struct {
-	Kind     string `json:"kind"`
-	ApiGroup string `json:"apiGroup"`
-}
-
 type MonitoringMetricSpec struct {
 	Type     string       `json:"type"`
 	Resource ResourceSpec `json:"resource,omitempty"`
@@ -61,4 +56,16 @@ type MetricSpec struct {
 	Endpoint string `json:"endpoint"`
 	Port     int    `json:"port"`
 	Protocol string `json:"protocol"`
+}
+
+type ObjectSpec struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+type ObjectGroupSpec struct {
+	Group   string       `json:"group"`
+	Kind    string       `json:"kind"`
+	Version string       `json:"version,omitempty"`
+	Items   []ObjectSpec `json:"items"`
 }

@@ -235,6 +235,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SkyVM")
 		os.Exit(1)
 	}
+	if err = (&corecontroller.SkyXRDReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

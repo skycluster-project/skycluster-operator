@@ -5,6 +5,32 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - skyxrds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - skyxrds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - skyxrds/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - core.skycluster.io
   resources:
   - skyproviders
@@ -33,3 +59,15 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - xrds.skycluster.io
+  resources:
+  - providersetups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

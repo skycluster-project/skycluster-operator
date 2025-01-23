@@ -2,14 +2,13 @@ package core
 
 import (
 	"context"
+	"reflect"
 
 	"encoding/json"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -17,56 +16,71 @@ import (
 )
 
 // Unified function using the interface
-func GeneratetLabelsforProvider(providerRef corev1alpha1.ProviderRefSpec) map[string]string {
-	return map[string]string{
-		"skycluster.io/provider-name":   providerRef.ProviderName,
-		"skycluster.io/provider-region": providerRef.ProviderRegion,
-		"skycluster.io/provider-zone":   providerRef.ProviderZone,
-		"skycluster.io/project-id":      uuid.New().String(),
-	}
-}
+// func GeneratetLabelsforProvider(providerRef corev1alpha1.ProviderRefSpec) map[string]string {
+// 	return map[string]string{
+// 		"skycluster.io/provider-name":   providerRef.ProviderName,
+// 		"skycluster.io/provider-region": providerRef.ProviderRegion,
+// 		"skycluster.io/provider-zone":   providerRef.ProviderZone,
+// 		"skycluster.io/project-id":      uuid.New().String(),
+// 	}
+// }
 
-func ListByGroupVersionKind(
-	ctx context.Context, kubeClient client.Client, namespace, depKind, depGroup, depAPIVersion string) (*unstructured.UnstructuredList, error) {
-	gvk := schema.GroupVersionKind{
+func GetDependencies(
+	ctx context.Context, kubeClient client.Client, searchLabels map[string]string,
+	namespace, depKind, depGroup, depAPIVersion string) (*unstructured.UnstructuredList, error) {
+	unstructuredObjList := &unstructured.UnstructuredList{}
+	unstructuredObjList.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   depGroup,
 		Version: depAPIVersion,
 		Kind:    depKind,
-	}
-	unstructuredObj := &unstructured.Unstructured{}
-	unstructuredObj.SetGroupVersionKind(gvk)
-	unstructuredObj.SetNamespace(namespace)
-	// Iterate over the list of XProviderSetups
-	unstructuredObjList := &unstructured.UnstructuredList{}
-	unstructuredObjList.SetGroupVersionKind(gvk)
-	if err := kubeClient.List(ctx, unstructuredObjList, &client.ListOptions{
-		Namespace: namespace,
-	}); err != nil {
+	})
+	if err := kubeClient.List(ctx, unstructuredObjList, client.MatchingLabels(searchLabels)); err != nil {
 		return nil, err
 	}
 	return unstructuredObjList, nil
 }
 
-func DependencyExists(unstructuredObjList unstructured.UnstructuredList, searchLabels map[string]string) (bool, error) {
-	for _, foundObj := range unstructuredObjList.Items {
-		foundObjLabels, found, err := unstructured.NestedMap(foundObj.Object, "metadata", "labels")
-		if !found || err != nil {
-			return false, errors.Wrap(err, "cannot get nested labels")
-		}
-		matched := true
-		for key, value := range searchLabels {
-			foundValue, exists := foundObjLabels[key]
-			if !exists || foundValue != value {
-				matched = false
-				break
-			}
-		}
-		if matched {
-			return true, nil
-		}
-	}
-	return false, nil
-}
+// func ListByGroupVersionKind(
+// 	ctx context.Context, kubeClient client.Client, namespace, depKind, depGroup, depAPIVersion string) (*unstructured.UnstructuredList, error) {
+// 	gvk := schema.GroupVersionKind{
+// 		Group:   depGroup,
+// 		Version: depAPIVersion,
+// 		Kind:    depKind,
+// 	}
+// 	unstructuredObj := &unstructured.Unstructured{}
+// 	unstructuredObj.SetGroupVersionKind(gvk)
+// 	unstructuredObj.SetNamespace(namespace)
+// 	// Iterate over the list of XProviderSetups
+// 	unstructuredObjList := &unstructured.UnstructuredList{}
+// 	unstructuredObjList.SetGroupVersionKind(gvk)
+// 	if err := kubeClient.List(ctx, unstructuredObjList, client.InNamespace(namespace), &client.ListOptions{
+// 		Namespace: namespace,
+// 	}); err != nil {
+// 		return nil, err
+// 	}
+// 	return unstructuredObjList, nil
+// }
+
+// func DependencyExists(unstructuredObjList unstructured.UnstructuredList, searchLabels map[string]string) (bool, error) {
+// 	for _, foundObj := range unstructuredObjList.Items {
+// 		foundObjLabels, found, err := unstructured.NestedMap(foundObj.Object, "metadata", "labels")
+// 		if !found || err != nil {
+// 			return false, errors.Wrap(err, "cannot get nested labels")
+// 		}
+// 		matched := true
+// 		for key, value := range searchLabels {
+// 			foundValue, exists := foundObjLabels[key]
+// 			if !exists || foundValue != value {
+// 				matched = false
+// 				break
+// 			}
+// 		}
+// 		if matched {
+// 			return true, nil
+// 		}
+// 	}
+// 	return false, nil
+// }
 
 func DeepCopyField(field interface{}) (map[string]interface{}, error) {
 	fieldBytes, err := json.Marshal(field)
@@ -99,9 +113,6 @@ func GetConfigMapsByLabels(ctx context.Context, namespace string, searchLabels m
 	if err := kubeClient.List(ctx, cmList, listOptions); err != nil {
 		return nil, err
 	}
-	if len(cmList.Items) == 0 {
-		return nil, nil
-	}
 	return cmList, nil
 }
 
@@ -112,4 +123,23 @@ func GetConfigMap(ctx context.Context, name, namespace string, kubeClient client
 		return nil, err
 	}
 	return cm, nil
+}
+
+func SliceContainObj(slice []interface{}, obj interface{}) bool {
+	for _, sliceObj := range slice {
+		if reflect.DeepEqual(sliceObj, obj) {
+			return true
+		}
+	}
+	return false
+}
+
+func setNestedFieldNoCopy(obj map[string][]interface{}, value interface{}, field string) error {
+	m := obj
+	if val, ok := m[field]; ok {
+		val = append(val, value)
+	} else {
+		return errors.New("field not found in the object")
+	}
+	return nil
 }

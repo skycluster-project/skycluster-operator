@@ -19,6 +19,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,6 +31,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 )
 
@@ -62,9 +64,14 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		corev1alpha1.SkyClusterProjectID,
 	}
 	if labelExists := LabelsExist(obj.Labels, labelKeys); !labelExists {
-		newLabels := GeneratetLabelsforProvider(obj.Spec.ProviderRef)
+		logger.Info("default labels do not exist, adding...")
 		// Add labels based on the fields
-		modified = r.compareAndUpdateLabels(&obj, newLabels)
+		modified = r.compareAndUpdateLabels(&obj, map[string]string{
+			"skycluster.io/provider-name":   obj.Spec.ProviderRef.ProviderName,
+			"skycluster.io/provider-region": obj.Spec.ProviderRef.ProviderRegion,
+			"skycluster.io/provider-zone":   obj.Spec.ProviderRef.ProviderZone,
+			"skycluster.io/project-id":      uuid.New().String(),
+		})
 	}
 
 	providerLabels := map[string]string{
@@ -76,37 +83,34 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		logger.Error(err, "failed to get provider type from ConfigMap")
 		return ctrl.Result{}, err
 	} else {
+		logger.Info("Adding provider type label...")
 		obj.Spec.ProviderRef.ProviderType = providerType
 		obj.Labels[corev1alpha1.SkyClusterProviderType] = providerType
 		modified = true
 	}
 
+	// Namespaced dependencies
 	// Dependencies: [ProviderSetup (XProviderSetup)]
-	dependencies, err := ListByGroupVersionKind(ctx, r.Client, obj.Namespace, "ProviderSetup", "xrds.skycluster.io", "v1alpha1")
-	if err != nil {
-		logger.Error(err, "failed to list ProviderSetups")
-		return ctrl.Result{}, err
-	}
-	depExists, err := DependencyExists(*dependencies, map[string]string{
+	searchLabels := map[string]string{
 		corev1alpha1.SkyClusterProviderName:   obj.Spec.ProviderRef.ProviderName,
 		corev1alpha1.SkyClusterProviderRegion: obj.Spec.ProviderRef.ProviderRegion,
 		corev1alpha1.SkyClusterProviderZone:   obj.Spec.ProviderRef.ProviderZone,
-	})
-	if err != nil {
-		logger.Error(err, "failed to check if XProviderSetup exists")
-		return ctrl.Result{}, err
 	}
-	if !depExists {
+	dependenciesObj, err := GetDependencies(ctx, r.Client, searchLabels, obj.Namespace, "ProviderSetup", "xrds.skycluster.io", "v1alpha1")
+	if err != nil || len(dependenciesObj.Items) == 0 {
 		logger.Info("ProviderSetup does not exists")
 		if err := r.createProviderSetup(ctx, &obj); err != nil {
 			logger.Error(err, "failed to create ProviderSetup")
 			return ctrl.Result{}, err
 		}
 		logger.Info("ProviderSetup created")
+	} else {
+		logger.Info("ProviderSetup exists, skipping creating...")
 	}
 
 	// if the SkyProvider obejct is modified, update it
 	if modified {
+		logger.Info("SkyProvider modified")
 		if err := r.Update(ctx, &obj); err != nil {
 			logger.Error(err, "failed to update object with project-id")
 			return ctrl.Result{}, err
@@ -170,13 +174,37 @@ func (r *SkyProviderReconciler) createProviderSetup(ctx context.Context, obj *co
 	if err := unstructured.SetNestedMap(unstructuredObj.Object, providerRefMap, "spec", "providerRef"); err != nil {
 		return errors.Wrap(err, "failed to set providerRef")
 	}
-	// set the namespace
+	// This object is namespaced so let's set the namespace
 	if err := unstructured.SetNestedField(unstructuredObj.Object, obj.Namespace, "metadata", "namespace"); err != nil {
 		return errors.Wrap(err, "failed to set namespace")
 	}
-	// Set the owner reference
-	if err := ctrl.SetControllerReference(obj, unstructuredObj, r.Scheme); err != nil {
-		return errors.Wrap(err, "failed to set owner reference")
+
+	// Instead of setting owner reference, we set fields "dependsOn" and "dependents"
+	// Because we may want to keep this object even if the SkyProvider object is deleted.
+	// We need to set dependent field in ProviderSetup and dependsOn field in the SkyProvider object
+	// SkyProvider -- depends on --> ProviderSetup
+	// skyProviderObj := corev1alpha1.ObjectSpec{Name: obj.Name, Namespace: obj.Namespace}
+	currentObj := corev1alpha1.ObjectSpec{
+		Name:      obj.Name,
+		Namespace: obj.Namespace,
+	}
+	// check if there are any existing dependents, when we create an object for the first time,
+	// this is obviously empty
+
+	skyObj := corev1alpha1.ObjectGroupSpec{
+		Group: obj.GroupVersionKind().Group,
+		Kind:  reflect.TypeOf(obj).Elem().Name(),
+		Items: []corev1alpha1.ObjectSpec{currentObj},
+	}
+
+	logger := log.FromContext(ctx)
+	logger.Info("Setting the dependents field set field")
+
+	m := unstructuredObj.Object["spec"]
+	if valMap, ok := m.(map[string][]interface{}); ok {
+		if err := setNestedFieldNoCopy(valMap, skyObj, "dependents"); err != nil {
+			return errors.Wrap(err, "failed to set dependents")
+		}
 	}
 
 	annot := map[string]string{
