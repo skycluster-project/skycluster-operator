@@ -62,7 +62,7 @@ rules:
 - apiGroups:
   - xrds.skycluster.io
   resources:
-  - providersetups
+  - skyproviders
   verbs:
   - create
   - delete

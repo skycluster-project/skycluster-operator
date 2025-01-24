@@ -61,6 +61,9 @@ type MetricSpec struct {
 type ObjectSpec struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
+	Group     string `json:"group"`
+	Kind      string `json:"kind"`
+	Version   string `json:"version,omitempty"`
 }
 
 type ObjectGroupSpec struct {

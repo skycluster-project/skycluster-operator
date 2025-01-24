@@ -24,10 +24,10 @@ import (
 type SkyProviderSpec struct {
 	SecGroup SecGroup `json:"secGroup,omitempty"`
 	// IpCidrRange       string          `json:"ipCidrRange,omitempty"`
-	KeypairRef  KeypairRefSpec    `json:"keypairRef,omitempty"`
-	ProviderRef ProviderRefSpec   `json:"providerRef,omitempty"`
-	DependsOn   []ObjectGroupSpec `json:"dependsOn,omitempty"`
-	Dependents  []ObjectGroupSpec `json:"dependents,omitempty"`
+	KeypairRef  KeypairRefSpec  `json:"keypairRef,omitempty"`
+	ProviderRef ProviderRefSpec `json:"providerRef,omitempty"`
+	DependsOn   []ObjectSpec    `json:"dependsOn,omitempty"`
+	Dependents  []ObjectSpec    `json:"dependents,omitempty"`
 }
 
 // SkyProviderStatus defines the observed state of SkyProvider.

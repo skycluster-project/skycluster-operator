@@ -41,21 +41,21 @@ type SkyXRDReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=skyxrds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=skyxrds/finalizers,verbs=update
 
-// +kubebuilder:rbac:groups=xrds.skycluster.io,resources=providersetups,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=xrds.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	logger.Info(fmt.Sprintf("ReconcilingSkyXRD %s %s", req.Name, req.NamespacedName))
+	logger.Info(fmt.Sprintf("[SkyXRD]\tqq%s %s", req.Name, req.NamespacedName))
 
 	// Fetch the object
-	providerSetupObj, err := r.GetUnstructuredResource(ctx, "ProviderSetup", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
+	SkyProviderObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
 	if err != nil {
 		logger.Error(err, "unable to fetch object, maybe it is deleted?")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	if providerSetupObj != nil {
-		logger.Info(fmt.Sprintf("ProviderSetup %s %s", providerSetupObj.GetName(), providerSetupObj.GetNamespace()))
+	if SkyProviderObj != nil {
+		logger.Info(fmt.Sprintf("[SkyProvider]\t%s %s", SkyProviderObj.GetName(), SkyProviderObj.GetNamespace()))
 	}
 
 	return ctrl.Result{}, nil
@@ -66,15 +66,15 @@ func (r *SkyXRDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	gvk := schema.GroupVersionKind{
 		Group:   "xrds.skycluster.io",
 		Version: "v1alpha1",
-		Kind:    "ProviderSetup",
+		Kind:    "SkyProvider",
 	}
-	unstructuredProviderSetupObj := &unstructured.Unstructured{}
-	unstructuredProviderSetupObj.SetGroupVersionKind(gvk)
+	unstructuredSkyProviderObj := &unstructured.Unstructured{}
+	unstructuredSkyProviderObj.SetGroupVersionKind(gvk)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		// For(&corev1alpha1.SkyXRD{}).
 		Watches(
-			unstructuredProviderSetupObj,
+			unstructuredSkyProviderObj,
 			&handler.EnqueueRequestForObject{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
 		).
 		Named("core-skyxrd").
