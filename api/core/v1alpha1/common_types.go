@@ -58,17 +58,10 @@ type MetricSpec struct {
 	Protocol string `json:"protocol"`
 }
 
-type ObjectSpec struct {
+type ObjectDescriptor struct {
 	Name      string `json:"name"`
 	Namespace string `json:"namespace"`
 	Group     string `json:"group"`
 	Kind      string `json:"kind"`
 	Version   string `json:"version,omitempty"`
-}
-
-type ObjectGroupSpec struct {
-	Group   string       `json:"group"`
-	Kind    string       `json:"kind"`
-	Version string       `json:"version,omitempty"`
-	Items   []ObjectSpec `json:"items"`
 }

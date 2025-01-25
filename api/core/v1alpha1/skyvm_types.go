@@ -29,7 +29,8 @@ type SkyVMSpec struct {
 	Image                string                 `json:"image,omitempty"`
 	MonitoringMetricList []MonitoringMetricSpec `json:"monitoringMetrics,omitempty"`
 	ProviderRef          ProviderRefSpec        `json:"providerRef,omitempty"`
-	SkyDependencyList    []SkyDependency        `json:"skyDependencies,omitempty"`
+	DependsOn            []ObjectDescriptor     `json:"dependsOn,omitempty"`
+	DependedBy           []ObjectDescriptor     `json:"dependedBy,omitempty"`
 }
 
 // SkyVMStatus defines the observed state of SkyVM.

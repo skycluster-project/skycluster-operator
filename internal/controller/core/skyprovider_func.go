@@ -10,21 +10,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func updateIPCidrConfigMap(kubeClient client.Client, configMap *corev1.ConfigMap, currentIpSubnet string) error {
+func updateIPCidrConfigMap(kubeClient client.Client, configMap *corev1.ConfigMap, currentIpSubnet int) error {
 	data := configMap.Data
-	currentIpSubnetInt, err := strconv.Atoi(currentIpSubnet)
-	if err != nil {
-		return errors.Wrap(err, "failed to convert currentIpSubnet to int")
-	}
-	currentIpSubnetInt++
-	data["currentIpSubnet"] = strconv.Itoa(currentIpSubnetInt)
+	data["currentIpSubnet"] = strconv.Itoa(currentIpSubnet)
 	if err := kubeClient.Update(context.Background(), configMap); err != nil {
 		return errors.Wrap(err, "failed to update ConfigMap")
 	}
 	return nil
 }
 
-func getIpCidrPartsFromSkyProvider(kubeClient client.Client, obj *corev1alpha1.SkyProvider) (string, string, *corev1.ConfigMap, error) {
+func getIpCidrPartsFromSkyProvider(kubeClient client.Client, obj corev1alpha1.SkyProvider) (string, string, *corev1.ConfigMap, error) {
 	providerName := obj.Spec.ProviderRef.ProviderName
 
 	// get a config map with label config-type: ip-cidr-ranges

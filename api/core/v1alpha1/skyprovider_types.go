@@ -24,10 +24,10 @@ import (
 type SkyProviderSpec struct {
 	SecGroup SecGroup `json:"secGroup,omitempty"`
 	// IpCidrRange       string          `json:"ipCidrRange,omitempty"`
-	KeypairRef  KeypairRefSpec  `json:"keypairRef,omitempty"`
-	ProviderRef ProviderRefSpec `json:"providerRef,omitempty"`
-	DependsOn   []ObjectSpec    `json:"dependsOn,omitempty"`
-	Dependents  []ObjectSpec    `json:"dependents,omitempty"`
+	KeypairRef  KeypairRefSpec     `json:"keypairRef,omitempty"`
+	ProviderRef ProviderRefSpec    `json:"providerRef,omitempty"`
+	DependsOn   []ObjectDescriptor `json:"dependsOn,omitempty"`
+	DependedBy  []ObjectDescriptor `json:"dependedBy,omitempty"`
 }
 
 // SkyProviderStatus defines the observed state of SkyProvider.
@@ -59,9 +59,4 @@ type SkyProviderList struct {
 
 func init() {
 	SchemeBuilder.Register(&SkyProvider{}, &SkyProviderList{})
-}
-
-// Implement the interface for SkyProvider
-func (obj *SkyProvider) GetProviderRef() ProviderRefSpec {
-	return obj.Spec.ProviderRef
 }
