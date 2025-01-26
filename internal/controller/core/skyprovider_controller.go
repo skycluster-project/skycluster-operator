@@ -52,9 +52,10 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Dependencies: Normally there should be only one Kind per group
 	// And I assume only one dependency of a single type for now
 	depSpecList := SkyDependencies["SkyProvider"]
-	depSpecDetailedList := []SkyDependency{}
+	depSpecDetailedList := make([]SkyDependency, len(depSpecList))
 	copy(depSpecDetailedList, depSpecList)
-	for _, dep := range depSpecDetailedList {
+	for i := range depSpecDetailedList {
+		dep := &depSpecDetailedList[i]
 		dep.Namespace, dep.Created, dep.Updated = req.Namespace, false, false
 	}
 
@@ -115,12 +116,14 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	dependenciesObjectList := map[string]*unstructured.Unstructured{}
 
-	for _, dep := range depSpecDetailedList {
+	for i := range depSpecDetailedList {
 		var depObj *unstructured.Unstructured
+		dep := &depSpecDetailedList[i]
 
 		s := map[string]string{
 			"kind":      dep.Kind,
 			"group":     dep.Group,
+			"version":   dep.Version,
 			"namespace": dep.Namespace,
 		}
 		if depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, s); err != nil {

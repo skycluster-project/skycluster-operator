@@ -20,8 +20,7 @@ import (
 // Object Functions //////////////////////
 
 func ListUnstructuredObjectsByLabels(
-	kubeClient client.Client,
-	searchLabels map[string]string, refType map[string]string) (*unstructured.UnstructuredList, error) {
+	kubeClient client.Client, searchLabels map[string]string, refType map[string]string) (*unstructured.UnstructuredList, error) {
 	// Iterate over the list of objects with given group, version and kind
 	// and search for the object with the given labels
 	unstructuredObjList := &unstructured.UnstructuredList{}
