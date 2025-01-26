@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"reflect"
 
 	"encoding/json"
 
@@ -14,15 +15,13 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Object Functions //////////////////////
 
-func FilterObjectByLabels(
+func ListUnstructuredObjectsByLabels(
 	kubeClient client.Client,
 	searchLabels map[string]string, refType map[string]string) (*unstructured.UnstructuredList, error) {
-	// namespace, depKind, depGroup, depVersion string) (*unstructured.UnstructuredList, error) {
 	// Iterate over the list of objects with given group, version and kind
 	// and search for the object with the given labels
 	unstructuredObjList := &unstructured.UnstructuredList{}
@@ -37,7 +36,7 @@ func FilterObjectByLabels(
 	return unstructuredObjList, nil
 }
 
-func LabelsExist(objLabels map[string]string, labelKeys []string) bool {
+func ContainsLabels(objLabels map[string]string, labelKeys []string) bool {
 	for _, key := range labelKeys {
 		if _, exists := objLabels[key]; !exists {
 			return false
@@ -46,30 +45,24 @@ func LabelsExist(objLabels map[string]string, labelKeys []string) bool {
 	return true
 }
 
-func CompareAndUpdateLabels(objLabels map[string]string, labels map[string]string) bool {
-	modified := false
-	if objLabels == nil {
-		objLabels = make(map[string]string)
+func UpdateLabelsIfDifferent(objLabels *map[string]string, labels map[string]string) {
+	if *objLabels == nil {
+		objLabels = &labels
 	}
 	for key, value := range labels {
-		vv, exists := objLabels[key]
+		vv, exists := (*objLabels)[key]
 		if !exists || vv != value {
-			objLabels[key] = value
-			modified = true
+			(*objLabels)[key] = value
 		}
 	}
-	return modified
 }
 
 func CompareStringSlices(a, b []string) bool {
-	logger := log.Log
 	if len(a) != len(b) {
-		logger.Info(fmt.Sprintf(" .. lengths are not equal %d %d", len(a), len(b)))
 		return false
 	}
 	for i := range a {
 		if a[i] != b[i] {
-			logger.Info(fmt.Sprintf(" .. elements are not equal %s", a[i]))
 			return false
 		}
 	}
@@ -83,10 +76,8 @@ func CompareStringMap(objLabels map[string]string, labels map[string]string) boo
 	if !CompareStringSlices(keys1, keys2) {
 		return false
 	}
-	logger := log.Log
 	for key, value := range labels {
 		if objLabels[key] != value {
-			logger.Info(fmt.Sprintf(" . values are not equal %s %s", objLabels[key], value))
 			return false
 		}
 	}
@@ -101,15 +92,17 @@ func CompareObjectDescrs(obj1, obj2 corev1alpha1.ObjectDescriptor) bool {
 		obj1.Version == obj2.Version
 }
 
-func InsertObjectDesc(objList *[]corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) {
-	if *objList == nil {
-		*objList = []corev1alpha1.ObjectDescriptor{value}
+func AppendObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) {
+	if objList == nil {
+		// if the objList is nil we create a new object and therefore, should
+		// assign its address to the objList, hecne, the objList should be a pointer
+		objList = &[]corev1alpha1.ObjectDescriptor{value}
 	} else {
 		*objList = append(*objList, value)
 	}
 }
 
-func ExistsInObjecDescrList(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
+func ObjectDescriptorExists(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
 	exists := false
 	for _, val := range objList {
 		if CompareObjectDescrs(val, value) {
@@ -120,9 +113,21 @@ func ExistsInObjecDescrList(objList []corev1alpha1.ObjectDescriptor, value corev
 	return exists
 }
 
+func StructToMap(obj interface{}) map[string]string {
+	result := make(map[string]string)
+	val := reflect.ValueOf(obj)
+	typ := reflect.TypeOf(obj)
+	for i := 0; i < val.NumField(); i++ {
+		field := typ.Field(i)
+		value := val.Field(i).Interface()
+		result[field.Name] = fmt.Sprintf("%v", value)
+	}
+	return result
+}
+
 // Config Maps Functions //////////////////////
 
-func GetConfigMapsByLabels(namespace string, searchLabels map[string]string, kubeClient client.Client) (*corev1.ConfigMapList, error) {
+func GetConfigMapsByLabels(kubeClient client.Client, namespace string, searchLabels map[string]string) (*corev1.ConfigMapList, error) {
 	cmList := &corev1.ConfigMapList{}
 	listOptions := &client.ListOptions{
 		Namespace:     namespace,
@@ -144,7 +149,7 @@ func GetConfigMap(ctx context.Context, name, namespace string, kubeClient client
 }
 
 func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[string]string) (string, error) {
-	if configMaps, err := GetConfigMapsByLabels(corev1alpha1.SkyClusterNamespace, providerLabels, kubeClient); err != nil || configMaps == nil {
+	if configMaps, err := GetConfigMapsByLabels(kubeClient, corev1alpha1.SkyClusterNamespace, providerLabels); err != nil || configMaps == nil {
 		return "", errors.Wrap(err, "failed to get ConfigMaps by labels")
 	} else {
 		// check the length of the configMaps
@@ -176,7 +181,7 @@ func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[s
 // 	return insertNestedFieldNoCpoy(ctx, obj, runtime.DeepCopyJSONValue(value), fields...)
 // }
 
-func NestedField(obj interface{}, fields ...string) (interface{}, error) {
+func GetNestedValue(obj interface{}, fields ...string) (interface{}, error) {
 	if len(fields) == 0 {
 		return nil, errors.New("no fields provided")
 	}
@@ -191,7 +196,7 @@ func NestedField(obj interface{}, fields ...string) (interface{}, error) {
 	return m, nil
 }
 
-func InsertNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
+func AppendNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
 	if len(fields) == 0 {
 		return errors.New("no fields provided")
 	}
@@ -212,7 +217,7 @@ func InsertNestedField(obj map[string]interface{}, value interface{}, fields ...
 	return nil
 }
 
-func ExistsInNestedField(obj map[string]interface{}, value map[string]string, fields ...string) (bool, error) {
+func ContainsNestedMap(obj map[string]interface{}, value map[string]string, fields ...string) (bool, error) {
 	if len(fields) == 0 {
 		return false, errors.New("no fields provided")
 	}

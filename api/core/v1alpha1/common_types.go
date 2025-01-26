@@ -4,6 +4,7 @@ var (
 	SkyClusterNamespace      = "skycluster"
 	SkyClusterAPI            = "skycluster.io"
 	SkyClusterCoreGroup      = "core." + SkyClusterAPI
+	SkyClusterXRDsGroup      = "xrds." + SkyClusterAPI
 	SkyClusterVersion        = "v1alpha1"
 	SkyClusterManagedBy      = SkyClusterAPI + "/managed-by"
 	SkyClusterManagedByValue = "skycluster"
