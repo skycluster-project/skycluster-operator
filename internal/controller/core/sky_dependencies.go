@@ -16,14 +16,17 @@ type SkyDependency struct {
 	Version   string `json:"version,omitempty"`
 	Created   bool   `json:"created,omitempty"`
 	Updated   bool   `json:"updated,omitempty"`
+	Deleted   bool   `json:"deleted,omitempty"`
+	Replicas  int32  `json:"replicas,omitempty"`
 }
 
 var SkyDependencies = map[string][]SkyDependency{
 	"SkyProvider": []SkyDependency{
 		SkyDependency{
-			Kind:    "SkyProvider",
-			Group:   corev1alpha1.SkyClusterXRDsGroup,
-			Version: corev1alpha1.SkyClusterVersion,
+			Kind:     "SkyProvider",
+			Group:    corev1alpha1.SkyClusterXRDsGroup,
+			Version:  corev1alpha1.SkyClusterVersion,
+			Replicas: 1,
 		},
 	},
 }

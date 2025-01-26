@@ -49,30 +49,89 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	logger.Info(fmt.Sprintf("[SkyProvider] Reconciler started for %s", req.Name))
 	modified := false
 
-	// Dependencies: Normally there should be only one Kind per group
-	// And I assume only one dependency of a single type for now
-	depSpecList := SkyDependencies["SkyProvider"]
-	depSpecDetailedList := make([]SkyDependency, len(depSpecList))
-	copy(depSpecDetailedList, depSpecList)
-	for i := range depSpecDetailedList {
-		dep := &depSpecDetailedList[i]
-		dep.Namespace, dep.Created, dep.Updated = req.Namespace, false, false
+	// Dependencies: Objects can have dependencies on other objects
+	// Dependencies are defined in the SkyDependencies map
+	// Where for each type (i.e. SkyProvider), a list of dependencies is defined
+	// Each dependency is defined by its Kind, Group, Version, and Replicas
+	// Where Replicas is the number of instances of the dependency object that should exist
+	// When the object is created, the dependency objects are created as well
+	// The object details are added to the depndedBy field of the dependency object
+	// Similarly, the dependency object details are added to the dependsOn field of the object
+	// When the object is deleted, the object details are removed from the
+	// depndedBy field of the dependency object,
+	// and if the depndedBy field is empty, the dependency object is deleted
+
+	depSpecs := SkyDependencies["SkyProvider"]
+	depSpecsCopy := make([]SkyDependency, len(depSpecs))
+	copy(depSpecsCopy, depSpecs)
+	for i := range depSpecsCopy {
+		depSpec := &depSpecsCopy[i]
+		depSpec.Namespace, depSpec.Created, depSpec.Updated, depSpec.Deleted = req.Namespace, false, false, false
+		// // intentionally setting the name of each dependency as the name of this object.
+		//// depSpec.Name = req.Name
+	}
+
+	// Check dependencies for the current object
+	skyProviderDesc := corev1alpha1.ObjectDescriptor{
+		Name:      req.Name,
+		Namespace: req.Namespace,
+		Kind:      "SkyProvider",
+		Group:     corev1alpha1.SkyClusterCoreGroup,
+		Version:   corev1alpha1.SkyClusterVersion,
 	}
 
 	// Fetch the object
-	obj := &corev1alpha1.SkyProvider{}
-	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
-		logger.Info("[SkyProvider]\tUnable to fetch object, maybe it is deleted?")
-		// Need to delete if the object is within the dependents list of the dependency
-		for i := range depSpecDetailedList {
-			dep := &depSpecDetailedList[i]
-			if _, err := GetUnstructuredObject(r.Client, dep.Name, dep.Namespace); err != nil {
-				logger.Error(err, fmt.Sprintf("Unable to retrieve the dependency object %s in ns: %s", dep.Name, dep.Namespace))
-			} else {
-				// remove from the dependedBy list, and if the list is empty, remove the dependency object
-			}
+	skyProvider := &corev1alpha1.SkyProvider{}
 
-		}
+	if err := r.Get(ctx, req.NamespacedName, skyProvider); err != nil {
+		logger.Info(fmt.Sprintf("[SkyProvider]\tUnable to fetch object %s, ns: %s, maybe it is deleted?", req.Name, req.Namespace))
+		// Need to delete if the object is within the dependents list of the dependency
+		// for i := range depSpecsCopy {
+		// 	// depSpec := &depSpecsCopy[i]
+		// 	// Get the dependency object,
+		// 	// TODO: we only support unstructured objects for now.
+		// 	// // What is the depedency if an object of a CRD?
+		// 	// if depObjUnstructured, err := GetUnstructuredObject(r.Client, depSpec.Name, depSpec.Namespace); err != nil {
+		// 	// 	logger.Error(err, fmt.Sprintf("Unable to retrieve the dependency object %s in ns: %s", depSpec.Name, depSpec.Namespace))
+		// 	// } else {
+		// 	// 	logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Dependency object %s in ns: %s exists, checking dependedBy fields", depSpec.Name, depSpec.Namespace))
+		// 	// 	// remove from the dependedBy list, and if the list is empty, remove the dependency object
+		// 	// 	// Check dependencies for the current object
+		// 	// 	skyProviderDesc := corev1alpha1.ObjectDescriptor{
+		// 	// 		Name:      req.Name,
+		// 	// 		Namespace: req.Namespace,
+		// 	// 		Kind:      "SkyProvider",
+		// 	// 		Group:     corev1alpha1.SkyClusterCoreGroup,
+		// 	// 		Version:   corev1alpha1.SkyClusterCoreGroup,
+		// 	// 	}
+		// 	// 	skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc)
+		// 	// 	if err != nil {
+		// 	// 		logger.Error(err, fmt.Sprintf("failed to convert %v to map when removing from dependedBy list", skyProviderDesc))
+		// 	// 	}
+		// 	// 	found, idx, err := ContainsNestedMap(depObjUnstructured.Object, skyProviderDescMap, "spec", "dependedBy")
+		// 	// 	if err != nil {
+		// 	// 		logger.Error(err, fmt.Sprintf("failed to check if the object with skyProviderDescMap as %v exists in the dependedBy list", skyProviderDescMap))
+		// 	// 	}
+		// 	// 	logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Found idx %d from dependency list with this object in its dependedBy field", idx))
+		// 	// 	if found {
+		// 	// 		if err := RemoveFromNestedField(depObjUnstructured.Object, idx, "spec", "dependedBy"); err != nil {
+		// 	// 			logger.Error(err, fmt.Sprintf("failed to remove object with idx %d from dependedBy list", idx))
+		// 	// 		}
+		// 	// 		logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Removed object from dependedBy list"))
+		// 	// 		depSpec.Updated = true
+		// 	// 		// if the dependedBy list is empty, remove the dependency object
+		// 	// 		m, _ := GetNestedField(depObjUnstructured.Object, "spec")
+		// 	// 		if len(m["dependedBy"].([]interface{})) == 0 {
+		// 	// 			if err := r.Delete(ctx, depObjUnstructured); err != nil {
+		// 	// 				logger.Error(err, fmt.Sprintf("failed to delete the dependency object %s in ns: %s", depSpec.Name, depSpec.Namespace))
+		// 	// 			}
+		// 	// 			logger.Info(fmt.Sprintf("[SkyProvider]\t >>> No other objects in this depSpec. Deleted"))
+		// 	// 			depSpec.Deleted = true
+		// 	// 		}
+		// 	// 		logger.Info(fmt.Sprintf("[SkyProvider]\t >>> More than one dependencies exist. Skip deleting"))
+		// 	// 	}
+		// 	// }
+		// }
 		return ctrl.Result{}, nil
 	}
 
@@ -83,13 +142,13 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		corev1alpha1.SkyClusterProviderType,
 		corev1alpha1.SkyClusterProjectID,
 	}
-	if labelExists := ContainsLabels(obj.GetLabels(), labelKeys); !labelExists {
+	if labelExists := ContainsLabels(skyProvider.GetLabels(), labelKeys); !labelExists {
 		logger.Info("[SkyProvider]\tdefault labels do not exist, adding...")
 		// Add labels based on the fields
-		UpdateLabelsIfDifferent(&obj.Labels, map[string]string{
-			"skycluster.io/provider-name":   obj.Spec.ProviderRef.ProviderName,
-			"skycluster.io/provider-region": obj.Spec.ProviderRef.ProviderRegion,
-			"skycluster.io/provider-zone":   obj.Spec.ProviderRef.ProviderZone,
+		UpdateLabelsIfDifferent(&skyProvider.Labels, map[string]string{
+			"skycluster.io/provider-name":   skyProvider.Spec.ProviderRef.ProviderName,
+			"skycluster.io/provider-region": skyProvider.Spec.ProviderRef.ProviderRegion,
+			"skycluster.io/provider-zone":   skyProvider.Spec.ProviderRef.ProviderZone,
 			"skycluster.io/project-id":      uuid.New().String(),
 		})
 		modified = true
@@ -98,57 +157,47 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// We will use provider related labels to get the provider type from the ConfigMap
 	// and likely use these labels for other dependency objects that may be created
 	providerLabels := map[string]string{
-		corev1alpha1.SkyClusterProviderName:   obj.Spec.ProviderRef.ProviderName,
-		corev1alpha1.SkyClusterProviderRegion: obj.Spec.ProviderRef.ProviderRegion,
-		corev1alpha1.SkyClusterProviderZone:   obj.Spec.ProviderRef.ProviderZone,
+		corev1alpha1.SkyClusterProviderName:   skyProvider.Spec.ProviderRef.ProviderName,
+		corev1alpha1.SkyClusterProviderRegion: skyProvider.Spec.ProviderRef.ProviderRegion,
+		corev1alpha1.SkyClusterProviderZone:   skyProvider.Spec.ProviderRef.ProviderZone,
 	}
 	if providerType, err := GetProviderTypeFromConfigMap(r.Client, providerLabels); err != nil {
 		logger.Error(err, "failed to get provider type from ConfigMap")
 		return ctrl.Result{}, err
 	} else {
 		logger.Info("[SkyProvider]\tAdding provider type label...")
-		obj.Spec.ProviderRef.ProviderType = providerType
-		obj.Labels[corev1alpha1.SkyClusterProviderType] = providerType
+		skyProvider.Spec.ProviderRef.ProviderType = providerType
+		skyProvider.Labels[corev1alpha1.SkyClusterProviderType] = providerType
 		modified = true
 	}
 
-	// Check dependencies for the current object
-	objDesc := corev1alpha1.ObjectDescriptor{
-		Name:      obj.Name,
-		Namespace: obj.Namespace,
-		Kind:      "SkyProvider",
-		Group:     obj.GroupVersionKind().Group,
-		Version:   obj.GroupVersionKind().Version,
-	}
 	// Dependencies should have the same provider labels as the current object
 	searchLabels := providerLabels
-
-	dependenciesObjectList := map[string]*unstructured.Unstructured{}
-
-	for i := range depSpecDetailedList {
+	dependenciesMap := map[string]*unstructured.Unstructured{}
+	// Create a list of dependencies objects
+	for i := range depSpecsCopy {
 		var depObj *unstructured.Unstructured
-		dep := &depSpecDetailedList[i]
-
+		depSpec := &depSpecsCopy[i]
 		s := map[string]string{
-			"kind":      dep.Kind,
-			"group":     dep.Group,
-			"version":   dep.Version,
-			"namespace": dep.Namespace,
+			"kind":      depSpec.Kind,
+			"group":     depSpec.Group,
+			"version":   depSpec.Version,
+			"namespace": depSpec.Namespace,
 		}
 		if depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, s); err != nil {
 			return ctrl.Result{}, err
 		} else if len(depList.Items) == 1 { // THE depenedency exists
-			logger.Info(fmt.Sprintf("[SkyProvider]\t%s dependency exists", dep.Kind))
+			logger.Info(fmt.Sprintf("[SkyProvider]\t%s dependency exists", depSpec.Kind))
 			depObj = &depList.Items[0] // Need to inset the current object into the dependents list of this dependency
 			// logger.Info(fmt.Sprintf("[SkyProvider]\tFound: %s %s", depObj.GetName(), depObj.Object["spec"]))
 		} else if len(depList.Items) == 0 { // No dependency exists, create one
 			logger.Info("[SkyProvider]\tNo SkyProvider Claims as dependencies, creating one...")
-			depObj, err = r.NewSkyProviderObject(ctx, *obj)
+			depObj, err = r.NewSkyProviderObject(ctx, *skyProvider)
 			if err != nil {
 				logger.Error(err, "failed to create SkyProvider")
 				return ctrl.Result{}, err
 			}
-			dep.Created = true
+			depSpec.Created = true
 		} else {
 			// We only support one dependency of a single type for now
 			return ctrl.Result{}, errors.New("SkyProvider claim exists, the dependency list constains more than one or zero elements.")
@@ -156,18 +205,18 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		// Inserting into dependedBy list (xrds)
 		logger.Info("[SkyProvider]\tAppending into dependedBy list...")
-		if objDescMap, err := DeepCopyToMapString(objDesc); err != nil {
+		if skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc); err != nil {
 			return ctrl.Result{}, err
 		} else {
-			exists, err := ContainsNestedMap(depObj.Object, objDescMap, "spec", "dependedBy")
+			exists, _, err := ContainsNestedMap(depObj.Object, skyProviderDescMap, "spec", "dependedBy")
 			if err != nil {
 				logger.Error(err, "")
 			}
 			if !exists {
-				if err := AppendToNestedField(depObj.Object, objDesc, "spec", "dependedBy"); err != nil {
+				if err := AppendToNestedField(depObj.Object, skyProviderDesc, "spec", "dependedBy"); err != nil {
 					return ctrl.Result{}, errors.Wrap(err, "failed to insert into dependedBy list")
 				}
-				dep.Updated = true
+				depSpec.Updated = true
 			}
 		}
 
@@ -180,25 +229,27 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			Group:     depObj.GroupVersionKind().Group,
 			Version:   depObj.GroupVersionKind().Version,
 		}
-		if exists := ObjectDescriptorExists(obj.Spec.DependsOn, depObjDesc); !exists {
+		if exists := ObjectDescriptorExists(skyProvider.Spec.DependsOn, depObjDesc); !exists {
 			logger.Info("[SkyProvider]\t  Does not exist, Appending into list...")
-			AppendObjectDescriptor(&obj.Spec.DependsOn, depObjDesc)
+			AppendObjectDescriptor(&skyProvider.Spec.DependsOn, depObjDesc)
 			modified = true
 		}
-		dep.Name = dep.Kind + "-" + dep.Group + "-" + dep.Namespace
-		dependenciesObjectList[dep.Name] = depObj
+		depSpec.Name = depSpec.Kind + "-" + depSpec.Group + "-" + depSpec.Namespace
+		dependenciesMap[depSpec.Name] = depObj
 	}
 
 	// Creation/update of Dependencies objects
-	for _, dep := range depSpecDetailedList {
-
-		if dep.Created {
-			if err := r.Create(ctx, dependenciesObjectList[dep.Name]); err != nil {
+	for _, depSpec := range depSpecsCopy {
+		if depSpec.Deleted {
+			continue
+		}
+		if depSpec.Created {
+			if err := r.Create(ctx, dependenciesMap[depSpec.Name]); err != nil {
 				logger.Error(err, "failed to create dependency object")
 				return ctrl.Result{}, err
 			}
-		} else if dep.Updated {
-			if err := r.Update(ctx, dependenciesObjectList[dep.Name]); err != nil {
+		} else if depSpec.Updated {
+			if err := r.Update(ctx, dependenciesMap[depSpec.Name]); err != nil {
 				logger.Error(err, "failed to update dependency object")
 				return ctrl.Result{}, err
 			}
@@ -206,7 +257,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// if the object is created, we need to update the ConfigMap with current IP CIDR range
-	if _, currentIpSubnet, providerCM, err := getIpCidrPartsFromSkyProvider(r.Client, *obj); err != nil {
+	if _, currentIpSubnet, providerCM, err := getIpCidrPartsFromSkyProvider(r.Client, *skyProvider); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to get IP CIDR parts when updating ConfigMap")
 	} else {
 		i, _ := strconv.Atoi(currentIpSubnet)
@@ -218,7 +269,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// if the SkyProvider obejct is modified, update it
 	if modified {
 		logger.Info("[SkyProvider]\tSkyProvider updated")
-		if err := r.Update(ctx, obj); err != nil {
+		if err := r.Update(ctx, skyProvider); err != nil {
 			logger.Error(err, "failed to update object with project-id")
 			return ctrl.Result{}, err
 		}
@@ -226,8 +277,8 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	return ctrl.Result{}, nil
 }
 
-func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj corev1alpha1.SkyProvider) (*unstructured.Unstructured, error) {
-	providerRef := obj.Spec.ProviderRef
+func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyProvider corev1alpha1.SkyProvider) (*unstructured.Unstructured, error) {
+	providerRef := skyProvider.Spec.ProviderRef
 	gvk := schema.GroupVersionKind{
 		Group:   "xrds.skycluster.io",
 		Version: "v1alpha1",
@@ -235,20 +286,20 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj co
 	}
 	unstructuredObj := &unstructured.Unstructured{}
 	unstructuredObj.SetGroupVersionKind(gvk)
-	unstructuredObj.SetNamespace(obj.Namespace)
-	unstructuredObj.SetName(obj.Name)
+	unstructuredObj.SetNamespace(skyProvider.Namespace)
+	unstructuredObj.SetName(skyProvider.Name)
 
 	// Public Key
 	// Retrive the secret value and use publicKey field for the xSkyProvider
-	secretName := obj.Spec.KeypairRef.Name
+	keypairName := skyProvider.Spec.KeypairRef.Name
 	var secretNamespace string
-	if obj.Spec.KeypairRef.Namespace != "" {
-		secretNamespace = obj.Spec.KeypairRef.Namespace
+	if skyProvider.Spec.KeypairRef.Namespace != "" {
+		secretNamespace = skyProvider.Spec.KeypairRef.Namespace
 	} else {
-		secretNamespace = obj.Namespace
+		secretNamespace = skyProvider.Namespace
 	}
 	secret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: secretNamespace, Name: secretName}, secret); err != nil {
+	if err := r.Get(ctx, client.ObjectKey{Namespace: secretNamespace, Name: keypairName}, secret); err != nil {
 		return nil, errors.Wrap(err, "failed to get secret")
 	}
 	secretData := secret.Data
@@ -259,7 +310,7 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj co
 		return nil, errors.Wrap(err, "failed to set publicKey")
 	}
 
-	ipGroup, currentIpSubnet, _, err := getIpCidrPartsFromSkyProvider(r.Client, obj)
+	ipGroup, currentIpSubnet, _, err := getIpCidrPartsFromSkyProvider(r.Client, skyProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get IP CIDR parts")
 	}
@@ -270,7 +321,7 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj co
 		return nil, errors.Wrap(err, "failed to set ipCidrRange")
 	}
 
-	secGroup := obj.Spec.SecGroup
+	secGroup := skyProvider.Spec.SecGroup
 	secGroupMap, err := DeepCopyField(secGroup)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal/unmarshal secGroup")
@@ -289,7 +340,7 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj co
 	}
 
 	// This object is namespaced so let's set the namespace
-	if err := unstructured.SetNestedField(unstructuredObj.Object, obj.Namespace, "metadata", "namespace"); err != nil {
+	if err := unstructured.SetNestedField(unstructuredObj.Object, skyProvider.Namespace, "metadata", "namespace"); err != nil {
 		return nil, errors.Wrap(err, "failed to set namespace")
 	}
 
@@ -300,11 +351,11 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, obj co
 		return nil, errors.Wrap(err, "failed to set annotations")
 	}
 	providerLabels := map[string]string{
-		corev1alpha1.SkyClusterProviderName:   obj.Spec.ProviderRef.ProviderName,
-		corev1alpha1.SkyClusterProviderRegion: obj.Spec.ProviderRef.ProviderRegion,
-		corev1alpha1.SkyClusterProviderZone:   obj.Spec.ProviderRef.ProviderZone,
-		corev1alpha1.SkyClusterProviderType:   obj.Spec.ProviderRef.ProviderType,
-		corev1alpha1.SkyClusterProjectID:      obj.Labels[corev1alpha1.SkyClusterProjectID],
+		corev1alpha1.SkyClusterProviderName:   skyProvider.Spec.ProviderRef.ProviderName,
+		corev1alpha1.SkyClusterProviderRegion: skyProvider.Spec.ProviderRef.ProviderRegion,
+		corev1alpha1.SkyClusterProviderZone:   skyProvider.Spec.ProviderRef.ProviderZone,
+		corev1alpha1.SkyClusterProviderType:   skyProvider.Spec.ProviderRef.ProviderType,
+		corev1alpha1.SkyClusterProjectID:      skyProvider.Labels[corev1alpha1.SkyClusterProjectID],
 	}
 	if err := unstructured.SetNestedStringMap(unstructuredObj.Object, providerLabels, "metadata", "labels"); err != nil {
 		return nil, errors.Wrap(err, "failed to set labels")

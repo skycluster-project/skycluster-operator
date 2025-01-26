@@ -176,20 +176,6 @@ func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[s
 
 // Unstructured Object Functions //////////////////////
 
-// These functions are used to evaluate the content of dependsOn and dependents fields
-// of the various objects.
-// m.(type): map[string]interface{}
-// m["spec"].(type): the type is interface{} but should be casted to map[string]interface{}
-// e.g. m["spec"].(map[string]interface{}) then we can get dependsOn field
-// m["spec"]["dependsOn"].(type): []interface{}
-
-// The difference between this function and the metav1 SetNestedField function is that
-// the obj["field1"]["field2"]...["fieldN"] is of type []interface{}
-// So we are appending to the list
-// func InsertNestedField(ctx context.Context, obj map[string]interface{}, value interface{}, fields ...string) error {
-// 	return insertNestedFieldNoCpoy(ctx, obj, runtime.DeepCopyJSONValue(value), fields...)
-// }
-
 // The GetNestedField function is used to get the value of a nested field in a map[string]interface{}
 // Call this function like this: m, err := GetNestedField(obj, "spec")
 // then use m["dependsOn"] to get the value of the dependsOn field
@@ -208,48 +194,21 @@ func GetNestedField(obj map[string]interface{}, fields ...string) (map[string]in
 	return m, nil // the last field is not found in the object
 }
 
-// func FindObjectInNestedField(obj map[string]interface{}, value interface{}, fields ...string) (bool, error) {
-// 	m, err := GetNestedField(obj, fields...)
-// 	if err != nil {
-// 		return false, err
-// 	}
-// 	if valList, ok := m["dependsOn"].([]interface{}); ok {
-// 		for _, val := range valList {
-// 			if mapString, err := ConvertToMapString(val); err != nil {
-// 				return false, err
-// 			} else {
-// 				if CompareStringMap(mapString, value) {
-// 					return true, nil
-// 				}
-// 			}
-// 		}
-// 	}
-// 	return false, nil
-// }
-
-// func RemoveFromNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
-// 	if len(fields) == 0 {
-// 		return errors.New("no fields provided")
-// 	}
-// 	m := obj
-// 	for _, field := range fields[:len(fields)-1] {
-// 		if val, ok := m[field]; ok {
-// 			m = val.(map[string]interface{})
-// 		}
-// 	}
-// 	field := fields[len(fields)-1]
-// 	if valList, ok := m[field].([]interface{}); ok {
-// 		for i, val := range valList {
-// 			if val == value {
-// 				m[field] = append(valList[:i], valList[i+1:]...)
-// 				return nil
-// 			}
-// 		}
-// 		return errors.New("value not found in the list")
-// 	} else {
-// 		return errors.New("field not found in the object")
-// 	}
-// }
+func RemoveFromNestedField(obj map[string]interface{}, idx int, fields ...string) error {
+	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
+	if err != nil {
+		return err
+	}
+	field := fields[len(fields)-1]
+	switch m[field].(type) {
+	case []interface{}:
+		valList := m[field].([]interface{})
+		m[field] = append(valList[:idx], valList[idx+1:]...)
+	default:
+		return errors.New(fmt.Sprintf("field %s not found in the object or its not a list", field))
+	}
+	return nil
+}
 
 func AppendToNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
 	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
@@ -268,31 +227,32 @@ func AppendToNestedField(obj map[string]interface{}, value interface{}, fields .
 	return nil
 }
 
-func ContainsNestedMap(obj map[string]interface{}, value map[string]string, fields ...string) (bool, error) {
+func ContainsNestedMap(obj map[string]interface{}, value map[string]string, fields ...string) (bool, int, error) {
+	foundIdx, exists := -1, false
 	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
 	if err != nil {
-		return false, err
+		return false, foundIdx, err
 	}
 	field := fields[len(fields)-1]
 	switch m[field].(type) {
 	case []interface{}:
-		exists := false
 		valList := m[field].([]interface{})
-		for _, val := range valList {
+		for idx, val := range valList {
 			if mapString, err := ConvertToMapString(val); err != nil {
-				return false, err
+				return false, foundIdx, err
 			} else {
 				if CompareStringMap(mapString, value) {
 					exists = true
+					foundIdx = idx
 					break
 				}
 			}
 		}
-		return exists, nil
+		return exists, foundIdx, nil
 	case nil:
-		return false, nil
+		return false, foundIdx, nil
 	default:
-		return false, errors.New(fmt.Sprintf("the field %s is not a list", field))
+		return false, foundIdx, errors.New(fmt.Sprintf("the field %s is not a list", field))
 	}
 }
 
