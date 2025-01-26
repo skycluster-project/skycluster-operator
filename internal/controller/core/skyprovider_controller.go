@@ -64,6 +64,15 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, obj); err != nil {
 		logger.Info("[SkyProvider]\tUnable to fetch object, maybe it is deleted?")
 		// Need to delete if the object is within the dependents list of the dependency
+		for i := range depSpecDetailedList {
+			dep := &depSpecDetailedList[i]
+			if _, err := GetUnstructuredObject(r.Client, dep.Name, dep.Namespace); err != nil {
+				logger.Error(err, fmt.Sprintf("Unable to retrieve the dependency object %s in ns: %s", dep.Name, dep.Namespace))
+			} else {
+				// remove from the dependedBy list, and if the list is empty, remove the dependency object
+			}
+
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -155,7 +164,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				logger.Error(err, "")
 			}
 			if !exists {
-				if err := AppendNestedField(depObj.Object, objDesc, "spec", "dependedBy"); err != nil {
+				if err := AppendToNestedField(depObj.Object, objDesc, "spec", "dependedBy"); err != nil {
 					return ctrl.Result{}, errors.Wrap(err, "failed to insert into dependedBy list")
 				}
 				dep.Updated = true

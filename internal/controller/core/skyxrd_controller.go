@@ -52,7 +52,7 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	SkyProviderObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
 	if err != nil {
 		logger.Error(err, "unable to fetch object, maybe it is deleted?")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, nil
 	}
 	if SkyProviderObj != nil {
 		logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", SkyProviderObj.GetName(), SkyProviderObj.GetNamespace()))

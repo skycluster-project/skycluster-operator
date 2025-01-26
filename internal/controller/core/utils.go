@@ -15,9 +15,19 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	// "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Object Functions //////////////////////
+
+func GetUnstructuredObject(kubeClient client.Client, name, namespace string) (*unstructured.Unstructured, error) {
+	unstructuredObj := &unstructured.Unstructured{}
+	objKey := client.ObjectKey{Name: name, Namespace: namespace}
+	if err := kubeClient.Get(context.Background(), objKey, unstructuredObj); err != nil {
+		return nil, err
+	}
+	return unstructuredObj, nil
+}
 
 func ListUnstructuredObjectsByLabels(
 	kubeClient client.Client, searchLabels map[string]string, refType map[string]string) (*unstructured.UnstructuredList, error) {
@@ -180,51 +190,88 @@ func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[s
 // 	return insertNestedFieldNoCpoy(ctx, obj, runtime.DeepCopyJSONValue(value), fields...)
 // }
 
-func GetNestedValue(obj interface{}, fields ...string) (interface{}, error) {
+// The GetNestedField function is used to get the value of a nested field in a map[string]interface{}
+// Call this function like this: m, err := GetNestedField(obj, "spec")
+// then use m["dependsOn"] to get the value of the dependsOn field
+func GetNestedField(obj map[string]interface{}, fields ...string) (map[string]interface{}, error) {
 	if len(fields) == 0 {
 		return nil, errors.New("no fields provided")
 	}
 	m := obj
 	for _, field := range fields {
-		if val, ok := m.(map[string]interface{})[field]; ok {
+		if val, ok := m[field].(map[string]interface{}); ok {
 			m = val
 		} else {
-			return nil, errors.New(fmt.Sprintf("field %s not found in the object", field))
+			return nil, errors.New(fmt.Sprintf("field %s not found in the object or its type is not map[string]interface{}", field))
 		}
 	}
-	return m, nil
+	return m, nil // the last field is not found in the object
 }
 
-func AppendNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
-	if len(fields) == 0 {
-		return errors.New("no fields provided")
-	}
-	m := obj
-	for _, field := range fields[:len(fields)-1] {
-		if val, ok := m[field]; ok {
-			m = val.(map[string]interface{})
-		}
+// func FindObjectInNestedField(obj map[string]interface{}, value interface{}, fields ...string) (bool, error) {
+// 	m, err := GetNestedField(obj, fields...)
+// 	if err != nil {
+// 		return false, err
+// 	}
+// 	if valList, ok := m["dependsOn"].([]interface{}); ok {
+// 		for _, val := range valList {
+// 			if mapString, err := ConvertToMapString(val); err != nil {
+// 				return false, err
+// 			} else {
+// 				if CompareStringMap(mapString, value) {
+// 					return true, nil
+// 				}
+// 			}
+// 		}
+// 	}
+// 	return false, nil
+// }
+
+// func RemoveFromNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
+// 	if len(fields) == 0 {
+// 		return errors.New("no fields provided")
+// 	}
+// 	m := obj
+// 	for _, field := range fields[:len(fields)-1] {
+// 		if val, ok := m[field]; ok {
+// 			m = val.(map[string]interface{})
+// 		}
+// 	}
+// 	field := fields[len(fields)-1]
+// 	if valList, ok := m[field].([]interface{}); ok {
+// 		for i, val := range valList {
+// 			if val == value {
+// 				m[field] = append(valList[:i], valList[i+1:]...)
+// 				return nil
+// 			}
+// 		}
+// 		return errors.New("value not found in the list")
+// 	} else {
+// 		return errors.New("field not found in the object")
+// 	}
+// }
+
+func AppendToNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
+	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
+	if err != nil {
+		return err
 	}
 	field := fields[len(fields)-1]
-	if valList, ok := m[field].([]interface{}); ok {
-		m[field] = append(valList, value)
-	} else if m[field] == nil {
+	switch m[field].(type) {
+	case []interface{}:
+		m[field] = append(m[field].([]interface{}), value)
+	case nil:
 		m[field] = []interface{}{value}
-	} else {
-		return errors.New("field not found in the object")
+	default:
+		return errors.New(fmt.Sprintf("field %s not found in the object or its not either nil or a list", field))
 	}
 	return nil
 }
 
 func ContainsNestedMap(obj map[string]interface{}, value map[string]string, fields ...string) (bool, error) {
-	if len(fields) == 0 {
-		return false, errors.New("no fields provided")
-	}
-	m := obj
-	for _, field := range fields[:len(fields)-1] {
-		if val, ok := m[field]; ok {
-			m = val.(map[string]interface{})
-		}
+	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
+	if err != nil {
+		return false, err
 	}
 	field := fields[len(fields)-1]
 	switch m[field].(type) {
