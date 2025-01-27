@@ -39,6 +39,46 @@ spec:
           spec:
             description: SkyVMSpec defines the desired state of SkyVM.
             properties:
+              dependedBy:
+                items:
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    version:
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              dependsOn:
+                items:
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    version:
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
               diskSizeGB:
                 type: integer
               diskType:
@@ -91,18 +131,6 @@ spec:
                   providerZone:
                     type: string
                 type: object
-              skyDependencies:
-                items:
-                  properties:
-                    apiGroup:
-                      type: string
-                    kind:
-                      type: string
-                  required:
-                  - apiGroup
-                  - kind
-                  type: object
-                type: array
             type: object
           status:
             description: SkyVMStatus defines the observed state of SkyVM.

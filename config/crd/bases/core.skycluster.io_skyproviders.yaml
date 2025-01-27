@@ -39,6 +39,46 @@ spec:
           spec:
             description: SkyProviderSpec defines the desired state of SkyProvider.
             properties:
+              dependedBy:
+                items:
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    version:
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
+              dependsOn:
+                items:
+                  properties:
+                    group:
+                      type: string
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    version:
+                      type: string
+                  required:
+                  - group
+                  - kind
+                  - name
+                  - namespace
+                  type: object
+                type: array
               keypairRef:
                 description: IpCidrRange       string          `json:"ipCidrRange,omitempty"`
                 properties:
@@ -87,18 +127,6 @@ spec:
                       type: object
                     type: array
                 type: object
-              skyDependencies:
-                items:
-                  properties:
-                    apiGroup:
-                      type: string
-                    kind:
-                      type: string
-                  required:
-                  - apiGroup
-                  - kind
-                  type: object
-                type: array
             type: object
           status:
             description: SkyProviderStatus defines the observed state of SkyProvider.

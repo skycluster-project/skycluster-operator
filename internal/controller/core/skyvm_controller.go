@@ -26,6 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	"github.com/google/uuid"
 )
 
 // SkyVMReconciler reconciles a SkyVM object
@@ -48,10 +49,13 @@ func (r *SkyVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Add labels based on the fields
-	newLabels := GeneratetLabelsforProvider(obj.Spec.ProviderRef)
 	// add essential labels
-	modified := r.updateLabels(&obj, newLabels)
+	modified := r.updateLabels(&obj, map[string]string{
+		"skycluster.io/provider-name":   obj.Spec.ProviderRef.ProviderName,
+		"skycluster.io/provider-region": obj.Spec.ProviderRef.ProviderRegion,
+		"skycluster.io/provider-zone":   obj.Spec.ProviderRef.ProviderZone,
+		"skycluster.io/project-id":      uuid.New().String(),
+	})
 
 	// SkyVM depends on SkyProvider
 	providerExists, err := r.skyProviderExists(ctx, &obj)
