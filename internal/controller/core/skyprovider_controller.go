@@ -62,14 +62,6 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// and if the depndedBy field is empty, the dependency object is deleted
 
 	depSpecs := SkyDependencies["SkyProvider"]
-	depSpecsCopy := make([]SkyDependency, len(depSpecs))
-	copy(depSpecsCopy, depSpecs)
-	for i := range depSpecsCopy {
-		depSpec := &depSpecsCopy[i]
-		depSpec.Namespace, depSpec.Created, depSpec.Updated, depSpec.Deleted = req.Namespace, false, false, false
-		// // intentionally setting the name of each dependency as the name of this object.
-		//// depSpec.Name = req.Name
-	}
 
 	// Check dependencies for the current object
 	skyProviderDesc := corev1alpha1.ObjectDescriptor{
@@ -171,53 +163,81 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		modified = true
 	}
 
-	// Dependencies should have the same provider labels as the current object
+	// SearchLables is used to limit the dependencies search to the same provider as the current object
+	// may add more labels for more fine-grained search
 	searchLabels := providerLabels
-	dependenciesMap := map[string]*unstructured.Unstructured{}
+	type DependencyMap struct {
+		Updated       bool
+		Created       bool
+		Deleted       bool
+		DependencyObj *unstructured.Unstructured
+	}
+	dependenciesMap := []*DependencyMap{}
+	// dependenciesMap := []unstructured.Unstructured{}
 	// Create a list of dependencies objects
-	for i := range depSpecsCopy {
-		var depObj *unstructured.Unstructured
-		depSpec := &depSpecsCopy[i]
+	for i := range depSpecs {
+		depSpec := &depSpecs[i]
 		s := map[string]string{
 			"kind":      depSpec.Kind,
 			"group":     depSpec.Group,
 			"version":   depSpec.Version,
 			"namespace": depSpec.Namespace,
 		}
-		if depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, s); err != nil {
+		depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, s)
+		if err != nil {
 			return ctrl.Result{}, err
-		} else if len(depList.Items) == 1 { // THE depenedency exists
-			logger.Info(fmt.Sprintf("[SkyProvider]\t%s dependency exists", depSpec.Kind))
-			depObj = &depList.Items[0] // Need to inset the current object into the dependents list of this dependency
-			// logger.Info(fmt.Sprintf("[SkyProvider]\tFound: %s %s", depObj.GetName(), depObj.Object["spec"]))
-		} else if len(depList.Items) == 0 { // No dependency exists, create one
-			logger.Info("[SkyProvider]\tNo SkyProvider Claims as dependencies, creating one...")
-			depObj, err = r.NewSkyProviderObject(ctx, *skyProvider)
+		}
+
+		// var depObjs = make([]unstructured.Unstructured, len(depList.Items))
+		// We allow having multiple replicas of the same type for each dependency
+		// i.e. SkyK8S may require multiple SkyVM objects
+		l := len(depList.Items)
+		logger.Info(fmt.Sprintf("[SkyProvider]\t [%d]/[%d] %s dependency exists.", l, depSpec.Replicas, depSpec.Kind))
+		for i := range depList.Items {
+			depObj := &depList.Items[i]
+			d := &DependencyMap{
+				Updated:       false,
+				Created:       false,
+				Deleted:       false,
+				DependencyObj: depObj,
+			}
+			dependenciesMap = append(dependenciesMap, d)
+		}
+		// If the number of dependencies is less than the required replicas, create the remaining
+		for i := len(depList.Items); i < depSpec.Replicas; i++ {
+			depObj, err := r.NewSkyProviderObject(ctx, *skyProvider)
 			if err != nil {
 				logger.Error(err, "failed to create SkyProvider")
 				return ctrl.Result{}, err
 			}
-			depSpec.Created = true
-		} else {
-			// We only support one dependency of a single type for now
-			return ctrl.Result{}, errors.New("SkyProvider claim exists, the dependency list constains more than one or zero elements.")
+			d := DependencyMap{
+				Updated:       false,
+				Created:       true,
+				Deleted:       false,
+				DependencyObj: depObj,
+			}
+			dependenciesMap = append(dependenciesMap, &d)
+			logger.Info(fmt.Sprintf("[SkyProvider]\t Creating %s dependency object...", depSpec.Kind))
 		}
+	}
 
-		// Inserting into dependedBy list (xrds)
-		logger.Info("[SkyProvider]\tAppending into dependedBy list...")
-		if skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc); err != nil {
-			return ctrl.Result{}, err
-		} else {
-			exists, _, err := ContainsNestedMap(depObj.Object, skyProviderDescMap, "spec", "dependedBy")
-			if err != nil {
-				logger.Error(err, "")
+	// Dependencies are all retrieved, now we check the depndedBy and dependsOn fields
+	skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	for i := range dependenciesMap {
+		t := dependenciesMap[i]
+		depObj := t.DependencyObj
+		exists, _, err := ContainsNestedMap(depObj.Object, skyProviderDescMap, "spec", "dependedBy")
+		if err != nil {
+			logger.Error(err, "")
+		}
+		if !exists {
+			if err := AppendToNestedField(depObj.Object, skyProviderDesc, "spec", "dependedBy"); err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to insert into dependedBy list")
 			}
-			if !exists {
-				if err := AppendToNestedField(depObj.Object, skyProviderDesc, "spec", "dependedBy"); err != nil {
-					return ctrl.Result{}, errors.Wrap(err, "failed to insert into dependedBy list")
-				}
-				depSpec.Updated = true
-			}
+			t.Updated = true
 		}
 
 		// set the current object as a dependent of the dependency object (core)
@@ -234,22 +254,21 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			AppendObjectDescriptor(&skyProvider.Spec.DependsOn, depObjDesc)
 			modified = true
 		}
-		depSpec.Name = depSpec.Kind + "-" + depSpec.Group + "-" + depSpec.Namespace
-		dependenciesMap[depSpec.Name] = depObj
 	}
 
 	// Creation/update of Dependencies objects
-	for _, depSpec := range depSpecsCopy {
-		if depSpec.Deleted {
+	for i := range dependenciesMap {
+		d := dependenciesMap[i]
+		if d.Deleted {
 			continue
 		}
-		if depSpec.Created {
-			if err := r.Create(ctx, dependenciesMap[depSpec.Name]); err != nil {
+		if d.Created {
+			if err := r.Create(ctx, d.DependencyObj); err != nil {
 				logger.Error(err, "failed to create dependency object")
 				return ctrl.Result{}, err
 			}
-		} else if depSpec.Updated {
-			if err := r.Update(ctx, dependenciesMap[depSpec.Name]); err != nil {
+		} else if d.Updated {
+			if err := r.Update(ctx, d.DependencyObj); err != nil {
 				logger.Error(err, "failed to update dependency object")
 				return ctrl.Result{}, err
 			}

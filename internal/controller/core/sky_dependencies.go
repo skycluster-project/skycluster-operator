@@ -14,10 +14,7 @@ type SkyDependency struct {
 	Kind      string `json:"kind"`
 	Group     string `json:"group"`
 	Version   string `json:"version,omitempty"`
-	Created   bool   `json:"created,omitempty"`
-	Updated   bool   `json:"updated,omitempty"`
-	Deleted   bool   `json:"deleted,omitempty"`
-	Replicas  int32  `json:"replicas,omitempty"`
+	Replicas  int    `json:"replicas,omitempty"`
 }
 
 var SkyDependencies = map[string][]SkyDependency{
