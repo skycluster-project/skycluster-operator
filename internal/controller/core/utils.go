@@ -45,6 +45,47 @@ func ListUnstructuredObjectsByLabels(
 	return unstructuredObjList, nil
 }
 
+func ListUnstructuredObjectsByFieldList(
+	kubeClient client.Client,
+	searchSpec map[string]string,
+	refType map[string]string,
+	fields ...string) (*unstructured.UnstructuredList, error) {
+	// Iterate over the list of objects with given group, version and kind
+	// and search for the object with the given specs within the dependedBy list
+	filteredObj := &unstructured.UnstructuredList{}
+	unstructuredObjList := &unstructured.UnstructuredList{}
+	unstructuredObjList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   refType["group"],
+		Version: refType["version"],
+		Kind:    refType["kind"],
+	})
+	if err := kubeClient.List(context.Background(), unstructuredObjList); err != nil {
+		return nil, err
+	}
+	for _, obj := range unstructuredObjList.Items {
+		if objSpec, err := GetNestedField(obj.Object, fields[:len(fields)-1]...); err != nil {
+			return nil, err
+		} else {
+			descriptors := objSpec[fields[len(fields)-1]]
+			switch d := descriptors.(type) {
+			case []interface{}:
+				for _, descriptor := range d {
+					if descriptorMap, err := ConvertToMapString(descriptor); err != nil {
+						return nil, err
+					} else {
+						if CompareStringMap(descriptorMap, searchSpec) {
+							filteredObj.Items = append(filteredObj.Items, obj)
+						}
+					}
+				}
+			default:
+				return nil, errors.New(fmt.Sprintf("field %s is not a list", fields[len(fields)-1]))
+			}
+		}
+	}
+	return filteredObj, nil
+}
+
 func ContainsLabels(objLabels map[string]string, labelKeys []string) bool {
 	for _, key := range labelKeys {
 		if _, exists := objLabels[key]; !exists {
@@ -93,7 +134,7 @@ func CompareStringMap(objLabels map[string]string, labels map[string]string) boo
 	return true
 }
 
-func CompareObjectDescrs(obj1, obj2 corev1alpha1.ObjectDescriptor) bool {
+func CompareObjectDescriptors(obj1, obj2 corev1alpha1.ObjectDescriptor) bool {
 	return obj1.Name == obj2.Name &&
 		obj1.Namespace == obj2.Namespace &&
 		obj1.Group == obj2.Group &&
@@ -114,7 +155,7 @@ func AppendObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, value core
 func ObjectDescriptorExists(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
 	exists := false
 	for _, val := range objList {
-		if CompareObjectDescrs(val, value) {
+		if CompareObjectDescriptors(val, value) {
 			exists = true
 			break
 		}
@@ -271,7 +312,7 @@ func DeepCopyField(field interface{}) (map[string]interface{}, error) {
 }
 
 // Return the map[string]interface{} of an object
-func DeepCopyToMapString(field interface{}) (map[string]string, error) {
+func ConvertToMapString(field interface{}) (map[string]string, error) {
 	fieldBytes, err := json.Marshal(field)
 	if err != nil {
 		return nil, err
@@ -282,20 +323,4 @@ func DeepCopyToMapString(field interface{}) (map[string]string, error) {
 		return nil, err
 	}
 	return fieldMap, nil
-}
-
-func ConvertToMapString(i interface{}) (map[string]string, error) {
-	result := make(map[string]string)
-	mi, ok := i.(map[string]interface{})
-	if !ok {
-		return nil, errors.New("input is not a map[string]interface{}")
-	}
-	for k, v := range mi {
-		str, ok := v.(string)
-		if !ok {
-			return nil, errors.New(fmt.Sprintf("value for key '%s' is not a string", k))
-		}
-		result[k] = str
-	}
-	return result, nil
 }

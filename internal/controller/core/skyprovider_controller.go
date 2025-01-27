@@ -61,6 +61,13 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// depndedBy field of the dependency object,
 	// and if the depndedBy field is empty, the dependency object is deleted
 
+	type DependencyMap struct {
+		Updated       bool
+		Created       bool
+		Deleted       bool
+		DependencyObj *unstructured.Unstructured
+	}
+	dependenciesMap := []*DependencyMap{}
 	depSpecs := SkyDependencies["SkyProvider"]
 
 	// Check dependencies for the current object
@@ -78,52 +85,56 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if err := r.Get(ctx, req.NamespacedName, skyProvider); err != nil {
 		logger.Info(fmt.Sprintf("[SkyProvider]\tUnable to fetch object %s, ns: %s, maybe it is deleted?", req.Name, req.Namespace))
 		// Need to delete if the object is within the dependents list of the dependency
-		// for i := range depSpecsCopy {
-		// 	// depSpec := &depSpecsCopy[i]
-		// 	// Get the dependency object,
-		// 	// TODO: we only support unstructured objects for now.
-		// 	// // What is the depedency if an object of a CRD?
-		// 	// if depObjUnstructured, err := GetUnstructuredObject(r.Client, depSpec.Name, depSpec.Namespace); err != nil {
-		// 	// 	logger.Error(err, fmt.Sprintf("Unable to retrieve the dependency object %s in ns: %s", depSpec.Name, depSpec.Namespace))
-		// 	// } else {
-		// 	// 	logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Dependency object %s in ns: %s exists, checking dependedBy fields", depSpec.Name, depSpec.Namespace))
-		// 	// 	// remove from the dependedBy list, and if the list is empty, remove the dependency object
-		// 	// 	// Check dependencies for the current object
-		// 	// 	skyProviderDesc := corev1alpha1.ObjectDescriptor{
-		// 	// 		Name:      req.Name,
-		// 	// 		Namespace: req.Namespace,
-		// 	// 		Kind:      "SkyProvider",
-		// 	// 		Group:     corev1alpha1.SkyClusterCoreGroup,
-		// 	// 		Version:   corev1alpha1.SkyClusterCoreGroup,
-		// 	// 	}
-		// 	// 	skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc)
-		// 	// 	if err != nil {
-		// 	// 		logger.Error(err, fmt.Sprintf("failed to convert %v to map when removing from dependedBy list", skyProviderDesc))
-		// 	// 	}
-		// 	// 	found, idx, err := ContainsNestedMap(depObjUnstructured.Object, skyProviderDescMap, "spec", "dependedBy")
-		// 	// 	if err != nil {
-		// 	// 		logger.Error(err, fmt.Sprintf("failed to check if the object with skyProviderDescMap as %v exists in the dependedBy list", skyProviderDescMap))
-		// 	// 	}
-		// 	// 	logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Found idx %d from dependency list with this object in its dependedBy field", idx))
-		// 	// 	if found {
-		// 	// 		if err := RemoveFromNestedField(depObjUnstructured.Object, idx, "spec", "dependedBy"); err != nil {
-		// 	// 			logger.Error(err, fmt.Sprintf("failed to remove object with idx %d from dependedBy list", idx))
-		// 	// 		}
-		// 	// 		logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Removed object from dependedBy list"))
-		// 	// 		depSpec.Updated = true
-		// 	// 		// if the dependedBy list is empty, remove the dependency object
-		// 	// 		m, _ := GetNestedField(depObjUnstructured.Object, "spec")
-		// 	// 		if len(m["dependedBy"].([]interface{})) == 0 {
-		// 	// 			if err := r.Delete(ctx, depObjUnstructured); err != nil {
-		// 	// 				logger.Error(err, fmt.Sprintf("failed to delete the dependency object %s in ns: %s", depSpec.Name, depSpec.Namespace))
-		// 	// 			}
-		// 	// 			logger.Info(fmt.Sprintf("[SkyProvider]\t >>> No other objects in this depSpec. Deleted"))
-		// 	// 			depSpec.Deleted = true
-		// 	// 		}
-		// 	// 		logger.Info(fmt.Sprintf("[SkyProvider]\t >>> More than one dependencies exist. Skip deleting"))
-		// 	// 	}
-		// 	// }
-		// }
+		for i := range depSpecs {
+			depSpec := &depSpecs[i]
+			selector := map[string]string{
+				"kind":      depSpec.Kind,
+				"group":     depSpec.Group,
+				"version":   depSpec.Version,
+				"namespace": depSpec.Namespace,
+			}
+			desc, err := ConvertToMapString(skyProviderDesc)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			depList, err := ListUnstructuredObjectsByFieldList(r.Client, desc, selector, "spec", "dependedBy")
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("Unable to retrieve the dependency object for %s", depSpec.Kind))
+				return ctrl.Result{}, err
+			}
+			logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Dependency objects [%d] item founds for %s", len(depList.Items), depSpec.Kind))
+
+			// remove from the dependedBy list, and if the list is empty, remove the dependency object
+			skyProviderDescMap, err := ConvertToMapString(skyProviderDesc)
+			if err != nil {
+				logger.Error(err, fmt.Sprintf("failed to convert %v to map when removing from dependedBy list", skyProviderDesc))
+			}
+			for i := range depList.Items {
+				depObjUnstructured := &depList.Items[i]
+				found, idx, err := ContainsNestedMap(depObjUnstructured.Object, skyProviderDescMap, "spec", "dependedBy")
+				if err != nil {
+					logger.Error(err, fmt.Sprintf("failed to check if depndedBy field has %v in its dependedBy list", skyProviderDescMap))
+				}
+				logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Found idx %d from dependency list with this object in its dependedBy field", idx))
+				if found {
+					if err := RemoveFromNestedField(depObjUnstructured.Object, idx, "spec", "dependedBy"); err != nil {
+						logger.Error(err, fmt.Sprintf("failed to remove object with idx %d from dependedBy list", idx))
+					}
+					// if the dependedBy list is empty, flag it to be removed
+					m, _ := GetNestedField(depObjUnstructured.Object, "spec")
+					if len(m["dependedBy"].([]interface{})) == 0 {
+						logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Dep object %s is to be removed.", depObjUnstructured.GetName()))
+						if err := r.Delete(ctx, depObjUnstructured); err != nil {
+							logger.Error(err, fmt.Sprintf("failed to delete the dependency object %s", depObjUnstructured.GetName()))
+						}
+					} else { // if it is not empty just update the dependency object
+						if err := r.Update(ctx, depObjUnstructured); err != nil {
+							logger.Error(err, fmt.Sprintf("failed to update the dependency object %s", depObjUnstructured.GetName()))
+						}
+					}
+				}
+			}
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -166,24 +177,17 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// SearchLables is used to limit the dependencies search to the same provider as the current object
 	// may add more labels for more fine-grained search
 	searchLabels := providerLabels
-	type DependencyMap struct {
-		Updated       bool
-		Created       bool
-		Deleted       bool
-		DependencyObj *unstructured.Unstructured
-	}
-	dependenciesMap := []*DependencyMap{}
-	// dependenciesMap := []unstructured.Unstructured{}
+
 	// Create a list of dependencies objects
 	for i := range depSpecs {
 		depSpec := &depSpecs[i]
-		s := map[string]string{
+		selector := map[string]string{
 			"kind":      depSpec.Kind,
 			"group":     depSpec.Group,
 			"version":   depSpec.Version,
 			"namespace": depSpec.Namespace,
 		}
-		depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, s)
+		depList, err := ListUnstructuredObjectsByLabels(r.Client, searchLabels, selector)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -222,7 +226,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	// Dependencies are all retrieved, now we check the depndedBy and dependsOn fields
-	skyProviderDescMap, err := DeepCopyToMapString(skyProviderDesc)
+	skyProviderDescMap, err := ConvertToMapString(skyProviderDesc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -260,7 +264,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	for i := range dependenciesMap {
 		d := dependenciesMap[i]
 		if d.Deleted {
-			continue
+			logger.Info(fmt.Sprintf("[SkyProvider]\t >> >> Flag deleted is True for dep obj %s", d.DependencyObj.GetName()))
 		}
 		if d.Created {
 			if err := r.Create(ctx, d.DependencyObj); err != nil {
