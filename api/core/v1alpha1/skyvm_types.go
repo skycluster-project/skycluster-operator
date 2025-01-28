@@ -31,6 +31,8 @@ type SkyVMSpec struct {
 	ProviderRef          ProviderRefSpec        `json:"providerRef,omitempty"`
 	DependsOn            []ObjectDescriptor     `json:"dependsOn,omitempty"`
 	DependedBy           []ObjectDescriptor     `json:"dependedBy,omitempty"`
+	KeypairRef           KeypairRefSpec         `json:"keypairRef,omitempty"`
+	SecGroup             *SecGroup              `json:"secGroup,omitempty"`
 }
 
 // SkyVMStatus defines the observed state of SkyVM.

@@ -152,15 +152,23 @@ func AppendObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, value core
 	}
 }
 
-func ContainsObjectDescriptor(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
-	exists := false
-	for _, val := range objList {
+func ContainsObjectDescriptor(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) (bool, int) {
+	exists, idx := false, -1
+	for i, val := range objList {
 		if CompareObjectDescriptors(val, value) {
 			exists = true
+			idx = i
 			break
 		}
 	}
-	return exists
+	return exists, idx
+}
+
+func RemoveObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, idx int) {
+	if objList == nil {
+		return
+	}
+	*objList = append((*objList)[:idx], (*objList)[idx+1:]...)
 }
 
 func StructToMap(obj interface{}) map[string]string {

@@ -85,6 +85,13 @@ spec:
                 type: string
               image:
                 type: string
+              keypairRef:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    type: string
+                type: object
               machineType:
                 type: string
               monitoringMetrics:
@@ -130,6 +137,33 @@ spec:
                     type: string
                   providerZone:
                     type: string
+                type: object
+              secGroup:
+                properties:
+                  tcpPorts:
+                    items:
+                      properties:
+                        fromPort:
+                          type: integer
+                        toPort:
+                          type: integer
+                      required:
+                      - fromPort
+                      - toPort
+                      type: object
+                    type: array
+                  udpPorts:
+                    items:
+                      properties:
+                        fromPort:
+                          type: integer
+                        toPort:
+                          type: integer
+                      required:
+                      - fromPort
+                      - toPort
+                      type: object
+                    type: array
                 type: object
             type: object
           status:

@@ -7,6 +7,7 @@ import (
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -50,4 +51,22 @@ func getIpCidrPartsFromSkyProvider(kubeClient client.Client, obj corev1alpha1.Sk
 		return "", "", nil, err
 	}
 	return ipGroup, currentIpSubnet, configMap, nil
+}
+
+func ListSkyProviderByLabels(
+	kubeClient client.Client,
+	searchLabels map[string]string,
+	refType map[string]string) (*corev1alpha1.SkyProviderList, error) {
+	// Iterate over the list of objects with given group, version and kind
+	// and search for the object with the given labels
+	skyProviderList := &corev1alpha1.SkyProviderList{}
+	skyProviderList.SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   refType["group"],
+		Version: refType["version"],
+		Kind:    refType["kind"],
+	})
+	if err := kubeClient.List(context.Background(), skyProviderList, client.MatchingLabels(searchLabels)); err != nil {
+		return nil, err
+	}
+	return skyProviderList, nil
 }

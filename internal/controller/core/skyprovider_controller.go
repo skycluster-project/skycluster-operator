@@ -48,7 +48,8 @@ type SkyProviderReconciler struct {
 
 func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info(fmt.Sprintf("[SkyProvider] Reconciler started for %s", req.Name))
+	logName := "SkyProvider"
+	logger.Info(fmt.Sprintf("[%s]\tReconciler started for %s", logName, req.Name))
 	modified := false
 
 	// Dependencies: Objects can have dependencies on other objects
@@ -85,7 +86,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	skyProvider := &corev1alpha1.SkyProvider{}
 
 	if err := r.Get(ctx, req.NamespacedName, skyProvider); err != nil {
-		logger.Info(fmt.Sprintf("[SkyProvider]\tUnable to fetch object %s, ns: %s, maybe it is deleted?", req.Name, req.Namespace))
+		logger.Info(fmt.Sprintf("[%s]\tUnable to fetch object %s, ns: %s, maybe it is deleted?", logName, req.Name, req.Namespace))
 		// Need to delete if the object is within the dependents list of the dependency
 		for i := range depSpecs {
 			depSpec := &depSpecs[i]
@@ -117,8 +118,8 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				if err != nil {
 					logger.Error(err, fmt.Sprintf("failed to check if depndedBy field has %v in its dependedBy list", skyProviderDescMap))
 				}
-				logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Found idx %d from dependency list with this object in its dependedBy field", idx))
 				if found {
+					logger.Info(fmt.Sprintf("[SkyProvider]\t >>> Found idx %d from dependency list with this object in its dependedBy field", idx))
 					if err := RemoveFromNestedField(depObjUnstructured.Object, idx, "spec", "dependedBy"); err != nil {
 						logger.Error(err, fmt.Sprintf("failed to remove object with idx %d from dependedBy list", idx))
 					}
@@ -148,7 +149,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		corev1alpha1.SkyClusterProjectID,
 	}
 	if labelExists := ContainsLabels(skyProvider.GetLabels(), labelKeys); !labelExists {
-		logger.Info("[SkyProvider]\tdefault labels do not exist, adding...")
+		logger.Info(fmt.Sprintf("[%s]\tDefault labels do not exist, adding...", logName))
 		// Add labels based on the fields
 		UpdateLabelsIfDifferent(&skyProvider.Labels, map[string]string{
 			"skycluster.io/provider-name":   skyProvider.Spec.ProviderRef.ProviderName,
@@ -166,21 +167,27 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		corev1alpha1.SkyClusterProviderRegion: skyProvider.Spec.ProviderRef.ProviderRegion,
 		corev1alpha1.SkyClusterProviderZone:   skyProvider.Spec.ProviderRef.ProviderZone,
 	}
+	// SearchLables is used to limit the dependencies search to the same provider as the current object
+	// may add more labels for more fine-grained search
+	searchLabels := map[string]string{
+		corev1alpha1.SkyClusterProjectID: skyProvider.Labels[corev1alpha1.SkyClusterProjectID],
+	}
+	for k, v := range providerLabels {
+		searchLabels[k] = v
+	}
+
 	if providerType, err := GetProviderTypeFromConfigMap(r.Client, providerLabels); err != nil {
 		logger.Error(err, "failed to get provider type from ConfigMap")
 		return ctrl.Result{}, err
 	} else {
-		logger.Info("[SkyProvider]\tAdding provider type label...")
+		logger.Info(fmt.Sprintf("[%s]\tAdding provider type label...", logName))
 		skyProvider.Spec.ProviderRef.ProviderType = providerType
 		skyProvider.Labels[corev1alpha1.SkyClusterProviderType] = providerType
 		modified = true
 	}
 
-	// SearchLables is used to limit the dependencies search to the same provider as the current object
-	// may add more labels for more fine-grained search
-	searchLabels := providerLabels
-
 	// Create a list of dependencies objects
+	logger.Info(fmt.Sprintf("[%s]\tChecking dependencies for %s...", logName, skyProvider.GetName()))
 	for i := range depSpecs {
 		depSpec := &depSpecs[i]
 		selector := map[string]string{
@@ -196,8 +203,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 		// We allow having multiple replicas of the same type for each dependency
 		// i.e. SkyK8S may require multiple SkyVM objects
-		l := len(depList.Items)
-		logger.Info(fmt.Sprintf("[SkyProvider]\t [%d]/[%d] %s dependency exists.", l, depSpec.Replicas, depSpec.Kind))
+		logger.Info(fmt.Sprintf("[%s]\t %s: [%d]/[%d] dependency exists.", logName, depSpec.Kind, len(depList.Items), depSpec.Replicas))
 		for i := range depList.Items {
 			depObj := &depList.Items[i]
 			d := &DependencyMap{
@@ -222,18 +228,22 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				DependencyObj: depObj,
 			}
 			dependenciesMap = append(dependenciesMap, &d)
-			logger.Info(fmt.Sprintf("[SkyProvider]\t Creating %s dependency object...", depSpec.Kind))
+			logger.Info(fmt.Sprintf("[%s]\t Create a new object (%s)", logName, depSpec.Kind))
 		}
 	}
 
 	// Dependencies are all retrieved, now we check the depndedBy and dependsOn fields
+	logger.Info(fmt.Sprintf("[%s]\tChecking depndedBy/dependsOn fields...", logName))
 	skyProviderDescMap, err := ConvertToMapString(skyProviderDesc)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	for i := range dependenciesMap {
 		t := dependenciesMap[i]
+		logger.Info(fmt.Sprintf("[%s]\t - Dependency (%s)", logName, t.DependencyObj.GetName()))
 		depObj := t.DependencyObj
+		// [DependedBy] field.
+		// TODO, ensure an index is returned.
 		exists, _, err := ContainsNestedMap(depObj.Object, skyProviderDescMap, "spec", "dependedBy")
 		if err != nil {
 			logger.Error(err, "")
@@ -245,8 +255,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			t.Updated = true
 		}
 
-		// set the current object as a dependent of the dependency object (core)
-		logger.Info("[SkyProvider]\tAppending into dependsOn list...")
+		// [DependsOn] field. set the current object as a dependent of the dependency object (core)
 		depObjDesc := corev1alpha1.ObjectDescriptor{
 			Name:      depObj.GetName(),
 			Namespace: depObj.GetNamespace(),
@@ -254,8 +263,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			Group:     depObj.GroupVersionKind().Group,
 			Version:   depObj.GroupVersionKind().Version,
 		}
-		if exists := ContainsObjectDescriptor(skyProvider.Spec.DependsOn, depObjDesc); !exists {
-			logger.Info("[SkyProvider]\t  Does not exist, Appending into list...")
+		if exists, _ := ContainsObjectDescriptor(skyProvider.Spec.DependsOn, depObjDesc); !exists {
 			AppendObjectDescriptor(&skyProvider.Spec.DependsOn, depObjDesc)
 			modified = true
 		}
@@ -265,7 +273,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	for i := range dependenciesMap {
 		d := dependenciesMap[i]
 		if d.Deleted {
-			logger.Info(fmt.Sprintf("[SkyProvider]\t >> >> Flag deleted is True for dep obj %s", d.DependencyObj.GetName()))
+			logger.Info(fmt.Sprintf("[SkyProvider]\t >>>> Flag deleted is True for dep obj %s", d.DependencyObj.GetName()))
 		}
 		if d.Created {
 			if err := r.Create(ctx, d.DependencyObj); err != nil {
