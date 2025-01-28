@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -192,7 +194,6 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			return ctrl.Result{}, err
 		}
 
-		// var depObjs = make([]unstructured.Unstructured, len(depList.Items))
 		// We allow having multiple replicas of the same type for each dependency
 		// i.e. SkyK8S may require multiple SkyVM objects
 		l := len(depList.Items)
@@ -253,7 +254,7 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			Group:     depObj.GroupVersionKind().Group,
 			Version:   depObj.GroupVersionKind().Version,
 		}
-		if exists := ObjectDescriptorExists(skyProvider.Spec.DependsOn, depObjDesc); !exists {
+		if exists := ContainsObjectDescriptor(skyProvider.Spec.DependsOn, depObjDesc); !exists {
 			logger.Info("[SkyProvider]\t  Does not exist, Appending into list...")
 			AppendObjectDescriptor(&skyProvider.Spec.DependsOn, depObjDesc)
 			modified = true
@@ -326,10 +327,13 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 		return nil, errors.Wrap(err, "failed to get secret")
 	}
 	secretData := secret.Data
-	publicKeyMap := map[string]string{
-		"publicKey": string(secretData["publicKey"]),
+	var config map[string]string
+	err := yaml.Unmarshal([]byte(secretData["config"]), &config)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to unmarshal secret data for publicKey")
 	}
-	if err := unstructured.SetNestedStringMap(unstructuredObj.Object, publicKeyMap, "spec", "forProvider"); err != nil {
+	scpub := strings.TrimSpace(config["publicKey"])
+	if err := SetNestedField(unstructuredObj.Object, scpub, "spec", "forProvider", "publicKey"); err != nil {
 		return nil, errors.Wrap(err, "failed to set publicKey")
 	}
 
@@ -337,10 +341,8 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get IP CIDR parts")
 	}
-	ipCidrRangeMap := map[string]string{
-		"ipCidrRange": fmt.Sprintf("10.%s.%s.0/24", ipGroup, currentIpSubnet),
-	}
-	if err := unstructured.SetNestedStringMap(unstructuredObj.Object, ipCidrRangeMap, "spec", "forProvider"); err != nil {
+	ipCidrRange := fmt.Sprintf("10.%s.%s.0/24", ipGroup, currentIpSubnet)
+	if err := SetNestedField(unstructuredObj.Object, ipCidrRange, "spec", "forProvider", "ipCidrRange"); err != nil {
 		return nil, errors.Wrap(err, "failed to set ipCidrRange")
 	}
 

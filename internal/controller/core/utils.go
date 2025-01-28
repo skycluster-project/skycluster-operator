@@ -152,7 +152,7 @@ func AppendObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, value core
 	}
 }
 
-func ObjectDescriptorExists(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
+func ContainsObjectDescriptor(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) bool {
 	exists := false
 	for _, val := range objList {
 		if CompareObjectDescriptors(val, value) {
@@ -265,6 +265,29 @@ func AppendToNestedField(obj map[string]interface{}, value interface{}, fields .
 	default:
 		return errors.New(fmt.Sprintf("field %s not found in the object or its not either nil or a list", field))
 	}
+	return nil
+}
+
+// Set the value of a nested field in a map[string]interface{}
+// if the latest field is nil, it will be set to the value
+// if the latest field is not nil, it will be overwritten
+func SetNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
+	m := obj
+	for _, field := range fields[:len(fields)-1] {
+		if val, ok := m[field]; ok {
+			if valMap, ok := val.(map[string]interface{}); ok {
+				m = valMap
+			} else {
+				return errors.New(fmt.Sprintf("field %s is not a map[string]interface{}", field))
+			}
+		} else {
+			newVal := make(map[string]interface{})
+			m[field] = newVal
+			m = newVal
+		}
+	}
+	field := fields[len(fields)-1]
+	m[field] = value
 	return nil
 }
 
