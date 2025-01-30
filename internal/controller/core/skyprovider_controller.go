@@ -19,11 +19,9 @@ package core
 import (
 	"context"
 	"fmt"
-	"strconv"
-	"strings"
 
-	"gopkg.in/yaml.v2"
-	corev1 "k8s.io/api/core/v1"
+	// "strconv"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -151,11 +149,11 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if labelExists := ContainsLabels(skyProvider.GetLabels(), labelKeys); !labelExists {
 		logger.Info(fmt.Sprintf("[%s]\tDefault labels do not exist, adding...", logName))
 		// Add labels based on the fields
-		UpdateLabelsIfDifferent(&skyProvider.Labels, map[string]string{
-			"skycluster.io/provider-name":   skyProvider.Spec.ProviderRef.ProviderName,
-			"skycluster.io/provider-region": skyProvider.Spec.ProviderRef.ProviderRegion,
-			"skycluster.io/provider-zone":   skyProvider.Spec.ProviderRef.ProviderZone,
-			"skycluster.io/project-id":      uuid.New().String(),
+		UpdateLabelsIfDifferent(skyProvider.Labels, map[string]string{
+			corev1alpha1.SkyClusterProviderName:   skyProvider.Spec.ProviderRef.ProviderName,
+			corev1alpha1.SkyClusterProviderRegion: skyProvider.Spec.ProviderRef.ProviderRegion,
+			corev1alpha1.SkyClusterProviderZone:   skyProvider.Spec.ProviderRef.ProviderZone,
+			corev1alpha1.SkyClusterProjectID:      uuid.New().String(),
 		})
 		modified = true
 	}
@@ -288,15 +286,15 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		}
 	}
 
-	// if the object is created, we need to update the ConfigMap with current IP CIDR range
-	if _, currentIpSubnet, providerCM, err := getIpCidrPartsFromSkyProvider(r.Client, *skyProvider); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to get IP CIDR parts when updating ConfigMap")
-	} else {
-		i, _ := strconv.Atoi(currentIpSubnet)
-		if err := updateIPCidrConfigMap(r.Client, providerCM, i+1); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "failed to update ConfigMap")
-		}
-	}
+	// // if the object is created, we need to update the ConfigMap with current IP CIDR range
+	// if _, currentIpSubnet, providerCM, err := getIpCidrPartsFromSkyProvider(r.Client, *skyProvider); err != nil {
+	// 	return ctrl.Result{}, errors.Wrap(err, "failed to get IP CIDR parts when updating ConfigMap")
+	// } else {
+	// 	i, _ := strconv.Atoi(currentIpSubnet)
+	// 	if err := updateIPCidrConfigMap(r.Client, providerCM, i+1); err != nil {
+	// 		return ctrl.Result{}, errors.Wrap(err, "failed to update ConfigMap")
+	// 	}
+	// }
 
 	// if the SkyProvider obejct is modified, update it
 	if modified {
@@ -323,44 +321,50 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 
 	// Public Key
 	// Retrive the secret value and use publicKey field for the xSkyProvider
-	keypairName := skyProvider.Spec.KeypairRef.Name
-	var secretNamespace string
-	if skyProvider.Spec.KeypairRef.Namespace != "" {
-		secretNamespace = skyProvider.Spec.KeypairRef.Namespace
-	} else {
-		secretNamespace = skyProvider.Namespace
-	}
-	secret := &corev1.Secret{}
-	if err := r.Get(ctx, client.ObjectKey{Namespace: secretNamespace, Name: keypairName}, secret); err != nil {
-		return nil, errors.Wrap(err, "failed to get secret")
-	}
-	secretData := secret.Data
-	var config map[string]string
-	err := yaml.Unmarshal([]byte(secretData["config"]), &config)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to unmarshal secret data for publicKey")
-	}
-	scpub := strings.TrimSpace(config["publicKey"])
-	if err := SetNestedField(unstructuredObj.Object, scpub, "spec", "forProvider", "publicKey"); err != nil {
-		return nil, errors.Wrap(err, "failed to set publicKey")
-	}
+	// We move the KeyPairRef and SecGroup fields to other objects (such as SkyVM)
+	// Because setting up an provider does not necessarily require a keypair or security group
+	// if skyProvider.Spec.KeypairRef == nil {
+	// 	return nil, errors.New("keypairRef is required")
+	// }
+	// keypairName := skyProvider.Spec.KeypairRef.Name
+	// var secretNamespace string
+	// if skyProvider.Spec.KeypairRef.Namespace != "" {
+	// 	secretNamespace = skyProvider.Spec.KeypairRef.Namespace
+	// } else {
+	// 	secretNamespace = skyProvider.Namespace
+	// }
+	// secret := &corev1.Secret{}
+	// if err := r.Get(ctx, client.ObjectKey{Namespace: secretNamespace, Name: keypairName}, secret); err != nil {
+	// 	return nil, errors.Wrap(err, "failed to get secret for keypair, does it exist? Same namespace?")
+	// }
+	// secretData := secret.Data
+	// var config map[string]string
+	// err := yaml.Unmarshal([]byte(secretData["config"]), &config)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "failed to unmarshal secret data for publicKey")
+	// }
+	// scpub := strings.TrimSpace(config["publicKey"])
+	// if err := SetNestedField(unstructuredObj.Object, scpub, "spec", "forProvider", "publicKey"); err != nil {
+	// 	return nil, errors.Wrap(err, "failed to set publicKey")
+	// }
 
-	ipGroup, currentIpSubnet, _, err := getIpCidrPartsFromSkyProvider(r.Client, skyProvider)
+	// secGroup := skyProvider.Spec.SecGroup
+	// secGroupMap, err := DeepCopyField(secGroup)
+	// if err != nil {
+	// 	return nil, errors.Wrap(err, "failed to marshal/unmarshal secGroup")
+	// }
+	// if err := unstructured.SetNestedMap(unstructuredObj.Object, secGroupMap, "spec", "forProvider", "secGroup"); err != nil {
+	// 	return nil, errors.Wrap(err, "failed to set secGroup")
+	// }
+
+	subnetCidr, _, err := getSubnetCidr(r.Client, skyProvider)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get IP CIDR parts")
 	}
-	ipCidrRange := fmt.Sprintf("10.%s.%s.0/24", ipGroup, currentIpSubnet)
+	// ipCidrRange := fmt.Sprintf("10.%s.%s.0/24", ipGroup, currentIpSubnet)
+	ipCidrRange := subnetCidr
 	if err := SetNestedField(unstructuredObj.Object, ipCidrRange, "spec", "forProvider", "ipCidrRange"); err != nil {
 		return nil, errors.Wrap(err, "failed to set ipCidrRange")
-	}
-
-	secGroup := skyProvider.Spec.SecGroup
-	secGroupMap, err := DeepCopyField(secGroup)
-	if err != nil {
-		return nil, errors.Wrap(err, "failed to marshal/unmarshal secGroup")
-	}
-	if err := unstructured.SetNestedMap(unstructuredObj.Object, secGroupMap, "spec", "forProvider", "secGroup"); err != nil {
-		return nil, errors.Wrap(err, "failed to set secGroup")
 	}
 
 	// Set the providerRef field
@@ -377,22 +381,26 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 		return nil, errors.Wrap(err, "failed to set namespace")
 	}
 
-	annot := map[string]string{
-		"crossplane.io/paused": "true",
+	if skyProvider.Annotations != nil {
+		if err := unstructured.SetNestedStringMap(unstructuredObj.Object, skyProvider.Annotations, "metadata", "annotations"); err != nil {
+			return nil, errors.Wrap(err, "failed to set annotations")
+		}
 	}
-	if err := unstructured.SetNestedStringMap(unstructuredObj.Object, annot, "metadata", "annotations"); err != nil {
-		return nil, errors.Wrap(err, "failed to set annotations")
+
+	if skyProvider.Labels != nil {
+		if err := unstructured.SetNestedStringMap(unstructuredObj.Object, skyProvider.Labels, "metadata", "labels"); err != nil {
+			return nil, errors.Wrap(err, "failed to set labels")
+		}
 	}
+	// ensure we have provider reference labels setup
+	// This block is not needed if we ensure the object always has the required labels
 	providerLabels := map[string]string{
 		corev1alpha1.SkyClusterProviderName:   skyProvider.Spec.ProviderRef.ProviderName,
 		corev1alpha1.SkyClusterProviderRegion: skyProvider.Spec.ProviderRef.ProviderRegion,
 		corev1alpha1.SkyClusterProviderZone:   skyProvider.Spec.ProviderRef.ProviderZone,
 		corev1alpha1.SkyClusterProviderType:   skyProvider.Spec.ProviderRef.ProviderType,
-		corev1alpha1.SkyClusterProjectID:      skyProvider.Labels[corev1alpha1.SkyClusterProjectID],
 	}
-	if err := unstructured.SetNestedStringMap(unstructuredObj.Object, providerLabels, "metadata", "labels"); err != nil {
-		return nil, errors.Wrap(err, "failed to set labels")
-	}
+	UpdateLabelsIfDifferent(unstructuredObj.GetLabels(), providerLabels)
 
 	return unstructuredObj, nil
 }

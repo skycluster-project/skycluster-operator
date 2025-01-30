@@ -15,7 +15,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	// "sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 // Object Functions //////////////////////
@@ -95,14 +94,16 @@ func ContainsLabels(objLabels map[string]string, labelKeys []string) bool {
 	return true
 }
 
-func UpdateLabelsIfDifferent(objLabels *map[string]string, labels map[string]string) {
-	if *objLabels == nil {
-		objLabels = &labels
+// Update the labels of an object if they are different
+// if the object labels are nil, they will be set to the labels
+func UpdateLabelsIfDifferent(objLabels map[string]string, labels map[string]string) {
+	if objLabels == nil {
+		objLabels = labels
 	}
 	for key, value := range labels {
-		vv, exists := (*objLabels)[key]
+		vv, exists := (objLabels)[key]
 		if !exists || vv != value {
-			(*objLabels)[key] = value
+			objLabels[key] = value
 		}
 	}
 }
@@ -228,6 +229,7 @@ func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[s
 // The GetNestedField function is used to get the value of a nested field in a map[string]interface{}
 // Call this function like this: m, err := GetNestedField(obj, "spec")
 // then use m["dependsOn"] to get the value of the dependsOn field
+// The functions return nil if the field is not found in the object
 func GetNestedField(obj map[string]interface{}, fields ...string) (map[string]interface{}, error) {
 	if len(fields) == 0 {
 		return nil, errors.New("no fields provided")
@@ -259,6 +261,8 @@ func RemoveFromNestedField(obj map[string]interface{}, idx int, fields ...string
 	return nil
 }
 
+// Append a value to a nested field in a map[string]interface{}
+// if the field is nil, it will be set to a list containing the value
 func AppendToNestedField(obj map[string]interface{}, value interface{}, fields ...string) error {
 	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
 	if err != nil {

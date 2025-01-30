@@ -14,6 +14,9 @@ var (
 	SkyClusterProviderZone   = SkyClusterAPI + "/provider-zone"
 	SkyClusterProviderType   = SkyClusterAPI + "/provider-type"
 	SkyClusterProjectID      = SkyClusterAPI + "/project-id"
+
+	// SkyClusterConfigType values
+	SkyClusterConfigTypeSubnetCidr = "subnet-cidr"
 )
 
 type SecGroupSpec struct {

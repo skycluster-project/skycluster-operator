@@ -17,13 +17,14 @@ limitations under the License.
 package v1alpha1
 
 import (
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // SkyProviderSpec defines the desired state of SkyProvider.
 type SkyProviderSpec struct {
-	SecGroup    SecGroup           `json:"secGroup,omitempty"`
-	KeypairRef  KeypairRefSpec     `json:"keypairRef,omitempty"`
+	// SecGroup    SecGroup           `json:"secGroup,omitempty"`
+	// KeypairRef  *KeypairRefSpec    `json:"keypairRef,omitempty"`
 	ProviderRef ProviderRefSpec    `json:"providerRef,omitempty"`
 	DependsOn   []ObjectDescriptor `json:"dependsOn,omitempty"`
 	DependedBy  []ObjectDescriptor `json:"dependedBy,omitempty"`
@@ -31,8 +32,7 @@ type SkyProviderSpec struct {
 
 // SkyProviderStatus defines the observed state of SkyProvider.
 type SkyProviderStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions xpv1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
