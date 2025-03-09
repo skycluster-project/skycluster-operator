@@ -20,14 +20,12 @@ import (
 	"context"
 	"fmt"
 
-	// corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	ctrlv1alpha1 "github.com/etesami/skycluster-manager/internal/controller"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	// logf "sigs.k8s.io/controller-runtime/pkg/log"
-
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 )
 
@@ -54,15 +52,18 @@ var _ webhook.CustomDefaulter = &DeploymentCustomDefaulter{}
 
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Deployment.
 func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
-	deployment, ok := obj.(*appsv1.Deployment)
 	logger := log.FromContext(ctx)
-	logName := "Webhook"
-	logger.Info(fmt.Sprintf("[%s]\tReconciler started", logName))
 
-	if !ok {
-		return fmt.Errorf("expected an Deployment object but got %T", obj)
+	deployment, ok := obj.(*appsv1.Deployment)
+	exists := ctrlv1alpha1.ContainsLabelsAndValue(deployment.Labels, map[string]string{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+	})
+	if !ok || !exists {
+		return nil
+	} else {
+		logger.Info(fmt.Sprintf("Webhook [%s] detected. Setting paused to true.", deployment.Name))
+		deployment.Spec.Paused = true
 	}
-	logger.Info("Defaulting for Deployment", "name", deployment.GetName())
 
 	return nil
 }

@@ -1,4 +1,4 @@
-package core
+package controller
 
 import (
 	"context"
@@ -89,6 +89,15 @@ func ListUnstructuredObjectsByFieldList(
 func ContainsLabels(objLabels map[string]string, labelKeys []string) bool {
 	for _, key := range labelKeys {
 		if _, exists := objLabels[key]; !exists {
+			return false
+		}
+	}
+	return true
+}
+
+func ContainsLabelsAndValue(objLabels map[string]string, labels map[string]string) bool {
+	for key, value := range labels {
+		if value2, exists := objLabels[key]; !exists || value2 != value {
 			return false
 		}
 	}

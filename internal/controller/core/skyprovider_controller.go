@@ -30,6 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	ctrlv1alpha1 "github.com/etesami/skycluster-manager/internal/controller"
+
 	// "github.com/google/uuid"
 	"github.com/pkg/errors"
 	// corev1 "k8s.io/api/core/v1"
@@ -379,12 +381,12 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 	// mask := cidrParts[1]
 	// ipCidrRange := fmt.Sprintf("%s.%s.%s.0/24", ipParts[0], ipParts[1], 0)
 	ipCidrRange := vpcCidr
-	if err := SetNestedField(unstructuredObj.Object, ipCidrRange, "spec", "forProvider", "ipCidrRange"); err != nil {
+	if err := ctrlv1alpha1.SetNestedField(unstructuredObj.Object, ipCidrRange, "spec", "forProvider", "ipCidrRange"); err != nil {
 		return nil, errors.Wrap(err, "failed to set ipCidrRange")
 	}
 
 	// Set the providerRef field
-	providerRefMap, err := DeepCopyField(providerRef)
+	providerRefMap, err := ctrlv1alpha1.DeepCopyField(providerRef)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal/unmarshal providerRef")
 	}
@@ -416,7 +418,7 @@ func (r *SkyProviderReconciler) NewSkyProviderObject(ctx context.Context, skyPro
 		corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL:   skyProvider.Spec.ProviderRef.ProviderZone,
 		corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL:   skyProvider.Spec.ProviderRef.ProviderType,
 	}
-	UpdateLabelsIfDifferent(unstructuredObj.GetLabels(), providerLabels)
+	ctrlv1alpha1.UpdateLabelsIfDifferent(unstructuredObj.GetLabels(), providerLabels)
 
 	return unstructuredObj, nil
 }
