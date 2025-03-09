@@ -1,0 +1,182 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+      - name: echo
+        image: registry.skycluster.io/alpine-curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              CONTENT=$(ip route get 8.8.8.8 | awk '{printf "Hey, my ip is: %s,", $7; exit}')
+              HOSTNAME=$(hostname)
+              CONTENT="$CONTENT\tHostname: $HOSTNAME"
+              CONTENT_LENGTH=$(echo -n "$CONTENT" | wc -c)
+              echo -e "HTTP/1.1 200 OK\r\nContent-Length: $CONTENT_LENGTH\r\n\r\n$CONTENT" | nc -l -p 8080
+            done
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: caller
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: caller
+  template:
+    metadata:
+      labels:
+        app: caller
+    spec:
+      containers:
+      - name: caller
+        image: registry.skycluster.io/alpine-curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            echo "Sending request to echo-svc"
+            # send request to echo-svc and save the responses,
+            # every 20 seconds, send the aggregated responses to the logger
+            all_responses=""
+            counter=0
+            while true; do
+              response=$(curl -s echo-svc:8080)
+              all_responses="$all_responses\n$response"
+              counter=$((counter+1))
+              if [ $counter -eq 20 ]; then
+                echo -e "Sending aggregated responses to logger"
+                aggregated_responses=$(echo -e "$all_responses" | wc -l)
+                dateTime=$(date '+%Y-%m-%d %H:%M:%S')
+                echo -e "[$dateTime] Aggregated responses: $aggregated_responses" | nc logger-svc 8080
+                all_responses=""
+                counter=0
+              fi
+              sleep 2
+            done
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logger
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logger
+  template:
+    metadata:
+      labels:
+        app: logger
+    spec:
+      containers:
+      - name: logger
+        image: registry.skycluster.io/alpine-curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            # Receive log messages from caller and print them
+            while true; do
+              echo "Listening for log messages"
+              log_message=$(nc -l -p 8080)
+              echo -e "$log_message"
+            done
+        ports:
+        - containerPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-svc
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: echo
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: logger-svc
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: logger
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: echo-app-policy
+spec:
+  dataDependencies:
+    - fromDeployment: caller
+      toService: logger-svc
+      latency: 30 #ms
+      totalDataTransferred: 0.5 #GB
+      averageDataRate: 0.01 #GB/s
+    - fromDeployment: caller
+      toService: echo-svc
+      latency: 20 #ms
+      totalDataTransferred: 1 #GB
+      averageDataRate: 0.1 #GB/s
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: echo-app-deployment-policy
+spec:
+  deploymentPolicies:
+    - deploymentRef:
+        name: echo
+      performancePolicy:
+        responseTime: 100ms
+        customMetric:
+          - name: cache-hit-ratio
+            endpoint: /metrics/cache-hit-ratio
+      locationConstraint:
+        permitted:
+          - region: scinet
+          - region: vaughan
+        required:
+          - region: edge
+    - deploymentRef:
+        name: caller
+      locationConstraint:
+        permitted: 
+          - type: edge
+          - type: nte
+        required: {}
+    - deploymentRef:
+        name: logger
+      locationConstraint:
+        permitted: 
+          - type: cloud
+---

@@ -24,35 +24,44 @@ import (
 // 	return nil
 // }
 
-func getSubnetCidr(kubeClient client.Client, obj corev1alpha1.SkyProvider) (string, *corev1.ConfigMap, error) {
+func getSubnetCidr(kubeClient client.Client, obj corev1alpha1.SkyProvider) (string, string, *corev1.ConfigMap, error) {
 	providerName := obj.Spec.ProviderRef.ProviderName
 
 	// get a config map with label config-type: subnet-cidr
 	configMaps := &corev1.ConfigMapList{}
 	listOptions := &client.MatchingLabels{
-		"skycluster.io/config-type":   corev1alpha1.SkyClusterConfigTypeSubnetCidr,
-		"skycluster.io/provider-name": providerName,
+		"skycluster.io/config-type":     corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		"skycluster.io/provider-name":   providerName,
+		"skycluster.io/provider-region": obj.Spec.ProviderRef.ProviderRegion,
+		// provider-type equal to default only filter regional settings
+		// which should have the subnet CIDR information
+		"skycluster.io/provider-type": "default",
 	}
 	if err := kubeClient.List(context.Background(), configMaps, listOptions); err != nil {
 		err := errors.Wrap(err, "failed to list ConfigMaps for subnet-cidr")
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if len(configMaps.Items) == 0 {
 		err := errors.New("No ConfigMap found with label config-type: subnet-cidr")
-		return "", nil, err
+		return "", "", nil, err
 	}
 	// There should be only one config map matching the labels
 	configMap := &configMaps.Items[0]
 	// get the data and based on the values of the fields returns their values
 	data := configMap.Data
 	// check if any fields is equal to 'providerName'
-	if subnet, ok1 := data["subnetCidr"]; !ok1 {
+	vpcCidr, ok1 := data[corev1alpha1.SKYCLUSTER_VPCCidrField_LABEL]
+	subnetIndex, ok2 := data[corev1alpha1.SKYCLUSTER_SubnetIndexField_LABEL]
+	if !ok1 {
 		err := errors.New("No IP CIDR range found for the provider")
-		return "", nil, err
-	} else {
-		return subnet, configMap, nil
+		return "", "", nil, err
 	}
+	if !ok2 {
+		err := errors.New("No subnet index found for the provider")
+		return "", "", nil, err
+	}
+	return vpcCidr, subnetIndex, configMap, nil
 }
 
 func ListSkyProviderByLabels(

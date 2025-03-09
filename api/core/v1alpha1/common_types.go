@@ -1,42 +1,44 @@
 package v1alpha1
 
 var (
-	SkyClusterNamespace      = "skycluster"
-	SkyClusterAPI            = "skycluster.io"
-	SkyClusterCoreGroup      = "core." + SkyClusterAPI
-	SkyClusterXRDsGroup      = "xrds." + SkyClusterAPI
-	SkyClusterVersion        = "v1alpha1"
-	SkyClusterManagedBy      = SkyClusterAPI + "/managed-by"
-	SkyClusterManagedByValue = "skycluster"
-	SkyClusterConfigType     = SkyClusterAPI + "/config-type"
-	SkyClusterProviderName   = SkyClusterAPI + "/provider-name"
-	SkyClusterProviderRegion = SkyClusterAPI + "/provider-region"
-	SkyClusterProviderZone   = SkyClusterAPI + "/provider-zone"
-	SkyClusterProviderType   = SkyClusterAPI + "/provider-type"
-	SkyClusterProjectID      = SkyClusterAPI + "/project-id"
+	SKYCLUSTER_NAMESPACE            = "skycluster"
+	SKYCLUSTER_API                  = "skycluster.io"
+	SKYCLUSTER_COREGROUP            = "core." + SKYCLUSTER_API
+	SKYCLUSTER_XRDsGROUP            = "xrds." + SKYCLUSTER_API
+	SKYCLUSTER_VERSION              = "v1alpha1"
+	SKYCLUSTER_MANAGEDBY_LABEL      = SKYCLUSTER_API + "/managed-by"
+	SKYCLUSTER_MANAGEDBY_VALUE      = "skycluster"
+	SKYCLUSTER_CONFIGTYPE_LABEL     = SKYCLUSTER_API + "/config-type"
+	SKYCLUSTER_PROVIDERNAME_LABEL   = SKYCLUSTER_API + "/provider-name"
+	SKYCLUSTER_PROVIDERREGION_LABEL = SKYCLUSTER_API + "/provider-region"
+	SKYCLUSTER_PROVIDERZONE_LABEL   = SKYCLUSTER_API + "/provider-zone"
+	SKYCLUSTER_PROVIDERTYPE_LABEL   = SKYCLUSTER_API + "/provider-type"
+	SKYCLUSTER_PROJECTID_LABEL      = SKYCLUSTER_API + "/project-id"
 
 	// SkyClusterConfigType values
-	SkyClusterConfigTypeSubnetCidr = "subnet-cidr"
+	SKYCLUSTER_VPCCidrField_LABEL      = "vpcCidr"
+	SKYCLUSTER_SubnetIndexField_LABEL  = "subnetIndex"
+	SKYCLUSTER_ProvdiderMappings_LABEL = "provider-mappings"
 )
 
-type SecGroupSpec struct {
-	SecGroup []SecGroup `json:"secgroup"`
-}
+// type SecGroupSpec struct {
+// 	SecGroup []SecGroup `json:"secgroup"`
+// }
 
-type SecGroup struct {
-	TCPPorts []PortSpec `json:"tcpPorts,omitempty"`
-	UDPPorts []PortSpec `json:"udpPorts,omitempty"`
-}
+// type SecGroup struct {
+// 	TCPPorts []PortSpec `json:"tcpPorts,omitempty"`
+// 	UDPPorts []PortSpec `json:"udpPorts,omitempty"`
+// }
 
-type PortSpec struct {
-	FromPort int `json:"fromPort"`
-	ToPort   int `json:"toPort"`
-}
+// type PortSpec struct {
+// 	FromPort int `json:"fromPort"`
+// 	ToPort   int `json:"toPort"`
+// }
 
-type KeypairRefSpec struct {
-	Name      string `json:"name,omitempty"`
-	Namespace string `json:"namespace,omitempty"`
-}
+// type KeypairRefSpec struct {
+// 	Name      string `json:"name,omitempty"`
+// 	Namespace string `json:"namespace,omitempty"`
+// }
 
 type ProviderRefSpec struct {
 	ProviderName        string `json:"providerName,omitempty"`
@@ -62,10 +64,10 @@ type MetricSpec struct {
 	Protocol string `json:"protocol"`
 }
 
-type ObjectDescriptor struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Group     string `json:"group"`
-	Kind      string `json:"kind"`
-	Version   string `json:"version,omitempty"`
-}
+// type ObjectDescriptor struct {
+// 	Name      string `json:"name"`
+// 	Namespace string `json:"namespace"`
+// 	Group     string `json:"group"`
+// 	Kind      string `json:"kind"`
+// 	Version   string `json:"version,omitempty"`
+// }

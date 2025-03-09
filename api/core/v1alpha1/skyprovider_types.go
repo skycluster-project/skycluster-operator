@@ -18,6 +18,7 @@ package v1alpha1
 
 import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -25,9 +26,9 @@ import (
 type SkyProviderSpec struct {
 	// SecGroup    SecGroup           `json:"secGroup,omitempty"`
 	// KeypairRef  *KeypairRefSpec    `json:"keypairRef,omitempty"`
-	ProviderRef ProviderRefSpec    `json:"providerRef,omitempty"`
-	DependsOn   []ObjectDescriptor `json:"dependsOn,omitempty"`
-	DependedBy  []ObjectDescriptor `json:"dependedBy,omitempty"`
+	ProviderRef ProviderRefSpec          `json:"providerRef,omitempty"`
+	DependsOn   []corev1.ObjectReference `json:"dependsOn,omitempty"`
+	DependedBy  []corev1.ObjectReference `json:"dependedBy,omitempty"`
 }
 
 // SkyProviderStatus defines the observed state of SkyProvider.

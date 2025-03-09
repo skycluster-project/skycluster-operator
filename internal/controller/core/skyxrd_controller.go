@@ -46,17 +46,23 @@ type SkyXRDReconciler struct {
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", req.Name, req.NamespacedName))
+	// logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", req.Name, req.NamespacedName))
 
 	// Fetch the object
-	SkyProviderObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
+	// unstrObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
+	unstrObj := &unstructured.Unstructured{}
+	unstrObj.SetNamespace(req.Namespace)
+	unstrObj.SetName(req.Name)
+	err := r.Get(ctx, req.NamespacedName, unstrObj)
+	gvk := unstrObj.GroupVersionKind()
+	logger.Info(fmt.Sprintf("[SkyXRD]\t%s %v", req.NamespacedName, gvk))
 	if err != nil {
 		logger.Info("[SkyXRD]\tunable to fetch object, maybe it is deleted?")
 		return ctrl.Result{}, nil
 	}
-	if SkyProviderObj != nil {
-		logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", SkyProviderObj.GetName(), SkyProviderObj.GetNamespace()))
-	}
+	// if SkyProviderObj != nil {
+	// 	logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", SkyProviderObj.GetName(), SkyProviderObj.GetNamespace()))
+	// }
 
 	return ctrl.Result{}, nil
 }

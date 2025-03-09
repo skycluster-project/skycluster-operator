@@ -85,6 +85,7 @@ func ListUnstructuredObjectsByFieldList(
 	return filteredObj, nil
 }
 
+// Check if all labels are present in the object
 func ContainsLabels(objLabels map[string]string, labelKeys []string) bool {
 	for _, key := range labelKeys {
 		if _, exists := objLabels[key]; !exists {
@@ -135,25 +136,23 @@ func CompareStringMap(objLabels map[string]string, labels map[string]string) boo
 	return true
 }
 
-func CompareObjectDescriptors(obj1, obj2 corev1alpha1.ObjectDescriptor) bool {
+func CompareObjectDescriptors(obj1, obj2 corev1.ObjectReference) bool {
 	return obj1.Name == obj2.Name &&
 		obj1.Namespace == obj2.Namespace &&
-		obj1.Group == obj2.Group &&
-		obj1.Kind == obj2.Kind &&
-		obj1.Version == obj2.Version
+		obj1.APIVersion == obj2.APIVersion
 }
 
-func AppendObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) {
+func AppendObjectDescriptor(objList *[]corev1.ObjectReference, value corev1.ObjectReference) {
 	if objList == nil {
 		// if the objList is nil we create a new object and therefore, should
 		// assign its address to the objList, hecne, the objList should be a pointer
-		objList = &[]corev1alpha1.ObjectDescriptor{value}
+		objList = &[]corev1.ObjectReference{value}
 	} else {
 		*objList = append(*objList, value)
 	}
 }
 
-func ContainsObjectDescriptor(objList []corev1alpha1.ObjectDescriptor, value corev1alpha1.ObjectDescriptor) (bool, int) {
+func ContainsObjectDescriptor(objList []corev1.ObjectReference, value corev1.ObjectReference) (bool, int) {
 	exists, idx := false, -1
 	for i, val := range objList {
 		if CompareObjectDescriptors(val, value) {
@@ -165,7 +164,7 @@ func ContainsObjectDescriptor(objList []corev1alpha1.ObjectDescriptor, value cor
 	return exists, idx
 }
 
-func RemoveObjectDescriptor(objList *[]corev1alpha1.ObjectDescriptor, idx int) {
+func RemoveObjectDescriptor(objList *[]corev1.ObjectReference, idx int) {
 	if objList == nil {
 		return
 	}
@@ -208,7 +207,7 @@ func GetConfigMap(ctx context.Context, name, namespace string, kubeClient client
 }
 
 func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[string]string) (string, error) {
-	if configMaps, err := GetConfigMapsByLabels(kubeClient, corev1alpha1.SkyClusterNamespace, providerLabels); err != nil || configMaps == nil {
+	if configMaps, err := GetConfigMapsByLabels(kubeClient, corev1alpha1.SKYCLUSTER_NAMESPACE, providerLabels); err != nil || configMaps == nil {
 		return "", errors.Wrap(err, "failed to get ConfigMaps by labels")
 	} else {
 		// check the length of the configMaps
@@ -216,7 +215,7 @@ func GetProviderTypeFromConfigMap(kubeClient client.Client, providerLabels map[s
 			return "", errors.New(fmt.Sprintf("expected 1 ConfigMap, got %d", len(configMaps.Items)))
 		}
 		for _, configMap := range configMaps.Items {
-			if value, exists := configMap.Labels[corev1alpha1.SkyClusterProviderType]; exists {
+			if value, exists := configMap.Labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL]; exists {
 				return value, nil
 			}
 		}

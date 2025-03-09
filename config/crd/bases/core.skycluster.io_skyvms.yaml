@@ -41,43 +41,95 @@ spec:
             properties:
               dependedBy:
                 items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
-                    group:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
                       type: string
                     kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
                       type: string
                     name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                       type: string
                     namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
                       type: string
-                    version:
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
                       type: string
-                  required:
-                  - group
-                  - kind
-                  - name
-                  - namespace
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
                   type: object
+                  x-kubernetes-map-type: atomic
                 type: array
               dependsOn:
                 items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
                   properties:
-                    group:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
                       type: string
                     kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
                       type: string
                     name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                       type: string
                     namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
                       type: string
-                    version:
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
                       type: string
-                  required:
-                  - group
-                  - kind
-                  - name
-                  - namespace
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
                   type: object
+                  x-kubernetes-map-type: atomic
                 type: array
               diskSizeGB:
                 type: integer
@@ -85,13 +137,6 @@ spec:
                 type: string
               image:
                 type: string
-              keypairRef:
-                properties:
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                type: object
               machineType:
                 type: string
               monitoringMetrics:
@@ -138,36 +183,50 @@ spec:
                   providerZone:
                     type: string
                 type: object
-              secGroup:
-                properties:
-                  tcpPorts:
-                    items:
-                      properties:
-                        fromPort:
-                          type: integer
-                        toPort:
-                          type: integer
-                      required:
-                      - fromPort
-                      - toPort
-                      type: object
-                    type: array
-                  udpPorts:
-                    items:
-                      properties:
-                        fromPort:
-                          type: integer
-                        toPort:
-                          type: integer
-                      required:
-                      - fromPort
-                      - toPort
-                      type: object
-                    type: array
-                type: object
             type: object
           status:
             description: SkyVMStatus defines the observed state of SkyVM.
+            properties:
+              conditions:
+                description: A Condition that may apply to a resource.
+                properties:
+                  lastTransitionTime:
+                    description: |-
+                      LastTransitionTime is the last time this condition transitioned from one
+                      status to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: |-
+                      A Message containing details about this condition's last transition from
+                      one status to another, if any.
+                    type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                      with respect to the current state of the instance.
+                    format: int64
+                    type: integer
+                  reason:
+                    description: A Reason for this condition's last transition from
+                      one status to another.
+                    type: string
+                  status:
+                    description: Status of this condition; is it currently True, False,
+                      or Unknown?
+                    type: string
+                  type:
+                    description: |-
+                      Type of this condition. At most one of each condition type may apply to
+                      a resource at any point in time.
+                    type: string
+                required:
+                - lastTransitionTime
+                - reason
+                - status
+                - type
+                type: object
             type: object
         type: object
     served: true

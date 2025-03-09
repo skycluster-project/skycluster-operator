@@ -39,7 +39,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
 	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
+	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -59,6 +61,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -240,6 +243,20 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+		os.Exit(1)
+	}
+	if err = (&policycontroller.DataflowPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
+		os.Exit(1)
+	}
+	if err = (&policycontroller.DeploymentPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

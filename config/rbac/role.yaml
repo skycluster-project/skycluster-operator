@@ -60,6 +60,35 @@ rules:
   - patch
   - update
 - apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  - deploymentpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/finalizers
+  - deploymentpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  - deploymentpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - xrds.skycluster.io
   resources:
   - skyproviders

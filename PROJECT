@@ -33,4 +33,22 @@ resources:
   kind: SkyXRD
   path: k8s.io/api/core/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: policy
+  kind: DataflowPolicy
+  path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: policy
+  kind: DeploymentPolicy
+  path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
+  version: v1alpha1
 version: "3"
