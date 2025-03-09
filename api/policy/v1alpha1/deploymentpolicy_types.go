@@ -41,9 +41,9 @@ type LocationConstraint struct {
 
 type CustomMetric struct {
 	// Name is the name of the custom metric
-	Name string `json:"name,omitempty"`
+	Name string `json:"name"`
 	// Endpoint is the endpoint of the custom metric
-	Endpoint string `json:"endpoint,omitempty"`
+	Endpoint string `json:"endpoint"`
 }
 
 type PerformanceConstraint struct {
@@ -52,9 +52,12 @@ type PerformanceConstraint struct {
 }
 
 type DeploymentPolicyItem struct {
-	DeploymentRef         corev1.ObjectReference `json:"deploymentRef"`
-	PerformanceConstraint PerformanceConstraint  `json:"performanceConstraint"`
-	LocationConstraint    LocationConstraint     `json:"locationConstraint"`
+	// DeploymentRef is the reference to the deployment
+	DeploymentRef corev1.ObjectReference `json:"deploymentRef"`
+	// PerformanceConstraint is the performance constraint for the deployment
+	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
+	// LocationConstraint is the location constraint for the deployment
+	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
 }
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.

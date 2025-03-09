@@ -43,8 +43,7 @@ spec:
                 items:
                   properties:
                     deploymentRef:
-                      description: ObjectReference contains enough information to
-                        let you inspect or modify the referred object.
+                      description: DeploymentRef is the reference to the deployment
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -87,6 +86,8 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     locationConstraint:
+                      description: LocationConstraint is the location constraint for
+                        the deployment
                       properties:
                         permitted:
                           description: Permitted is the list of locations that are
@@ -132,6 +133,8 @@ spec:
                           type: array
                       type: object
                     performanceConstraint:
+                      description: PerformanceConstraint is the performance constraint
+                        for the deployment
                       properties:
                         customMetrics:
                           items:
@@ -143,6 +146,9 @@ spec:
                               name:
                                 description: Name is the name of the custom metric
                                 type: string
+                            required:
+                            - endpoint
+                            - name
                             type: object
                           type: array
                         responseTime:
@@ -150,8 +156,6 @@ spec:
                       type: object
                   required:
                   - deploymentRef
-                  - locationConstraint
-                  - performanceConstraint
                   type: object
                 type: array
             required:

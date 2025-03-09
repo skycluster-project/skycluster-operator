@@ -43,6 +43,7 @@ import (
 	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
 	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
 	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
+	webhookpolicyv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/policy/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -276,6 +277,20 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err = webhookcorev1alpha1.SetupDeploymentWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookpolicyv1alpha1.SetupDataflowPolicyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DataflowPolicy")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookpolicyv1alpha1.SetupDeploymentPolicyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DeploymentPolicy")
 			os.Exit(1)
 		}
 	}

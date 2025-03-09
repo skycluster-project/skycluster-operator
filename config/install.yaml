@@ -48,17 +48,23 @@ spec:
             description: DataflowPolicySpec defines the desired state of DataflowPolicy.
             properties:
               dataDependencies:
+                description: DataDependencies is the list of data dependencies
                 items:
                   properties:
                     averageDataRate:
+                      description: AverageDataRate indicates the average data rate
                       type: string
                     fromDeployment:
+                      description: FromDeployment is the name of the source deployment
                       type: string
                     latency:
+                      description: Latency represents the latency between services
                       type: string
                     toService:
+                      description: ToService is the target service name
                       type: string
                     totalDataTransfer:
+                      description: TotalDataTransfer indicates the total data transferred
                       type: string
                   required:
                   - fromDeployment
@@ -117,10 +123,127 @@ spec:
           spec:
             description: DeploymentPolicySpec defines the desired state of DeploymentPolicy.
             properties:
-              foo:
-                description: Foo is an example field of DeploymentPolicy. Edit deploymentpolicy_types.go
-                  to remove/update
-                type: string
+              deploymentPolicies:
+                items:
+                  properties:
+                    deploymentRef:
+                      description: DeploymentRef is the reference to the deployment
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    locationConstraint:
+                      description: LocationConstraint is the location constraint for
+                        the deployment
+                      properties:
+                        permitted:
+                          description: Permitted is the list of locations that are
+                            permitted
+                          items:
+                            properties:
+                              name:
+                                description: Name is the name of the location e.g.
+                                  aws, gcp, os (OpenStack)
+                                type: string
+                              region:
+                                description: Region is the region of the location
+                                type: string
+                              type:
+                                description: Type is the type of the location e.g.
+                                  cloud, nte, edge
+                                type: string
+                              zone:
+                                description: Zone is the zone of the location
+                                type: string
+                            type: object
+                          type: array
+                        required:
+                          description: Required is the list of locations that are
+                            required for deployment
+                          items:
+                            properties:
+                              name:
+                                description: Name is the name of the location e.g.
+                                  aws, gcp, os (OpenStack)
+                                type: string
+                              region:
+                                description: Region is the region of the location
+                                type: string
+                              type:
+                                description: Type is the type of the location e.g.
+                                  cloud, nte, edge
+                                type: string
+                              zone:
+                                description: Zone is the zone of the location
+                                type: string
+                            type: object
+                          type: array
+                      type: object
+                    performanceConstraint:
+                      description: PerformanceConstraint is the performance constraint
+                        for the deployment
+                      properties:
+                        customMetrics:
+                          items:
+                            properties:
+                              endpoint:
+                                description: Endpoint is the endpoint of the custom
+                                  metric
+                                type: string
+                              name:
+                                description: Name is the name of the custom metric
+                                type: string
+                            required:
+                            - endpoint
+                            - name
+                            type: object
+                          type: array
+                        responseTime:
+                          type: string
+                      type: object
+                  required:
+                  - deploymentRef
+                  type: object
+                type: array
+            required:
+            - deploymentPolicies
             type: object
           status:
             description: DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
@@ -1236,4 +1359,46 @@ webhooks:
     - UPDATE
     resources:
     - deployments
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: skycluster-manager-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUV5akNDQXpLZ0F3SUJBZ0lSQU1QTHZLN0xCWk5oc3dFM3p6ZVZ1dkV3RFFZSktvWklodmNOQVFFTEJRQXcKZlRFZU1Cd0dBMVVFQ2hNVmJXdGpaWEowSUdSbGRtVnNiM0J0Wlc1MElFTkJNU2t3SndZRFZRUUxEQ0IxWW5WdQpkSFZBWW14MVpXTnNkWE4wWlhJdFpHVjJNU0FvVldKMWJuUjFLVEV3TUM0R0ExVUVBd3duYld0alpYSjBJSFZpCmRXNTBkVUJpYkhWbFkyeDFjM1JsY2kxa1pYWXhJQ2hWWW5WdWRIVXBNQjRYRFRJMU1ESXlNREUzTVRneU0xb1gKRFRNMU1ESXlNREUzTVRneU0xb3dmVEVlTUJ3R0ExVUVDaE1WYld0alpYSjBJR1JsZG1Wc2IzQnRaVzUwSUVOQgpNU2t3SndZRFZRUUxEQ0IxWW5WdWRIVkFZbXgxWldOc2RYTjBaWEl0WkdWMk1TQW9WV0oxYm5SMUtURXdNQzRHCkExVUVBd3duYld0alpYSjBJSFZpZFc1MGRVQmliSFZsWTJ4MWMzUmxjaTFrWlhZeElDaFZZblZ1ZEhVcE1JSUIKb2pBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVk4QU1JSUJpZ0tDQVlFQTB2WlMvWjFlU1BNQVFyZ3BzZXNEbjJqSQpHVHUxQ0psaDlzSG5RWnRUSUZabWtWMDZnTGpsdlJFN2pHdk1Rb0JrL3EySmRoYkhzdGtyNGlveXNnRW1oQ0tsCkZ6akFNYmdEcDU4V1NDa3d4ZWEwczBIL3JtR3BPWlZwalpreFZidkcwNHRtYktiR1NtbmRRWWlrQnJzR2Y4RncKbWhzeU93c3owYXFsS0JVK0pGR2hhSjdNQ2hSTXdValYwRzNibzF3L3U2S3dCT1pCZjBYa3Bod0srR2k0YkRvaQpudFFRN0RHU0toMC9LaFlQSFNGK1hvbUpjTU1BNGFZZkRyVlkvVVR0aWlRLzhiYUJuT0pyeGNIRjJUMkRaaG1sClRSYlpEVHErWVplNmprZ2xHZjVTU3FjWXVUS2JkQUI5Q2t6UUtyenVtTzdHSXpBcG5uVzFlelZkY0Y2aFJOUkoKQ1g1bk1ZakNkSTVzSGZTWlovRi9NQXlxNllZa05YZGsvbDlBUE1IWWVCaG5haVJFWVVQYnpMZGZtaUlEcVlkeAozV2p1UTFiWkpGbnhyUEhOM3BjVHZzVFhzbHBNZGxrVFZ5bnN2SXZIT3B3V1hoa2s1NWNpYzZGMUpjRksxQ3J4CmxPOXllZnZsZGxhYWtYMlYrTVcwUm4wMFpvODB2WTNnTGVGVmxZblBBZ01CQUFHalJUQkRNQTRHQTFVZER3RUIKL3dRRUF3SUNCREFTQmdOVkhSTUJBZjhFQ0RBR0FRSC9BZ0VBTUIwR0ExVWREZ1FXQkJTc1I2UnQ4UU5zYmxHSwpVV2J1NS9vYnFFMll5VEFOQmdrcWhraUc5dzBCQVFzRkFBT0NBWUVBaXgranVadTVvdC9RR3czYmpORGdQbEorCll0Nk5BTld5cjFVSjNHQ0tocHdtVHNjbldWYnhSTmwxS0FDNk5tU01oVU5yWkNBODN4NWVkV0dwT1N2WlRaMG4KMXR1dW45MEJPcTVYQ1dmb0wxVFVxU1ZRQjhWWklSTGU3QzFmRUNIeXBvNDdBdEVxb1ZHNnJreWdRUmxjZDZJZgpiZDhGdWNXbG45QjZQa0lsaGpjN1AzTDFQMUFjdThQUjVzc1N1WFBoV1BiZzVaSXNYVXZORjBuOVh3dXpsRVpaCkt5bFpGTStyZCt5OXU4cFV4b2RaWkZ4dUdRM1NQWEk2SGFMbXRaUDNhUER3WGlud0dEczNGQjdqQ2dYd1pZU1AKUWd3VFNqUWdqNGVobzZjN09zOUtCTmZQYmVZcFE5d01NRFRjRnRRSE5xNEtrQVJrZTBTanZ5dGcxK2g5ZG5OSAp6TWlzZWtVNmRoakh2emErK01CYk9SWWp0RDlmUWlhajYybXJkMmNJdzlVQVdNenRlSFo1ZFRKWHpKdmE1bktsCmpXREpnK3BnQkhpOHJIRmJ6cG01NUpOaS9nZUJwVDRwdE1SOUxFSHZ4ZmhXejVUUWZmWWNEbCtEVUNmd1pxZUMKa1dDaU9BckJtbEZPY0NZbEtWSXZxdUpHcmt3L3NYTjZ4NUFJU2Y0egotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    url: https://172.17.0.1:9443/validate-policy-skycluster-io-v1alpha1-dataflowpolicy
+  failurePolicy: Fail
+  name: vdataflowpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - dataflowpolicies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUV5akNDQXpLZ0F3SUJBZ0lSQU1QTHZLN0xCWk5oc3dFM3p6ZVZ1dkV3RFFZSktvWklodmNOQVFFTEJRQXcKZlRFZU1Cd0dBMVVFQ2hNVmJXdGpaWEowSUdSbGRtVnNiM0J0Wlc1MElFTkJNU2t3SndZRFZRUUxEQ0IxWW5WdQpkSFZBWW14MVpXTnNkWE4wWlhJdFpHVjJNU0FvVldKMWJuUjFLVEV3TUM0R0ExVUVBd3duYld0alpYSjBJSFZpCmRXNTBkVUJpYkhWbFkyeDFjM1JsY2kxa1pYWXhJQ2hWWW5WdWRIVXBNQjRYRFRJMU1ESXlNREUzTVRneU0xb1gKRFRNMU1ESXlNREUzTVRneU0xb3dmVEVlTUJ3R0ExVUVDaE1WYld0alpYSjBJR1JsZG1Wc2IzQnRaVzUwSUVOQgpNU2t3SndZRFZRUUxEQ0IxWW5WdWRIVkFZbXgxWldOc2RYTjBaWEl0WkdWMk1TQW9WV0oxYm5SMUtURXdNQzRHCkExVUVBd3duYld0alpYSjBJSFZpZFc1MGRVQmliSFZsWTJ4MWMzUmxjaTFrWlhZeElDaFZZblZ1ZEhVcE1JSUIKb2pBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVk4QU1JSUJpZ0tDQVlFQTB2WlMvWjFlU1BNQVFyZ3BzZXNEbjJqSQpHVHUxQ0psaDlzSG5RWnRUSUZabWtWMDZnTGpsdlJFN2pHdk1Rb0JrL3EySmRoYkhzdGtyNGlveXNnRW1oQ0tsCkZ6akFNYmdEcDU4V1NDa3d4ZWEwczBIL3JtR3BPWlZwalpreFZidkcwNHRtYktiR1NtbmRRWWlrQnJzR2Y4RncKbWhzeU93c3owYXFsS0JVK0pGR2hhSjdNQ2hSTXdValYwRzNibzF3L3U2S3dCT1pCZjBYa3Bod0srR2k0YkRvaQpudFFRN0RHU0toMC9LaFlQSFNGK1hvbUpjTU1BNGFZZkRyVlkvVVR0aWlRLzhiYUJuT0pyeGNIRjJUMkRaaG1sClRSYlpEVHErWVplNmprZ2xHZjVTU3FjWXVUS2JkQUI5Q2t6UUtyenVtTzdHSXpBcG5uVzFlelZkY0Y2aFJOUkoKQ1g1bk1ZakNkSTVzSGZTWlovRi9NQXlxNllZa05YZGsvbDlBUE1IWWVCaG5haVJFWVVQYnpMZGZtaUlEcVlkeAozV2p1UTFiWkpGbnhyUEhOM3BjVHZzVFhzbHBNZGxrVFZ5bnN2SXZIT3B3V1hoa2s1NWNpYzZGMUpjRksxQ3J4CmxPOXllZnZsZGxhYWtYMlYrTVcwUm4wMFpvODB2WTNnTGVGVmxZblBBZ01CQUFHalJUQkRNQTRHQTFVZER3RUIKL3dRRUF3SUNCREFTQmdOVkhSTUJBZjhFQ0RBR0FRSC9BZ0VBTUIwR0ExVWREZ1FXQkJTc1I2UnQ4UU5zYmxHSwpVV2J1NS9vYnFFMll5VEFOQmdrcWhraUc5dzBCQVFzRkFBT0NBWUVBaXgranVadTVvdC9RR3czYmpORGdQbEorCll0Nk5BTld5cjFVSjNHQ0tocHdtVHNjbldWYnhSTmwxS0FDNk5tU01oVU5yWkNBODN4NWVkV0dwT1N2WlRaMG4KMXR1dW45MEJPcTVYQ1dmb0wxVFVxU1ZRQjhWWklSTGU3QzFmRUNIeXBvNDdBdEVxb1ZHNnJreWdRUmxjZDZJZgpiZDhGdWNXbG45QjZQa0lsaGpjN1AzTDFQMUFjdThQUjVzc1N1WFBoV1BiZzVaSXNYVXZORjBuOVh3dXpsRVpaCkt5bFpGTStyZCt5OXU4cFV4b2RaWkZ4dUdRM1NQWEk2SGFMbXRaUDNhUER3WGlud0dEczNGQjdqQ2dYd1pZU1AKUWd3VFNqUWdqNGVobzZjN09zOUtCTmZQYmVZcFE5d01NRFRjRnRRSE5xNEtrQVJrZTBTanZ5dGcxK2g5ZG5OSAp6TWlzZWtVNmRoakh2emErK01CYk9SWWp0RDlmUWlhajYybXJkMmNJdzlVQVdNenRlSFo1ZFRKWHpKdmE1bktsCmpXREpnK3BnQkhpOHJIRmJ6cG01NUpOaS9nZUJwVDRwdE1SOUxFSHZ4ZmhXejVUUWZmWWNEbCtEVUNmd1pxZUMKa1dDaU9BckJtbEZPY0NZbEtWSXZxdUpHcmt3L3NYTjZ4NUFJU2Y0egotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    url: https://172.17.0.1:9443/validate-policy-skycluster-io-v1alpha1-deploymentpolicy
+  failurePolicy: Fail
+  name: vdeploymentpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deploymentpolicies
   sideEffects: None

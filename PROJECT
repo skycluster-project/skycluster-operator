@@ -42,6 +42,9 @@ resources:
   kind: DataflowPolicy
   path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
@@ -51,6 +54,9 @@ resources:
   kind: DeploymentPolicy
   path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
   version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 - core: true
   group: core
   kind: Deployment

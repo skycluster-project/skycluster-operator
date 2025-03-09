@@ -140,12 +140,12 @@ spec:
     - fromDeployment: caller
       toService: logger-svc
       latency: 30ms
-      totalDataTransferr: 0.5GB
+      totalDataTransfer: 0.5GB
       averageDataRate: 0.01GB/s
     - fromDeployment: caller
       toService: echo-svc
       latency: 20ms
-      totalDataTransferr: 1GB
+      totalDataTransfer: 1GB
       averageDataRate: 0.1GB/s
 ---
 apiVersion: policy.skycluster.io/v1alpha1
@@ -158,7 +158,7 @@ spec:
         name: echo
       performanceConstraint:
         responseTime: 100ms
-        customMetric:
+        customMetrics:
           - name: cache-hit-ratio
             endpoint: /metrics/cache-hit-ratio
       locationConstraint:
@@ -173,7 +173,6 @@ spec:
         permitted: 
           - type: edge
           - type: nte
-        required: {}
     - deploymentRef:
         name: logger
       locationConstraint:

@@ -24,3 +24,49 @@ webhooks:
     resources:
     - deployments
   sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-policy-skycluster-io-v1alpha1-dataflowpolicy
+  failurePolicy: Fail
+  name: vdataflowpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - dataflowpolicies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-policy-skycluster-io-v1alpha1-deploymentpolicy
+  failurePolicy: Fail
+  name: vdeploymentpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deploymentpolicies
+  sideEffects: None
