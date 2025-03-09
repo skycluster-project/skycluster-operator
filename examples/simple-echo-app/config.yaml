@@ -134,7 +134,7 @@ spec:
 apiVersion: policy.skycluster.io/v1alpha1
 kind: DataflowPolicy
 metadata:
-  name: echo-app-policy
+  name: echo-app-policies
 spec:
   dataDependencies:
     - fromDeployment: caller
@@ -151,7 +151,7 @@ spec:
 apiVersion: policy.skycluster.io/v1alpha1
 kind: DeploymentPolicy
 metadata:
-  name: echo-app-deployment-policy
+  name: echo-app-policies
 spec:
   deploymentPolicies:
     - deploymentRef:

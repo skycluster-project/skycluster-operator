@@ -18,13 +18,16 @@ package policy
 
 import (
 	"context"
+	"fmt"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DeploymentPolicyReconciler reconciles a DeploymentPolicy object
@@ -37,19 +40,51 @@ type DeploymentPolicyReconciler struct {
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=deploymentpolicies/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=deploymentpolicies/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the DeploymentPolicy object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.4/pkg/reconcile
 func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+	loggerName := "DPPolicy"
+	logger.Info(fmt.Sprintf("[%s]\t Reconciling DeploymentPolicy for [%s]", loggerName, req.Name))
 
-	// TODO(user): your logic here
+	dpPolicy := &policyv1alpha1.DeploymentPolicy{}
+	if err := r.Get(ctx, req.NamespacedName, dpPolicy); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy not found.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Append the name of the DeploymentPolciy to the skycluster.core.skycluster.io/v1alpha1 object
+	// If the SkyCluster object does not exist, create it and then append the name
+
+	skyCluster := &corev1alpha1.SkyCluster{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: dpPolicy.Namespace,
+		Name:      dpPolicy.Name,
+	}, skyCluster); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found. Creating it.", loggerName))
+		skyCluster = &corev1alpha1.SkyCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      dpPolicy.Name,
+				Namespace: dpPolicy.Namespace,
+			},
+			Spec: corev1alpha1.SkyClusterSpec{
+				DeploymentPolciyRef: corev1alpha1.ResourceSpec{
+					Name: dpPolicy.Name,
+				},
+			},
+		}
+		if err := r.Create(ctx, skyCluster); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to create SkyCluster.", loggerName))
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// The SkyCluster object exists, update it by appending the name of the DataflowPolicy
+	logger.Info(fmt.Sprintf("[%s]\t Updating SkyCluster.", loggerName))
+	skyCluster.Spec.DeploymentPolciyRef.Name = dpPolicy.Name
+	if err := r.Update(ctx, skyCluster); err != nil {
+		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update SkyCluster.", loggerName))
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

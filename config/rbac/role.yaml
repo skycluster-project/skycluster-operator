@@ -33,6 +33,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - skyclusters
   - skyproviders
   - skyvms
   verbs:
@@ -46,6 +47,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - skyclusters/finalizers
   - skyproviders/finalizers
   - skyvms/finalizers
   verbs:
@@ -53,6 +55,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - skyclusters/status
   - skyproviders/status
   - skyvms/status
   verbs:
