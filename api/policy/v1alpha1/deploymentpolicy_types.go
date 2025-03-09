@@ -17,25 +17,53 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type Location struct {
+	// Name is the name of the location e.g. aws, gcp, os (OpenStack)
+	Name string `json:"name,omitempty"`
+	// Type is the type of the location e.g. cloud, nte, edge
+	Type string `json:"type,omitempty"`
+	// Region is the region of the location
+	Region string `json:"region,omitempty"`
+	// Zone is the zone of the location
+	Zone string `json:"zone,omitempty"`
+}
+
+type LocationConstraint struct {
+	// Permitted is the list of locations that are permitted
+	Permitted []Location `json:"permitted,omitempty"`
+	// Required is the list of locations that are required for deployment
+	Required []Location `json:"required,omitempty"`
+}
+
+type CustomMetric struct {
+	// Name is the name of the custom metric
+	Name string `json:"name,omitempty"`
+	// Endpoint is the endpoint of the custom metric
+	Endpoint string `json:"endpoint,omitempty"`
+}
+
+type PerformanceConstraint struct {
+	ResponseTime  string         `json:"responseTime,omitempty"`
+	CustomMetrics []CustomMetric `json:"customMetrics,omitempty"`
+}
+
+type DeploymentPolicyItem struct {
+	DeploymentRef         corev1.ObjectReference `json:"deploymentRef"`
+	PerformanceConstraint PerformanceConstraint  `json:"performanceConstraint"`
+	LocationConstraint    LocationConstraint     `json:"locationConstraint"`
+}
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.
 type DeploymentPolicySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of DeploymentPolicy. Edit deploymentpolicy_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	DeploymentPolicies []DeploymentPolicyItem `json:"deploymentPolicies"`
 }
 
 // DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
 type DeploymentPolicyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true

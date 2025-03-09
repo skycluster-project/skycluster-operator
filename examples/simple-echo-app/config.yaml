@@ -139,14 +139,14 @@ spec:
   dataDependencies:
     - fromDeployment: caller
       toService: logger-svc
-      latency: 30 #ms
-      totalDataTransferred: 0.5 #GB
-      averageDataRate: 0.01 #GB/s
+      latency: 30ms
+      totalDataTransferr: 0.5GB
+      averageDataRate: 0.01GB/s
     - fromDeployment: caller
       toService: echo-svc
-      latency: 20 #ms
-      totalDataTransferred: 1 #GB
-      averageDataRate: 0.1 #GB/s
+      latency: 20ms
+      totalDataTransferr: 1GB
+      averageDataRate: 0.1GB/s
 ---
 apiVersion: policy.skycluster.io/v1alpha1
 kind: DeploymentPolicy
@@ -156,7 +156,7 @@ spec:
   deploymentPolicies:
     - deploymentRef:
         name: echo
-      performancePolicy:
+      performanceConstraint:
         responseTime: 100ms
         customMetric:
           - name: cache-hit-ratio

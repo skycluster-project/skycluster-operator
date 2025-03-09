@@ -39,10 +39,32 @@ spec:
           spec:
             description: DataflowPolicySpec defines the desired state of DataflowPolicy.
             properties:
-              foo:
-                description: Foo is an example field of DataflowPolicy. Edit dataflowpolicy_types.go
-                  to remove/update
-                type: string
+              dataDependencies:
+                description: DataDependencies is the list of data dependencies
+                items:
+                  properties:
+                    averageDataRate:
+                      description: AverageDataRate indicates the average data rate
+                      type: string
+                    fromDeployment:
+                      description: FromDeployment is the name of the source deployment
+                      type: string
+                    latency:
+                      description: Latency represents the latency between services
+                      type: string
+                    toService:
+                      description: ToService is the target service name
+                      type: string
+                    totalDataTransfer:
+                      description: TotalDataTransfer indicates the total data transferred
+                      type: string
+                  required:
+                  - fromDeployment
+                  - toService
+                  type: object
+                type: array
+            required:
+            - dataDependencies
             type: object
           status:
             description: DataflowPolicyStatus defines the observed state of DataflowPolicy.

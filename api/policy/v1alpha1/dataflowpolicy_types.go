@@ -20,22 +20,31 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+type DataDapendency struct {
+	// FromDeployment is the name of the source deployment
+	FromDeployment string `json:"fromDeployment"`
+
+	// ToService is the target service name
+	ToService string `json:"toService"`
+
+	// Latency represents the latency between services
+	Latency string `json:"latency,omitempty"`
+
+	// TotalDataTransfer indicates the total data transferred
+	TotalDataTransfer string `json:"totalDataTransfer,omitempty"`
+
+	// AverageDataRate indicates the average data rate
+	AverageDataRate string `json:"averageDataRate,omitempty"`
+}
 
 // DataflowPolicySpec defines the desired state of DataflowPolicy.
 type DataflowPolicySpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of DataflowPolicy. Edit dataflowpolicy_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// DataDependencies is the list of data dependencies
+	DataDependencies []DataDapendency `json:"dataDependencies"`
 }
 
 // DataflowPolicyStatus defines the observed state of DataflowPolicy.
 type DataflowPolicyStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 // +kubebuilder:object:root=true
