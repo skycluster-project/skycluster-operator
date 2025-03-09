@@ -51,4 +51,20 @@ resources:
   kind: DeploymentPolicy
   path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
   version: v1alpha1
+- core: true
+  group: core
+  kind: Deployment
+  path: k8s.io/api/core/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: skycluster.io
+  group: core
+  kind: Deployment
+  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  version: v1alpha1
 version: "3"

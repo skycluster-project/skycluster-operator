@@ -24,3 +24,7 @@ config/samples
 svcs
 
 SkyCluster
+.golangci.yml
+.devcontainer
+.github
+config/webhook/manifests-local.yaml

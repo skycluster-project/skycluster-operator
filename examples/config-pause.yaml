@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo-app-vaughan
+spec:
+  paused: True
+  replicas: 2
+  selector:
+    matchLabels:
+      app: echo-app
+      skycluster.io/provider-identifier: os-vaughan-zone-1
+  template:
+    metadata:
+      labels:
+        app: echo-app
+        skycluster.io/provider-identifier: os-vaughan-zone-1
+    spec:
+      containers:
+      - name: echo
+        image: registry.skycluster.io/alpine-curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              CONTENT=$(ip route get 8.8.8.8 | awk '{printf "Hey, my ip is: %s,", $7; exit}')
+              HOSTNAME=$(hostname)
+              CONTENT="$CONTENT\tHostname: $HOSTNAME"
+              CONTENT_LENGTH=$(echo -n "$CONTENT" | wc -c)
+              echo -e "HTTP/1.1 200 OK\r\nContent-Length: $CONTENT_LENGTH\r\n\r\n$CONTENT" | nc -l -p 8080
+            done
+        ports:
+        - containerPort: 8080
+      imagePullSecrets:
+      - name: regcred
+      nodeSelector:
+        skycluster.io/provider-identifier: os-vaughan-zone-1

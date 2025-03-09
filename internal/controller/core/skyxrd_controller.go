@@ -45,8 +45,8 @@ type SkyXRDReconciler struct {
 
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-
-	// logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", req.Name, req.NamespacedName))
+	logName := "SkyXRD"
+	logger.Info(fmt.Sprintf("[%s]\tReconciler started for %s", logName, req.Name))
 
 	// Fetch the object
 	// unstrObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)

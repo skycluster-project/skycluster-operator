@@ -42,6 +42,7 @@ import (
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
 	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
 	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
+	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -74,6 +75,7 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var logOutput string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -90,24 +92,35 @@ func main() {
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	flag.StringVar(&logOutput, "log-output-dir", "", "If provided logs will be written to the specified directory.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 
-	file, err := os.Create("/var/log/skycluster/logs.log")
-	if err != nil {
-		panic(err)
-	}
-	defer file.Close()
-
-	opts := zap.Options{
-		Development: true,
-		EncoderConfigOptions: []zap.EncoderConfigOption{
-			customLoggerFormat(),
-		},
-		DestWriter: file,
-	}
+	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	if logOutput != "" {
+		file, err := os.Create(filepath.Join(logOutput, "manager.log"))
+		if err != nil {
+			panic(err)
+		}
+		defer file.Close()
+		opts = zap.Options{
+			Development: true,
+			EncoderConfigOptions: []zap.EncoderConfigOption{
+				customLoggerFormat(),
+			},
+			DestWriter: file,
+		}
+	} else {
+		opts = zap.Options{
+			Development: true,
+			EncoderConfigOptions: []zap.EncoderConfigOption{
+				customLoggerFormat(),
+			},
+		}
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -258,6 +271,13 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhookcorev1alpha1.SetupDeploymentWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

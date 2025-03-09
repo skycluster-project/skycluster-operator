@@ -1,0 +1,7 @@
+resources:
+- manifests-local.yaml
+# - manifests.yaml
+# - service.yaml
+
+# configurations:
+# - kustomizeconfig.yaml

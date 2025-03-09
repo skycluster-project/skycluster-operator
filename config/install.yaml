@@ -1,3 +1,169 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+    control-plane: controller-manager
+  name: skycluster-manager
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: dataflowpolicies.policy.skycluster.io
+spec:
+  group: policy.skycluster.io
+  names:
+    kind: DataflowPolicy
+    listKind: DataflowPolicyList
+    plural: dataflowpolicies
+    singular: dataflowpolicy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DataflowPolicy is the Schema for the dataflowpolicies API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DataflowPolicySpec defines the desired state of DataflowPolicy.
+            properties:
+              foo:
+                description: Foo is an example field of DataflowPolicy. Edit dataflowpolicy_types.go
+                  to remove/update
+                type: string
+            type: object
+          status:
+            description: DataflowPolicyStatus defines the observed state of DataflowPolicy.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: deploymentpolicies.policy.skycluster.io
+spec:
+  group: policy.skycluster.io
+  names:
+    kind: DeploymentPolicy
+    listKind: DeploymentPolicyList
+    plural: deploymentpolicies
+    singular: deploymentpolicy
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DeploymentPolicy is the Schema for the deploymentpolicies API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DeploymentPolicySpec defines the desired state of DeploymentPolicy.
+            properties:
+              foo:
+                description: Foo is an example field of DeploymentPolicy. Edit deploymentpolicy_types.go
+                  to remove/update
+                type: string
+            type: object
+          status:
+            description: DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: deployments.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: Deployment
+    listKind: DeploymentList
+    plural: deployments
+    singular: deployment
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Deployment is the Schema for the deployments API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DeploymentSpec defines the desired state of Deployment.
+            type: object
+          status:
+            description: DeploymentStatus defines the observed state of Deployment.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -38,15 +204,336 @@ spec:
           spec:
             description: SkyProviderSpec defines the desired state of SkyProvider.
             properties:
-              ipCidrRange:
-                type: string
-              keypairRef:
+              dependedBy:
+                items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
+                      type: string
+                    kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                      type: string
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                      type: string
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              dependsOn:
+                items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
+                      type: string
+                    kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                      type: string
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                      type: string
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              providerRef:
+                description: |-
+                  SecGroup    SecGroup           `json:"secGroup,omitempty"`
+                  KeypairRef  *KeypairRefSpec    `json:"keypairRef,omitempty"`
                 properties:
-                  name:
+                  providerName:
                     type: string
-                  namespace:
+                  providerRegion:
+                    type: string
+                  providerRegionAlias:
+                    type: string
+                  providerType:
+                    type: string
+                  providerZone:
                     type: string
                 type: object
+            type: object
+          status:
+            description: SkyProviderStatus defines the observed state of SkyProvider.
+            properties:
+              conditions:
+                description: A Condition that may apply to a resource.
+                properties:
+                  lastTransitionTime:
+                    description: |-
+                      LastTransitionTime is the last time this condition transitioned from one
+                      status to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: |-
+                      A Message containing details about this condition's last transition from
+                      one status to another, if any.
+                    type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                      with respect to the current state of the instance.
+                    format: int64
+                    type: integer
+                  reason:
+                    description: A Reason for this condition's last transition from
+                      one status to another.
+                    type: string
+                  status:
+                    description: Status of this condition; is it currently True, False,
+                      or Unknown?
+                    type: string
+                  type:
+                    description: |-
+                      Type of this condition. At most one of each condition type may apply to
+                      a resource at any point in time.
+                    type: string
+                required:
+                - lastTransitionTime
+                - reason
+                - status
+                - type
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.17.0
+  name: skyvms.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: SkyVM
+    listKind: SkyVMList
+    plural: skyvms
+    singular: skyvm
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: SkyVM is the Schema for the skyvms API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: SkyVMSpec defines the desired state of SkyVM.
+            properties:
+              dependedBy:
+                items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
+                      type: string
+                    kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                      type: string
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                      type: string
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              dependsOn:
+                items:
+                  description: ObjectReference contains enough information to let
+                    you inspect or modify the referred object.
+                  properties:
+                    apiVersion:
+                      description: API version of the referent.
+                      type: string
+                    fieldPath:
+                      description: |-
+                        If referring to a piece of an object instead of an entire object, this string
+                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                        the event) or if no container name is specified "spec.containers[2]" (container with
+                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                        referencing a part of an object.
+                      type: string
+                    kind:
+                      description: |-
+                        Kind of the referent.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                      type: string
+                    name:
+                      description: |-
+                        Name of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      type: string
+                    namespace:
+                      description: |-
+                        Namespace of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                      type: string
+                    resourceVersion:
+                      description: |-
+                        Specific resourceVersion to which this reference is made, if any.
+                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                      type: string
+                    uid:
+                      description: |-
+                        UID of the referent.
+                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                      type: string
+                  type: object
+                  x-kubernetes-map-type: atomic
+                type: array
+              diskSizeGB:
+                type: integer
+              diskType:
+                type: string
+              image:
+                type: string
+              machineType:
+                type: string
+              monitoringMetrics:
+                items:
+                  properties:
+                    metric:
+                      properties:
+                        endpoint:
+                          type: string
+                        port:
+                          type: integer
+                        protocol:
+                          type: string
+                      required:
+                      - endpoint
+                      - port
+                      - protocol
+                      type: object
+                    resource:
+                      properties:
+                        name:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    type:
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+              preemptible:
+                type: boolean
               providerRef:
                 properties:
                   providerName:
@@ -60,47 +547,753 @@ spec:
                   providerZone:
                     type: string
                 type: object
-              secgroup:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    tcpPorts:
-                      items:
-                        properties:
-                          fromPort:
-                            type: integer
-                          toPort:
-                            type: integer
-                        required:
-                        - fromPort
-                        - toPort
-                        type: object
-                      type: array
-                    udpPorts:
-                      items:
-                        properties:
-                          fromPort:
-                            type: integer
-                          toPort:
-                            type: integer
-                        required:
-                        - fromPort
-                        - toPort
-                        type: object
-                      type: array
-                  required:
-                  - name
-                  type: object
-                type: array
-            required:
-            - secgroup
             type: object
           status:
-            description: SkyProviderStatus defines the observed state of SkyProvider.
+            description: SkyVMStatus defines the observed state of SkyVM.
+            properties:
+              conditions:
+                description: A Condition that may apply to a resource.
+                properties:
+                  lastTransitionTime:
+                    description: |-
+                      LastTransitionTime is the last time this condition transitioned from one
+                      status to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: |-
+                      A Message containing details about this condition's last transition from
+                      one status to another, if any.
+                    type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                      with respect to the current state of the instance.
+                    format: int64
+                    type: integer
+                  reason:
+                    description: A Reason for this condition's last transition from
+                      one status to another.
+                    type: string
+                  status:
+                    description: Status of this condition; is it currently True, False,
+                      or Unknown?
+                    type: string
+                  type:
+                    description: |-
+                      Type of this condition. At most one of each condition type may apply to
+                      a resource at any point in time.
+                    type: string
+                required:
+                - lastTransitionTime
+                - reason
+                - status
+                - type
+                type: object
             type: object
         type: object
     served: true
     storage: true
     subresources:
       status: {}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-controller-manager
+  namespace: skycluster-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-leader-election-role
+  namespace: skycluster-manager
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-deployment-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-deployment-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-deployment-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - deployments/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyprovider-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyprovider-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyprovider-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyvm-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyvm-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-core-skyvm-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyvms/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-manager-manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - skyxrds
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - skyxrds/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - skyxrds/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders
+  - skyvms
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/finalizers
+  - skyvms/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - skyproviders/status
+  - skyvms/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  - deploymentpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/finalizers
+  - deploymentpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  - deploymentpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - xrds.skycluster.io
+  resources:
+  - skyproviders
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-manager-metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-manager-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-dataflowpolicy-admin-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-dataflowpolicy-editor-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-dataflowpolicy-viewer-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-deploymentpolicy-admin-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-deploymentpolicy-editor-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-policy-deploymentpolicy-viewer-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-leader-election-rolebinding
+  namespace: skycluster-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: skycluster-manager-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-manager-controller-manager
+  namespace: skycluster-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+  name: skycluster-manager-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: skycluster-manager-manager-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-manager-controller-manager
+  namespace: skycluster-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: skycluster-manager-metrics-auth-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: skycluster-manager-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-manager-controller-manager
+  namespace: skycluster-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+    control-plane: controller-manager
+  name: skycluster-manager-controller-manager-metrics-service
+  namespace: skycluster-manager
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: skycluster-manager
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-manager
+    control-plane: controller-manager
+  name: skycluster-manager-controller-manager
+  namespace: skycluster-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skycluster-manager
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: skycluster-manager
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-bind-address=:8443
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+        command:
+        - /manager
+        image: controller:latest
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: webhook-certs
+          readOnly: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: skycluster-manager-controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: webhook-server-cert
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: skycluster-manager-mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSUV5akNDQXpLZ0F3SUJBZ0lSQU1QTHZLN0xCWk5oc3dFM3p6ZVZ1dkV3RFFZSktvWklodmNOQVFFTEJRQXcKZlRFZU1Cd0dBMVVFQ2hNVmJXdGpaWEowSUdSbGRtVnNiM0J0Wlc1MElFTkJNU2t3SndZRFZRUUxEQ0IxWW5WdQpkSFZBWW14MVpXTnNkWE4wWlhJdFpHVjJNU0FvVldKMWJuUjFLVEV3TUM0R0ExVUVBd3duYld0alpYSjBJSFZpCmRXNTBkVUJpYkhWbFkyeDFjM1JsY2kxa1pYWXhJQ2hWWW5WdWRIVXBNQjRYRFRJMU1ESXlNREUzTVRneU0xb1gKRFRNMU1ESXlNREUzTVRneU0xb3dmVEVlTUJ3R0ExVUVDaE1WYld0alpYSjBJR1JsZG1Wc2IzQnRaVzUwSUVOQgpNU2t3SndZRFZRUUxEQ0IxWW5WdWRIVkFZbXgxWldOc2RYTjBaWEl0WkdWMk1TQW9WV0oxYm5SMUtURXdNQzRHCkExVUVBd3duYld0alpYSjBJSFZpZFc1MGRVQmliSFZsWTJ4MWMzUmxjaTFrWlhZeElDaFZZblZ1ZEhVcE1JSUIKb2pBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVk4QU1JSUJpZ0tDQVlFQTB2WlMvWjFlU1BNQVFyZ3BzZXNEbjJqSQpHVHUxQ0psaDlzSG5RWnRUSUZabWtWMDZnTGpsdlJFN2pHdk1Rb0JrL3EySmRoYkhzdGtyNGlveXNnRW1oQ0tsCkZ6akFNYmdEcDU4V1NDa3d4ZWEwczBIL3JtR3BPWlZwalpreFZidkcwNHRtYktiR1NtbmRRWWlrQnJzR2Y4RncKbWhzeU93c3owYXFsS0JVK0pGR2hhSjdNQ2hSTXdValYwRzNibzF3L3U2S3dCT1pCZjBYa3Bod0srR2k0YkRvaQpudFFRN0RHU0toMC9LaFlQSFNGK1hvbUpjTU1BNGFZZkRyVlkvVVR0aWlRLzhiYUJuT0pyeGNIRjJUMkRaaG1sClRSYlpEVHErWVplNmprZ2xHZjVTU3FjWXVUS2JkQUI5Q2t6UUtyenVtTzdHSXpBcG5uVzFlelZkY0Y2aFJOUkoKQ1g1bk1ZakNkSTVzSGZTWlovRi9NQXlxNllZa05YZGsvbDlBUE1IWWVCaG5haVJFWVVQYnpMZGZtaUlEcVlkeAozV2p1UTFiWkpGbnhyUEhOM3BjVHZzVFhzbHBNZGxrVFZ5bnN2SXZIT3B3V1hoa2s1NWNpYzZGMUpjRksxQ3J4CmxPOXllZnZsZGxhYWtYMlYrTVcwUm4wMFpvODB2WTNnTGVGVmxZblBBZ01CQUFHalJUQkRNQTRHQTFVZER3RUIKL3dRRUF3SUNCREFTQmdOVkhSTUJBZjhFQ0RBR0FRSC9BZ0VBTUIwR0ExVWREZ1FXQkJTc1I2UnQ4UU5zYmxHSwpVV2J1NS9vYnFFMll5VEFOQmdrcWhraUc5dzBCQVFzRkFBT0NBWUVBaXgranVadTVvdC9RR3czYmpORGdQbEorCll0Nk5BTld5cjFVSjNHQ0tocHdtVHNjbldWYnhSTmwxS0FDNk5tU01oVU5yWkNBODN4NWVkV0dwT1N2WlRaMG4KMXR1dW45MEJPcTVYQ1dmb0wxVFVxU1ZRQjhWWklSTGU3QzFmRUNIeXBvNDdBdEVxb1ZHNnJreWdRUmxjZDZJZgpiZDhGdWNXbG45QjZQa0lsaGpjN1AzTDFQMUFjdThQUjVzc1N1WFBoV1BiZzVaSXNYVXZORjBuOVh3dXpsRVpaCkt5bFpGTStyZCt5OXU4cFV4b2RaWkZ4dUdRM1NQWEk2SGFMbXRaUDNhUER3WGlud0dEczNGQjdqQ2dYd1pZU1AKUWd3VFNqUWdqNGVobzZjN09zOUtCTmZQYmVZcFE5d01NRFRjRnRRSE5xNEtrQVJrZTBTanZ5dGcxK2g5ZG5OSAp6TWlzZWtVNmRoakh2emErK01CYk9SWWp0RDlmUWlhajYybXJkMmNJdzlVQVdNenRlSFo1ZFRKWHpKdmE1bktsCmpXREpnK3BnQkhpOHJIRmJ6cG01NUpOaS9nZUJwVDRwdE1SOUxFSHZ4ZmhXejVUUWZmWWNEbCtEVUNmd1pxZUMKa1dDaU9BckJtbEZPY0NZbEtWSXZxdUpHcmt3L3NYTjZ4NUFJU2Y0egotLS0tLUVORCBDRVJUSUZJQ0FURS0tLS0tCg==
+    url: https://172.17.0.1:9443/mutate--v1-deployment
+  failurePolicy: Fail
+  name: mdeployment.kb.io
+  rules:
+  - apiGroups:
+    - ""
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deployments
+  sideEffects: None
