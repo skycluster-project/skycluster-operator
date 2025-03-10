@@ -71,6 +71,11 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				},
 			},
 		}
+		// Set the DataflowPolicy as the owner of the SkyCluster
+		if err := ctrl.SetControllerReference(dfPolicy, skyCluster, r.Scheme); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to set owner reference.", loggerName))
+			return ctrl.Result{}, err
+		}
 		if err := r.Create(ctx, skyCluster); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Failed to create SkyCluster.", loggerName))
 			return ctrl.Result{}, err

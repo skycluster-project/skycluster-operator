@@ -19,6 +19,14 @@ var (
 	SKYCLUSTER_VPCCidrField_LABEL      = "vpcCidr"
 	SKYCLUSTER_SubnetIndexField_LABEL  = "subnetIndex"
 	SKYCLUSTER_ProvdiderMappings_LABEL = "provider-mappings"
+	SKYCLUSTER_VSERVICES_LABEL         = "provider-vservices"
+	SKYCLUSTER_FLAVORS                 = []string{
+		"1vCPU-2GB", "1vCPU-4GB", "1vCPU-8GB",
+		"2vCPU-4GB", "2vCPU-8GB", "2vCPU-16GB", "2vCPU-32GB",
+		"4vCPU-8GB", "4vCPU-16GB", "4vCPU-32GB",
+		"8vCPU-32GB",
+		"12vCPU-32GB",
+	}
 )
 
 // type SecGroupSpec struct {
