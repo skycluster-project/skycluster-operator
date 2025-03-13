@@ -137,24 +137,40 @@ metadata:
   name: echo-app-policies
 spec:
   dataDependencies:
-    - fromDeployment: caller
-      toService: logger-svc
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: caller
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: logger
       latency: 30ms
       totalDataTransfer: 0.5GB
       averageDataRate: 0.01GB/s
-    - fromDeployment: caller
-      toService: echo-svc
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: echo
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: caller
       latency: 20ms
       totalDataTransfer: 1GB
       averageDataRate: 0.1GB/s
 ---
+# All components should be referenced by their name, apiGroup and kind
+# within the DeploymentPolicy object, otherwise they will not be considered
 apiVersion: policy.skycluster.io/v1alpha1
 kind: DeploymentPolicy
 metadata:
   name: echo-app-policies
 spec:
   deploymentPolicies:
-    - deploymentRef:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
         name: echo
       performanceConstraint:
         responseTime: 100ms
@@ -166,16 +182,32 @@ spec:
           - region: scinet
           - region: vaughan
         required:
-          - region: edge
-    - deploymentRef:
+          - type: edge
+            region: vaughan
+          - type: edge
+            region: scinet
+    - componentRef:
         name: caller
+        apiVersion: apps/v1
+        kind: Deployment
       locationConstraint:
         permitted: 
           - type: edge
+            region: vaughan
+          - type: edge
+            region: scinet
           - type: nte
-    - deploymentRef:
+            region: vaughan
+          - type: nte
+            region: scinet
+    - componentRef:
         name: logger
+        apiVersion: apps/v1
+        kind: Deployment
       locationConstraint:
         permitted: 
           - type: cloud
+            region: vaughan
+          - type: cloud
+            region: scinet
 ---

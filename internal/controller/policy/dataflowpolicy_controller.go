@@ -20,14 +20,14 @@ import (
 	"context"
 	"fmt"
 
+	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // DataflowPolicyReconciler reconciles a DataflowPolicy object
@@ -66,7 +66,7 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				Namespace: dfPolicy.Namespace,
 			},
 			Spec: corev1alpha1.SkyClusterSpec{
-				DataflowPolicyRef: corev1alpha1.ResourceSpec{
+				DataflowPolicyRef: corev1.LocalObjectReference{
 					Name: dfPolicy.Name,
 				},
 			},

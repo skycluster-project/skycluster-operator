@@ -8,6 +8,7 @@ resources:
 - bases/policy.skycluster.io_deploymentpolicies.yaml
 - bases/core.skycluster.io_deployments.yaml
 - bases/core.skycluster.io_skyclusters.yaml
+- bases/core.skycluster.io_ilptasks.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

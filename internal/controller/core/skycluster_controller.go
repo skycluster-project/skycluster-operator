@@ -14,6 +14,27 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+SkyCluster is a custom resource that defines the desired state of SkyCluster per application
+which contains the deployment reference and data flow reference.
+Additionally it contains all selected providers and their configurations.
+SkyCluster also contains the application components, including the deployments
+and all sky components (e.g. SkyVM, SkyDB, SkyStorage, SkyNetwork, etc.)
+
+Once the dataflow and deployment policies are created, the SkyCluster controller
+reconciler get all deployments and sky components label with skycluster.io
+and check their requirements and set their minimum flavor (for deployments)
+and location constraints (for deployments and all other services) as annotations.
+
+It then creates the ILPTask and waits for the optimization to finish. Once the
+optimization is succeeded, it creates the deployment plan and sets the SkyProvider
+in spec field which results in the creation of SkyProviders, consequently the
+Sky Services and SkyK8SCluster for the application.
+
+The SkyCluster includes list of all deployments and SkyCluster as its spec.skyComponents
+and uses this list to create the ILPTask and later to deploy services.
+*/
+
 package core
 
 import (
@@ -26,13 +47,17 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	res "k8s.io/apimachinery/pkg/api/resource"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	"github.com/pkg/errors"
 )
 
 // SkyClusterReconciler reconciles a SkyCluster object
@@ -56,6 +81,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// ########### ########### ########### ########### ###########
 	// Check if both DeploymentPolicy and DataflowPolicy are set
 	if skyCluster.Spec.DataflowPolicyRef.Name == "" || skyCluster.Spec.DeploymentPolciyRef.Name == "" {
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy or DataflowPolicy not set.", loggerName))
@@ -77,6 +103,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	// ########### ########### ########### ########### ###########
 	// We are all good, let's check the deployment plan
 	// If we already have the deployment plan, no need to make any changes
 	if skyCluster.Status.DeploymentPlanStatus != "" || skyCluster.Status.DeploymentPlan != "" {
@@ -135,6 +162,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	logger.Info(fmt.Sprintf("[%s]\t Flavors [%d] found.", loggerName, len(allFlavors)))
 
+	// ########### ########### ########### ########### ###########
 	// List all deployments that have skycluster labels
 	allDeploy := &appsv1.DeploymentList{}
 	if err := r.List(ctx, allDeploy, client.MatchingLabels{
@@ -145,100 +173,23 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 	logger.Info(fmt.Sprintf("[%s]\t Deployments [%d] found.", loggerName, len(allDeploy.Items)))
 
+	// ########### ########### ########### ########### ###########
 	// Check each deployments' pod template and check its cpu and memory limits, and request, then
 	// Comparing the requirements with flavors, we select the minimum flavor that satisfies the requirements
-
 	for _, deploy := range allDeploy.Items {
-
-		// Get the pod template
-		podTemplate := deploy.Spec.Template
-		// Get the containers
-		containers := podTemplate.Spec.Containers
-		// Check each container
-		minimumFlavorCPU := make([]int, len(containers))
-		minimumFlavorRAM := make([]int, len(containers))
-		for _, container := range containers {
-			// Get the resources
-			resources := container.Resources
-			// Get the limits
-			limits := resources.Limits
-			// Get the requests
-			requests := resources.Requests
-			// Check the limits
-
-			for k, v := range limits {
-				if strings.Contains(k.String(), "cpu") {
-					if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 1)
-					} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 2)
-					} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 4)
-					}
-				}
-				if strings.Contains(k.String(), "memory") {
-					if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 1)
-					} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 2)
-					} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 4)
-					}
-				}
-			}
-			// Check the requests
-			for k, v := range requests {
-				if strings.Contains(k.String(), "cpu") {
-					if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 1)
-					} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 2)
-					} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
-						minimumFlavorCPU = append(minimumFlavorCPU, 4)
-					}
-				}
-				if strings.Contains(k.String(), "memory") {
-					if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 1)
-					} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 2)
-					} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
-						minimumFlavorRAM = append(minimumFlavorRAM, 4)
-					}
-				}
-			}
+		// the deployment name should be the same as the component name in the deployment policy
+		// if not, we ignore the deployment
+		if !deployExistsInDeploymentPolicy(deploy.GetObjectMeta().GetName(), dpPolicy) {
+			continue
 		}
-		// across all containers, get the maximum of all request and limits for both cpu and memory
-		// This would be the minimum flavor required for the deployment
-		minCPU := max(slices.Max(minimumFlavorCPU), 1)
-		minRAM := max(slices.Max(minimumFlavorRAM), 2)
+		minCPU, minRAM := getPodMinimumFlavor(deploy)
 		logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%dvCPU-%dGB].", loggerName, deploy.GetObjectMeta().GetName(), minCPU, minRAM))
 
 		// Select all flavors that satisfy the requirements
-		// We can either dynamically get all available flavors
-		// or statically define them in the code: corev1alpha1.SKYCLUSTER_FLAVORS
-		okFlavors := make([]string, 0)
-		for _, skyFlavor := range allFlavors {
-			cpu := strings.Split(skyFlavor, "-")[0]
-			cpu = strings.Replace(cpu, "vCPU", "", -1)
-			cpu_int, err1 := strconv.Atoi(cpu)
-			ram := strings.Split(skyFlavor, "-")[1]
-			ram = strings.Replace(ram, "GB", "", -1)
-			ram_int, err2 := strconv.Atoi(ram)
-			if err1 != nil || err2 != nil {
-				logger.Info(fmt.Sprintf("[%s]\t Error converting flavor spec to int.", loggerName))
-				if err1 != nil {
-					logger.Error(err1, "Error converting flavor spec to int.")
-				}
-				if err2 != nil {
-					logger.Error(err2, "Error converting flavor spec to int.")
-				}
-				// if there are error processing the flavors we ignore them and not add them to the list
-				continue
-			}
-			if cpu_int >= minCPU && ram_int >= minRAM {
-				okFlavors = append(okFlavors, skyFlavor)
-			}
+		okFlavors, err := getProperFlavorsForPod(minCPU, minRAM, allFlavors)
+		if err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		// Set this minimum flavor to the deployment as an annotation
 		deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-flavor"] = strings.Join(okFlavors, ",")
@@ -247,32 +198,26 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// Using the name of the deployment, we search through dpPolicy
 		for _, dp := range dpPolicy.Spec.DeploymentPolicies {
 			// if the deployment name matches the deploymentRef name we check its location constraints
-			if dp.DeploymentRef.Name == deploy.GetObjectMeta().GetName() {
-				// Get the location constraints
-				locationConstraints := dp.LocationConstraint
-				// Get the permitted locations
-				permittedLocations := locationConstraints.Permitted
-				// Get the required locations
-				requiredLocations := locationConstraints.Required
-				// Set the permitted and required locations as annotations
-				locs_permitted := make([]string, 0)
-				for _, loc := range permittedLocations {
-					// Name, Type, RegionAlias, Region
-					locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
-					locs_permitted = append(locs_permitted, locDetails)
-				}
+			if dp.ComponentRef.Name == deploy.GetObjectMeta().GetName() {
+				locs_permitted, locs_required := getLocationConstraints(dp)
 				logger.Info(fmt.Sprintf("[%s]\t Permitted Locations [%s].", loggerName, strings.Join(locs_permitted, "__")))
 				deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-permitted-locations"] = strings.Join(locs_permitted, "__")
-				locs_required := make([]string, 0)
-				for _, loc := range requiredLocations {
-					// Name, Type, RegionAlias, Region
-					locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
-					locs_required = append(locs_required, locDetails)
-				}
 				logger.Info(fmt.Sprintf("[%s]\t Required Locations [%s].", loggerName, strings.Join(locs_required, "__")))
 				deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-required-locations"] = strings.Join(locs_required, "__")
 			}
 		}
+
+		// We also add the reference to this deployment to the SkyCluster spec.skyComponents
+		// The provider field is not set as it will be set by the optimizer
+		skyCluster.Spec.SkyComponents = append(
+			skyCluster.Spec.SkyComponents, corev1alpha1.SkyComponent{
+				Component: corev1.ObjectReference{
+					APIVersion: deploy.APIVersion,
+					Kind:       deploy.Kind,
+					Namespace:  deploy.Namespace,
+					Name:       deploy.Name,
+				},
+			})
 
 		// Update the deployment
 		if err := r.Update(ctx, &deploy); err != nil {
@@ -281,7 +226,209 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 	}
 
+	// ########### ########### ########### ########### ###########
+	// In addition to deployments, there may be other Sky Services referenced in
+	// DeploymentPolicy object. We need to check them as well and include them in the optimization.
+	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
+		if *&dp.ComponentRef.Kind == "Deployment" {
+			// This is a deployment, we have already processed it
+			continue
+		}
+		// Get the object's performance and location constraints
+		gv, err := schema.ParseGroupVersion(dp.ComponentRef.APIVersion)
+		if err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Error parsing APIVersion.", loggerName))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		gk := schema.GroupVersionKind{
+			Group:   gv.Group,
+			Version: gv.Version,
+			Kind:    dp.ComponentRef.Kind,
+		}
+		// Get the object
+		obj := &unstructured.Unstructured{}
+		obj.SetGroupVersionKind(gk)
+		if err := r.Get(ctx, client.ObjectKey{
+			Namespace: req.Namespace,
+			Name:      dp.ComponentRef.Name,
+		}, obj); err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Object not found.", loggerName))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		logger.Info(fmt.Sprintf("[%s]\t Object found.", loggerName))
+		locs_permitted, locs_required := getLocationConstraints(dp)
+		logger.Info(fmt.Sprintf("[%s]\t Permitted Locations [%s].", loggerName, strings.Join(locs_permitted, "__")))
+		obj.SetAnnotations(map[string]string{
+			corev1alpha1.SKYCLUSTER_API + "/skyvm-permitted-locations": strings.Join(locs_permitted, "__"),
+		})
+		logger.Info(fmt.Sprintf("[%s]\t Required Locations [%s].", loggerName, strings.Join(locs_required, "__")))
+		obj.SetAnnotations(map[string]string{
+			corev1alpha1.SKYCLUSTER_API + "/skyvm-required-locations": strings.Join(locs_required, "__"),
+		})
+
+		// We also add the reference to this object to the SkyCluster spec.skyComponents
+		// The provider field is not set as it will be set by the optimizer
+		skyCluster.Spec.SkyComponents = append(
+			skyCluster.Spec.SkyComponents, corev1alpha1.SkyComponent{
+				Component: corev1.ObjectReference{
+					APIVersion: obj.GetAPIVersion(),
+					Kind:       obj.GetKind(),
+					Namespace:  obj.GetNamespace(),
+					Name:       obj.GetName(),
+				},
+			})
+
+		// Update the object
+		if err := r.Update(ctx, obj); err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Error updating Object.", loggerName))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+	}
+
+	// ########### ########### ########### ########### ###########
+	// Before we create the ILPTask, we need to check if there are any additional
+	// Sky Srvices (e.g. SkyVM) that should be included in the optimization.
+
+	// ########### ########### ########### ########### ###########
+	// Save the SkyCluster object
+	if err := r.Update(ctx, skyCluster); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	skyCluster.Status.DeploymentPlanStatus = "Pending"
+	// Save the SkyCluster object status
+	if err := r.Status().Update(ctx, skyCluster); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	return ctrl.Result{}, nil
+}
+
+func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, error) {
+	okFlavors := make([]string, 0)
+	for _, skyFlavor := range allFlavors {
+		cpu := strings.Split(skyFlavor, "-")[0]
+		cpu = strings.Replace(cpu, "vCPU", "", -1)
+		cpu_int, err1 := strconv.Atoi(cpu)
+		ram := strings.Split(skyFlavor, "-")[1]
+		ram = strings.Replace(ram, "GB", "", -1)
+		ram_int, err2 := strconv.Atoi(ram)
+		if err1 != nil || err2 != nil {
+			if err1 != nil {
+				return nil, errors.Wrap(err1, "Error converting flavor spec to int.")
+			}
+			if err2 != nil {
+				return nil, errors.Wrap(err1, "Error converting flavor spec to int.")
+			}
+			// if there are error processing the flavors we ignore them and not add them to the list
+			continue
+		}
+		if cpu_int >= minCPU && ram_int >= minRAM {
+			okFlavors = append(okFlavors, skyFlavor)
+		}
+	}
+	return okFlavors, nil
+}
+
+func getPodMinimumFlavor(deploy appsv1.Deployment) (int, int) {
+	// Get the pod template
+	podTemplate := deploy.Spec.Template
+	// Get the containers
+	containers := podTemplate.Spec.Containers
+	// Check each container
+	minimumFlavorCPU := make([]int, len(containers))
+	minimumFlavorRAM := make([]int, len(containers))
+	for _, container := range containers {
+		// Get the resources
+		resources := container.Resources
+		// Get the limits
+		limits := resources.Limits
+		// Get the requests
+		requests := resources.Requests
+		// Check the limits
+
+		for k, v := range limits {
+			if strings.Contains(k.String(), "cpu") {
+				if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 1)
+				} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 2)
+				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 4)
+				}
+			}
+			if strings.Contains(k.String(), "memory") {
+				if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 1)
+				} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 2)
+				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 4)
+				}
+			}
+		}
+		// Check the requests
+		for k, v := range requests {
+			if strings.Contains(k.String(), "cpu") {
+				if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 1)
+				} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 2)
+				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
+					minimumFlavorCPU = append(minimumFlavorCPU, 4)
+				}
+			}
+			if strings.Contains(k.String(), "memory") {
+				if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 1)
+				} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 2)
+				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
+					minimumFlavorRAM = append(minimumFlavorRAM, 4)
+				}
+			}
+		}
+	}
+	// across all containers, get the maximum of all request and limits for both cpu and memory
+	// This would be the minimum flavor required for the deployment
+	minCPU := max(slices.Max(minimumFlavorCPU), 1)
+	minRAM := max(slices.Max(minimumFlavorRAM), 2)
+	return minCPU, minRAM
+}
+
+func getLocationConstraints(dp policyv1alpha1.DeploymentPolicyItem) ([]string, []string) {
+	// Get the location constraints
+	locationConstraints := dp.LocationConstraint
+	// Get the permitted locations
+	permittedLocations := locationConstraints.Permitted
+	// Get the required locations
+	requiredLocations := locationConstraints.Required
+	// Set the permitted and required locations as annotations
+	locs_permitted := make([]string, 0)
+	for _, loc := range permittedLocations {
+		// Name, Type, RegionAlias, Region
+		locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
+		locs_permitted = append(locs_permitted, locDetails)
+	}
+
+	locs_required := make([]string, 0)
+	for _, loc := range requiredLocations {
+		// Name, Type, RegionAlias, Region
+		locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
+		locs_required = append(locs_required, locDetails)
+	}
+	return locs_permitted, locs_required
+}
+
+func deployExistsInDeploymentPolicy(deployName string, dpPolicy *policyv1alpha1.DeploymentPolicy) bool {
+	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
+		if dp.ComponentRef.Name == deployName {
+			return true
+		}
+	}
+	return false
 }
 
 // SetupWithManager sets up the controller with the Manager.

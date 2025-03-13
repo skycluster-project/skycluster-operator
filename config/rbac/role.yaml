@@ -33,6 +33,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - ilptasks
   - skyclusters
   - skyproviders
   - skyvms
@@ -47,6 +48,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - ilptasks/finalizers
   - skyclusters/finalizers
   - skyproviders/finalizers
   - skyvms/finalizers
@@ -55,6 +57,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - ilptasks/status
   - skyclusters/status
   - skyproviders/status
   - skyvms/status

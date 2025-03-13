@@ -1,5 +1,9 @@
 package v1alpha1
 
+import (
+	corev1 "k8s.io/api/core/v1"
+)
+
 var (
 	SKYCLUSTER_NAMESPACE            = "skycluster"
 	SKYCLUSTER_API                  = "skycluster.io"
@@ -48,6 +52,11 @@ var (
 // 	Namespace string `json:"namespace,omitempty"`
 // }
 
+type SkyComponent struct {
+	Component corev1.ObjectReference `json:"component"`
+	Provider  ProviderRefSpec        `json:"provider,omitempty"`
+}
+
 type ProviderRefSpec struct {
 	ProviderName        string `json:"providerName,omitempty"`
 	ProviderRegion      string `json:"providerRegion,omitempty"`
@@ -57,13 +66,9 @@ type ProviderRefSpec struct {
 }
 
 type MonitoringMetricSpec struct {
-	Type     string       `json:"type"`
-	Resource ResourceSpec `json:"resource,omitempty"`
-	Metric   MetricSpec   `json:"metric,omitempty"`
-}
-
-type ResourceSpec struct {
-	Name string `json:"name"`
+	Type     string                 `json:"type"`
+	Resource corev1.ObjectReference `json:"resource,omitempty"`
+	Metric   MetricSpec             `json:"metric,omitempty"`
 }
 
 type MetricSpec struct {

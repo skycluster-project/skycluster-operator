@@ -26,20 +26,17 @@ type SkyClusterSpec struct {
 	// DataflowPolicyRef is the reference to the DataflowPolicy
 	// The DataflowPolicy is used to define the dataflow policy and
 	// Should has the same name and namespace as the SkyCluster
-	DataflowPolicyRef ResourceSpec `json:"dataflowPolicyRef,omitempty"`
+	DataflowPolicyRef corev1.LocalObjectReference `json:"dataflowPolicyRef,omitempty"`
 	// DeploymentPolicyRef is the reference to the DeploymentPolicy
 	// The DeploymentPolicy is used to define the deployment policy and
 	// Should has the same name and namespace as the SkyCluster
-	DeploymentPolciyRef ResourceSpec `json:"deploymentPolicyRef,omitempty"`
+	DeploymentPolciyRef corev1.LocalObjectReference `json:"deploymentPolicyRef,omitempty"`
 	// SkyProviders is the list of the SkyProvider that will be provisioned
 	// This list should be populated when the optimizer is executed
 	SkyProviders []ProviderRefSpec `json:"skyProviders,omitempty"`
-	// SkyServices is the list of the SkyService that will be used by the optimization
-	// and will be scheduled to be deployed in one of the SkyProviders
-	SkyServices []corev1.ObjectReference `json:"skyServices,omitempty"`
-	// SkyApps is the list of the deployments that will be used by the optimization
-	// The deployments should be created prior to the SkyCluster creation
-	SkyApps []corev1.ObjectReference `json:"skyApps,omitempty"`
+	// SkyComponents is the list of the SkyComponent including deployments
+	// and all Sky Services such as SkyVM that will be used by the optimization.
+	SkyComponents []SkyComponent `json:"skyComponents,omitempty"`
 }
 
 // SkyClusterStatus defines the observed state of SkyCluster.

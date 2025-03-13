@@ -42,8 +42,8 @@ spec:
               deploymentPolicies:
                 items:
                   properties:
-                    deploymentRef:
-                      description: DeploymentRef is the reference to the deployment
+                    componentRef:
+                      description: ComponentRef is the reference to the component
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -87,7 +87,7 @@ spec:
                       x-kubernetes-map-type: atomic
                     locationConstraint:
                       description: LocationConstraint is the location constraint for
-                        the deployment
+                        the component
                       properties:
                         permitted:
                           description: Permitted is the list of locations that are
@@ -134,7 +134,7 @@ spec:
                       type: object
                     performanceConstraint:
                       description: PerformanceConstraint is the performance constraint
-                        for the deployment
+                        for the component
                       properties:
                         customMetrics:
                           items:
@@ -155,7 +155,7 @@ spec:
                           type: string
                       type: object
                   required:
-                  - deploymentRef
+                  - componentRef
                   type: object
                 type: array
             required:

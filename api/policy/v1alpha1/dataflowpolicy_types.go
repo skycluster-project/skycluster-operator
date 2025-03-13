@@ -17,15 +17,15 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type DataDapendency struct {
-	// FromDeployment is the name of the source deployment
-	FromDeployment string `json:"fromDeployment"`
-
-	// ToService is the target service name
-	ToService string `json:"toService"`
+	// From is the reference to the source component
+	From corev1.ObjectReference `json:"from,omitempty"`
+	// To is the reference to the destination component
+	To corev1.ObjectReference `json:"to,omitempty"`
 
 	// Latency represents the latency between services
 	Latency string `json:"latency,omitempty"`

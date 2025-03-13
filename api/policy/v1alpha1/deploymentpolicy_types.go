@@ -52,11 +52,11 @@ type PerformanceConstraint struct {
 }
 
 type DeploymentPolicyItem struct {
-	// DeploymentRef is the reference to the deployment
-	DeploymentRef corev1.ObjectReference `json:"deploymentRef"`
-	// PerformanceConstraint is the performance constraint for the deployment
+	// ComponentRef is the reference to the component
+	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
-	// LocationConstraint is the location constraint for the deployment
+	// LocationConstraint is the location constraint for the component
 	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
 }
 

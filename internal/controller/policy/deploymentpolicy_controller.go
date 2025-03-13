@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -66,7 +67,7 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				Namespace: dpPolicy.Namespace,
 			},
 			Spec: corev1alpha1.SkyClusterSpec{
-				DeploymentPolciyRef: corev1alpha1.ResourceSpec{
+				DeploymentPolciyRef: corev1.LocalObjectReference{
 					Name: dpPolicy.Name,
 				},
 			},
