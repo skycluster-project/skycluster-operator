@@ -24,15 +24,12 @@ import (
 
 // SkyVMSpec defines the desired state of SkyVM.
 type SkyVMSpec struct {
-	MachineType          string                   `json:"machineType,omitempty"`
-	DiskSizeGB           int                      `json:"diskSizeGB,omitempty"`
-	DiskType             string                   `json:"diskType,omitempty"`
-	Preemptible          bool                     `json:"preemptible,omitempty"`
-	Image                string                   `json:"image,omitempty"`
-	MonitoringMetricList []MonitoringMetricSpec   `json:"monitoringMetrics,omitempty"`
-	ProviderRef          ProviderRefSpec          `json:"providerRef,omitempty"`
-	DependsOn            []corev1.ObjectReference `json:"dependsOn,omitempty"`
-	DependedBy           []corev1.ObjectReference `json:"dependedBy,omitempty"`
+	Flavor      string                   `json:"flavor,omitempty"`
+	Preemptible bool                     `json:"preemptible,omitempty"`
+	Image       string                   `json:"image,omitempty"`
+	ProviderRef ProviderRefSpec          `json:"providerRef,omitempty"`
+	DependsOn   []corev1.ObjectReference `json:"dependsOn,omitempty"`
+	DependedBy  []corev1.ObjectReference `json:"dependedBy,omitempty"`
 }
 
 // SkyVMStatus defines the observed state of SkyVM.

@@ -74,6 +74,16 @@ spec:
         ports:
         - containerPort: 8080
 ---
+apiVersion: core.skycluster.io/v1alpha1
+kind: SkyVM
+metadata:
+  name: skyvm-test
+  labels:
+    skycluster.io/managed-by: skycluster
+spec: 
+  image: ubuntu-20.04
+  flavor: 2vCPU-4GB
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -159,6 +169,17 @@ spec:
       latency: 20ms
       totalDataTransfer: 1GB
       averageDataRate: 0.1GB/s
+    - from:
+        apiVersion: core.skycluster.io/v1alpha1
+        kind: SkyVM
+        name: skyvm-test
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: echo
+      latency: 20ms
+      totalDataTransfer: 1GB
+      averageDataRate: 0.1GB/s
 ---
 # All components should be referenced by their name, apiGroup and kind
 # within the DeploymentPolicy object, otherwise they will not be considered
@@ -209,5 +230,15 @@ spec:
           - type: cloud
             region: vaughan
           - type: cloud
+            region: scinet
+    - componentRef:
+        name: skyvm-test
+        apiVersion: core.skycluster.io/v1alpha1
+        kind: SkyVM
+      locationConstraint:
+        permitted: 
+          - type: edge
+            region: vaughan
+          - type: edge
             region: scinet
 ---

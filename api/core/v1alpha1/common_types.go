@@ -24,13 +24,13 @@ var (
 	SKYCLUSTER_SubnetIndexField_LABEL  = "subnetIndex"
 	SKYCLUSTER_ProvdiderMappings_LABEL = "provider-mappings"
 	SKYCLUSTER_VSERVICES_LABEL         = "provider-vservices"
-	SKYCLUSTER_FLAVORS                 = []string{
-		"1vCPU-2GB", "1vCPU-4GB", "1vCPU-8GB",
-		"2vCPU-4GB", "2vCPU-8GB", "2vCPU-16GB", "2vCPU-32GB",
-		"4vCPU-8GB", "4vCPU-16GB", "4vCPU-32GB",
-		"8vCPU-32GB",
-		"12vCPU-32GB",
-	}
+	// SKYCLUSTER_FLAVORS                 = []string{
+	// 	"1vCPU-2GB", "1vCPU-4GB", "1vCPU-8GB",
+	// 	"2vCPU-4GB", "2vCPU-8GB", "2vCPU-16GB", "2vCPU-32GB",
+	// 	"4vCPU-8GB", "4vCPU-16GB", "4vCPU-32GB",
+	// 	"8vCPU-32GB",
+	// 	"12vCPU-32GB",
+	// }
 )
 
 // type SecGroupSpec struct {
@@ -52,9 +52,19 @@ var (
 // 	Namespace string `json:"namespace,omitempty"`
 // }
 
+type LocationConstraint struct {
+	Required  []ProviderRefSpec `json:"required,omitempty"`
+	Preferred []ProviderRefSpec `json:"preferred,omitempty"`
+}
+
 type SkyComponent struct {
 	Component corev1.ObjectReference `json:"component"`
 	Provider  ProviderRefSpec        `json:"provider,omitempty"`
+	// LocationConstraints specifies the location constraints for the SkyComponent
+	// It declartively specifies the provider and region where the SkyComponent should be deployed
+	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
+	// VirtualServices specifies the virtual services that are required by the SkyComponent
+	VirtualServices []corev1.LocalObjectReference `json:"virtualServices,omitempty"`
 }
 
 type ProviderRefSpec struct {

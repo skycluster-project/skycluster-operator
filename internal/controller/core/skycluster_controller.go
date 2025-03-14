@@ -47,6 +47,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	res "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -176,6 +177,8 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// ########### ########### ########### ########### ###########
 	// Check each deployments' pod template and check its cpu and memory limits, and request, then
 	// Comparing the requirements with flavors, we select the minimum flavor that satisfies the requirements
+	deploysLocReqConstraints := make(map[string][]corev1alpha1.ProviderRefSpec)
+	deploysLocPerConstraints := make(map[string][]corev1alpha1.ProviderRefSpec)
 	for _, deploy := range allDeploy.Items {
 		// the deployment name should be the same as the component name in the deployment policy
 		// if not, we ignore the deployment
@@ -191,19 +194,35 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
-		// Set this minimum flavor to the deployment as an annotation
-		deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-flavor"] = strings.Join(okFlavors, ",")
+
+		// Set the deployment as a key and the location constraints as value
+		k := deploy.GetObjectMeta().GetName() + "." + deploy.GetObjectKind().GroupVersionKind().Kind
 
 		// Get the location policies of each deployment
 		// Using the name of the deployment, we search through dpPolicy
 		for _, dp := range dpPolicy.Spec.DeploymentPolicies {
-			// if the deployment name matches the deploymentRef name we check its location constraints
+			// If the deployment name matches the deploymentRef name we check its location constraints
 			if dp.ComponentRef.Name == deploy.GetObjectMeta().GetName() {
-				locs_permitted, locs_required := getLocationConstraints(dp)
-				logger.Info(fmt.Sprintf("[%s]\t Permitted Locations [%s].", loggerName, strings.Join(locs_permitted, "__")))
-				deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-permitted-locations"] = strings.Join(locs_permitted, "__")
-				logger.Info(fmt.Sprintf("[%s]\t Required Locations [%s].", loggerName, strings.Join(locs_required, "__")))
-				deploy.ObjectMeta.Annotations[corev1alpha1.SKYCLUSTER_API+"/skyvm-required-locations"] = strings.Join(locs_required, "__")
+				locs_permitted := make([]corev1alpha1.ProviderRefSpec, 0)
+				for _, loc := range dp.LocationConstraint.Permitted {
+					locs_permitted = append(locs_permitted, corev1alpha1.ProviderRefSpec{
+						ProviderName:   loc.Name,
+						ProviderType:   loc.Type,
+						ProviderRegion: loc.Region,
+						ProviderZone:   loc.Zone,
+					})
+				}
+				locs_required := make([]corev1alpha1.ProviderRefSpec, 0)
+				for _, loc := range dp.LocationConstraint.Required {
+					locs_required = append(locs_required, corev1alpha1.ProviderRefSpec{
+						ProviderName:   loc.Name,
+						ProviderType:   loc.Type,
+						ProviderRegion: loc.Region,
+						ProviderZone:   loc.Zone,
+					})
+				}
+				deploysLocPerConstraints[k] = locs_permitted
+				deploysLocReqConstraints[k] = locs_required
 			}
 		}
 
@@ -217,6 +236,11 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					Namespace:  deploy.Namespace,
 					Name:       deploy.Name,
 				},
+				LocationConstraint: corev1alpha1.LocationConstraint{
+					Required:  deploysLocReqConstraints[k],
+					Preferred: deploysLocPerConstraints[k],
+				},
+				VirtualServices: []corev1.LocalObjectReference{{Name: strings.Join(okFlavors, ",")}},
 			})
 
 		// Update the deployment
@@ -230,7 +254,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// In addition to deployments, there may be other Sky Services referenced in
 	// DeploymentPolicy object. We need to check them as well and include them in the optimization.
 	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
-		if *&dp.ComponentRef.Kind == "Deployment" {
+		if dp.ComponentRef.Kind == "Deployment" {
 			// This is a deployment, we have already processed it
 			continue
 		}
@@ -252,19 +276,46 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			Namespace: req.Namespace,
 			Name:      dp.ComponentRef.Name,
 		}, obj); err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Object not found.", loggerName))
+			logger.Info(
+				fmt.Sprintf(
+					"[%s]\t Object not found: Name: [%s], Kind: [%s].",
+					loggerName, dp.ComponentRef.Name, dp.ComponentRef.Kind))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		logger.Info(fmt.Sprintf("[%s]\t Object found.", loggerName))
-		locs_permitted, locs_required := getLocationConstraints(dp)
-		logger.Info(fmt.Sprintf("[%s]\t Permitted Locations [%s].", loggerName, strings.Join(locs_permitted, "__")))
-		obj.SetAnnotations(map[string]string{
-			corev1alpha1.SKYCLUSTER_API + "/skyvm-permitted-locations": strings.Join(locs_permitted, "__"),
-		})
-		logger.Info(fmt.Sprintf("[%s]\t Required Locations [%s].", loggerName, strings.Join(locs_required, "__")))
-		obj.SetAnnotations(map[string]string{
-			corev1alpha1.SKYCLUSTER_API + "/skyvm-required-locations": strings.Join(locs_required, "__"),
-		})
+
+		locs_permitted := make([]corev1alpha1.ProviderRefSpec, 0)
+		locs_required := make([]corev1alpha1.ProviderRefSpec, 0)
+		for _, loc := range dp.LocationConstraint.Permitted {
+			locs_permitted = append(locs_permitted, corev1alpha1.ProviderRefSpec{
+				ProviderName:   loc.Name,
+				ProviderType:   loc.Type,
+				ProviderRegion: loc.Region,
+				ProviderZone:   loc.Zone,
+			})
+		}
+		for _, loc := range dp.LocationConstraint.Required {
+			locs_required = append(locs_required, corev1alpha1.ProviderRefSpec{
+				ProviderName:   loc.Name,
+				ProviderType:   loc.Type,
+				ProviderRegion: loc.Region,
+				ProviderZone:   loc.Zone,
+			})
+		}
+
+		objVServices := make([]corev1.LocalObjectReference, 0)
+		nestedObj, err := GetNestedField(obj.Object, "spec")
+		if err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
+			return ctrl.Result{}, err
+		}
+		for nestedField, nestedFieldValue := range nestedObj {
+			if slices.Contains(corev1alpha1.SkyVMVirtualServices, nestedField) {
+				// Construct virtual service name (e.g. skyvm.flavor.2vCPU-4GB)
+				objVservice := strings.ToLower(dp.ComponentRef.Kind) + "." + nestedField + "." + nestedFieldValue.(string)
+				objVServices = append(objVServices, corev1.LocalObjectReference{Name: objVservice})
+			}
+		}
 
 		// We also add the reference to this object to the SkyCluster spec.skyComponents
 		// The provider field is not set as it will be set by the optimizer
@@ -276,6 +327,15 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					Namespace:  obj.GetNamespace(),
 					Name:       obj.GetName(),
 				},
+				LocationConstraint: corev1alpha1.LocationConstraint{
+					Required:  locs_required,
+					Preferred: locs_permitted,
+				},
+				// TODO: Potentially a better system for managing the virtual services
+				// relationship and dependencies can be implemented, but for now
+				// we just copy whatever fields in the Spec field of the components
+				// that is not empty, (e.g. flavor, image, etc. for SkyVM)
+				VirtualServices: objVServices,
 			})
 
 		// Update the object
@@ -286,8 +346,26 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// ########### ########### ########### ########### ###########
-	// Before we create the ILPTask, we need to check if there are any additional
-	// Sky Srvices (e.g. SkyVM) that should be included in the optimization.
+	// Create the ILPTask object, once the ILPTask is finished,
+	// it updates the SkyCluster's status with the deployment plan
+	ilpTask := &corev1alpha1.ILPTask{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      skyCluster.Name,
+			Namespace: skyCluster.Namespace,
+		},
+		Spec: corev1alpha1.ILPTaskSpec{
+			SkyComponents: skyCluster.Spec.SkyComponents,
+		},
+	}
+	if err := ctrl.SetControllerReference(skyCluster, ilpTask, r.Scheme); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
+		return ctrl.Result{}, err
+	}
+	// TODO: Uncomment this section
+	// if err := r.Create(ctx, ilpTask); err != nil {
+	// 	logger.Info(fmt.Sprintf("[%s]\t Error creating ILPTask.", loggerName))
+	// 	return ctrl.Result{}, client.IgnoreNotFound(err)
+	// }
 
 	// ########### ########### ########### ########### ###########
 	// Save the SkyCluster object
