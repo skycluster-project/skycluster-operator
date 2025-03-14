@@ -150,10 +150,10 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	allFlavors_set := make(map[string]struct{}, 0)
 	for _, cm := range allConfigMap.Items {
 		for k := range cm.Data {
-			if !strings.Contains(k, "skyvm.flavor") {
+			if !strings.Contains(k, "skyvm_flavor") {
 				continue
 			}
-			flavorName := strings.Split(k, ".")[2]
+			flavorName := strings.Split(k, "_")[2]
 			if _, ok := allFlavors_set[flavorName]; ok {
 				continue
 			}
@@ -238,16 +238,18 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				},
 				LocationConstraint: corev1alpha1.LocationConstraint{
 					Required:  deploysLocReqConstraints[k],
-					Preferred: deploysLocPerConstraints[k],
+					Permitted: deploysLocPerConstraints[k],
 				},
-				VirtualServices: []corev1.LocalObjectReference{{Name: strings.Join(okFlavors, ",")}},
+				VirtualServices: []corev1alpha1.VirtualService{
+					{Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"},
+				},
 			})
 
-		// Update the deployment
-		if err := r.Update(ctx, &deploy); err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Error updating Deployment.", loggerName))
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
+		// // Update the deployment
+		// if err := r.Update(ctx, &deploy); err != nil {
+		// 	logger.Info(fmt.Sprintf("[%s]\t Error updating Deployment.", loggerName))
+		// 	return ctrl.Result{}, client.IgnoreNotFound(err)
+		// }
 	}
 
 	// ########### ########### ########### ########### ###########
@@ -303,17 +305,21 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			})
 		}
 
-		objVServices := make([]corev1.LocalObjectReference, 0)
+		objVServices := make([]corev1alpha1.VirtualService, 0)
 		nestedObj, err := GetNestedField(obj.Object, "spec")
 		if err != nil {
 			logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
 			return ctrl.Result{}, err
 		}
 		for nestedField, nestedFieldValue := range nestedObj {
+			// Check if these fields is considered a "virtual service"
 			if slices.Contains(corev1alpha1.SkyVMVirtualServices, nestedField) {
-				// Construct virtual service name (e.g. skyvm.flavor.2vCPU-4GB)
-				objVservice := strings.ToLower(dp.ComponentRef.Kind) + "." + nestedField + "." + nestedFieldValue.(string)
-				objVServices = append(objVServices, corev1.LocalObjectReference{Name: objVservice})
+				// Construct virtual service name (e.g. skyvm_flavor_2vCPU-4GB)
+				objVservice := fmt.Sprintf(
+					"%s|1", nestedFieldValue.(string))
+				objVServices = append(objVServices, corev1alpha1.VirtualService{
+					Name: objVservice,
+					Type: fmt.Sprintf("%s_%s", strings.ToLower(dp.ComponentRef.Kind), nestedField)})
 			}
 		}
 
@@ -329,7 +335,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				},
 				LocationConstraint: corev1alpha1.LocationConstraint{
 					Required:  locs_required,
-					Preferred: locs_permitted,
+					Permitted: locs_permitted,
 				},
 				// TODO: Potentially a better system for managing the virtual services
 				// relationship and dependencies can be implemented, but for now
@@ -338,11 +344,11 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				VirtualServices: objVServices,
 			})
 
-		// Update the object
-		if err := r.Update(ctx, obj); err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Error updating Object.", loggerName))
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
+		// // Update the object
+		// if err := r.Update(ctx, obj); err != nil {
+		// 	logger.Info(fmt.Sprintf("[%s]\t Error updating Object.", loggerName))
+		// 	return ctrl.Result{}, client.IgnoreNotFound(err)
+		// }
 	}
 
 	// ########### ########### ########### ########### ###########
@@ -361,11 +367,6 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
 		return ctrl.Result{}, err
 	}
-	// TODO: Uncomment this section
-	// if err := r.Create(ctx, ilpTask); err != nil {
-	// 	logger.Info(fmt.Sprintf("[%s]\t Error creating ILPTask.", loggerName))
-	// 	return ctrl.Result{}, client.IgnoreNotFound(err)
-	// }
 
 	// ########### ########### ########### ########### ###########
 	// Save the SkyCluster object
@@ -378,6 +379,11 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Save the SkyCluster object status
 	if err := r.Status().Update(ctx, skyCluster); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	if err := r.Create(ctx, ilpTask); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error creating ILPTask.", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -404,7 +410,7 @@ func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, 
 			continue
 		}
 		if cpu_int >= minCPU && ram_int >= minRAM {
-			okFlavors = append(okFlavors, skyFlavor)
+			okFlavors = append(okFlavors, fmt.Sprintf("%s|1", skyFlavor))
 		}
 	}
 	return okFlavors, nil

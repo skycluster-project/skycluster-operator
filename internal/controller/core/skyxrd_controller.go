@@ -41,7 +41,7 @@ type SkyXRDReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=skyxrds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=skyxrds/finalizers,verbs=update
 
-// +kubebuilder:rbac:groups=xrds.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
+// // +kubebuilder:rbac:groups=xrds.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
 
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)

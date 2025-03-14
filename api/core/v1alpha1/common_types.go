@@ -54,7 +54,12 @@ var (
 
 type LocationConstraint struct {
 	Required  []ProviderRefSpec `json:"required,omitempty"`
-	Preferred []ProviderRefSpec `json:"preferred,omitempty"`
+	Permitted []ProviderRefSpec `json:"permitted,omitempty"`
+}
+
+type VirtualService struct {
+	Name string `json:"name"`
+	Type string `json:"type,omitempty"`
 }
 
 type SkyComponent struct {
@@ -64,7 +69,7 @@ type SkyComponent struct {
 	// It declartively specifies the provider and region where the SkyComponent should be deployed
 	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
 	// VirtualServices specifies the virtual services that are required by the SkyComponent
-	VirtualServices []corev1.LocalObjectReference `json:"virtualServices,omitempty"`
+	VirtualServices []VirtualService `json:"virtualServices,omitempty"`
 }
 
 type ProviderRefSpec struct {

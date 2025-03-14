@@ -34,11 +34,11 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -70,7 +70,19 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Fetch the ILPTask instance
 	instance := &corev1alpha1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Failed to get ILPTask", loggerName))
+		logger.Info(fmt.Sprintf("[%s]\t Failed to get ILPTask, maybe it is deleted?", loggerName))
+		logger.Info(fmt.Sprintf("[%s]\t Deleting the optimization pod as the ILPTask is not found.", loggerName))
+		// Delete the optimization pod
+		pod := &corev1.Pod{}
+		if err := r.Get(ctx, client.ObjectKey{
+			Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
+			Name:      OPTMIZATION_POD_NAME,
+		}, pod); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to get Pod for deletion", loggerName))
+		}
+		if err := r.Delete(ctx, pod); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to delete Pod.", loggerName))
+		}
 		return ctrl.Result{}, err
 	}
 
@@ -84,11 +96,11 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// The previous status is running
-	if instance.Status.Optimization.Status == "Running" {
+	// The previous status is set, so a pod is created
+	if instance.Status.Optimization.Status != "" {
 		// check the pod status, if it is done running, then update the result
 		// if the pod is not done, then return requing the ILPTask
-		podStatus, optResult, optDeployPlan, err := getPodStatusAndResult(ctx, r, req)
+		podStatus, optResult, optDeployPlan, err := getPodStatusAndResult(ctx, r)
 		if err != nil {
 			logger.Info(fmt.Sprintf("[%s]\t Failed to get Pod status", loggerName))
 			return ctrl.Result{}, err
@@ -125,8 +137,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Info(fmt.Sprintf("[%s]\t Failed to update ILPTask status", loggerName))
 			return ctrl.Result{}, err
 		}
-		logger.Info(fmt.Sprintf("[%s]\t ILPTask failed. Check pod status.", loggerName))
-		return ctrl.Result{}, nil
+		logger.Info(fmt.Sprintf("[%s]\t ILPTask failed. Checking pod status again in 5 sec.", loggerName))
+		return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 	}
 
 	// If the status is not running, then it means the optimization was run previously
@@ -138,38 +150,62 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	// We need to schedule the optimization
-	// Creating task definitions and task attribute files
-	// Get all deployments with skycluster label
-	// List all deployments that have skycluster labels
-	allDeploy := &appsv1.DeploymentList{}
-	if err := r.List(ctx, allDeploy, client.MatchingLabels{
-		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
-	}); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Error listing SkyApps.", loggerName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	logger.Info(fmt.Sprintf("[%s]\t Deployments [%d] found.", loggerName, len(allDeploy.Items)))
+	// We need to schedule the optimization,
+	// SkyCluster (owner) with same name as the current object,
+	// has a list of all components (tasks)
+	// that we should include in the optimization process.
+	// We iterate over all components in the spec.skyComponents
+	// and create corresponding tasks for optimization problem.
 
-	// Get dataflow and deployment policies as we need them later
-	dfPolicy := &policyv1alpha1.DataflowPolicy{}
+	skyCluster := &corev1alpha1.SkyCluster{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace,
 		Name:      req.Name,
-	}, dfPolicy); err != nil {
+	}, skyCluster); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	// Creating tasks.csv
+	tasks := getTasksFromSkyCluster(skyCluster)
+	// Creating task-locations.csv
+	// Location constraints should be retrived from deployment policy object
+	// with the same name as the current object
+	dp := &policyv1alpha1.DeploymentPolicy{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace,
+		Name:      skyCluster.Spec.DeploymentPolciyRef.Name,
+	}, dp); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy not found.", loggerName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	taskLocations := getTasksLocationsFromDeployPolicy(dp)
+	// Creating tasks-edges.csv
+	df := &policyv1alpha1.DataflowPolicy{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace,
+		Name:      skyCluster.Spec.DataflowPolicyRef.Name,
+	}, df); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy not found.", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy found.", loggerName))
+	tasksEdges := getTasksEdgesFromDataflowPolicy(df)
 
-	// If deployment contains skycluster annotations then create task definition and task attribute files
-	// By having all files we are ready to run optimization
+	// Creating task definitions and task attribute files
+	// Get all deployments with skycluster label
+	// List all deployments that have skycluster labels
+	// allDeploy := &appsv1.DeploymentList{}
+	// if err := r.List(ctx, allDeploy, client.MatchingLabels{
+	// 	corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+	// }); err != nil {
+	// 	logger.Info(fmt.Sprintf("[%s]\t Error listing SkyApps.", loggerName))
+	// 	return ctrl.Result{}, client.IgnoreNotFound(err)
+	// }
+	// logger.Info(fmt.Sprintf("[%s]\t Deployments [%d] found.", loggerName, len(allDeploy.Items)))
+
 	// The optimization is done by creating a pod, and mounting optimization scripts
-	// as well as providers and tasks files
+	// as well as providers data and tasks env variables created above.
 	// The providers files (.json) are generated during the installation phase and stored
-	// in a persistent volume, however, the deployments (.json) are generated in init container
-	// of the optimization pod. The csv files are generated within the main container of the
-	// optimization pod.
+	// in a persistent volume.
 	// Provider files (generated during the setup)
 	//    '/shared/providers.json',
 	//    '/shared/providers.csv',
@@ -177,13 +213,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	//    '/shared/providers-attr.csv',
 	//    '/shared/offerings.json',
 	//    '/shared/vservices.csv',
-	// Deployment files (init container)
-	//    '/shared/deployments.json',
-	//    '/shared/deployments-attr.json'
-	// CSV files (main container, before running the optimization)
-	//    '/shared/tasks.json'
-	//    '/shared/tasksEdges.json'
-	//    '/shared/tasks-locations.json'
 	// Results
 	//    '/shared/optimization-stats.csv'
 	//    '/shared/deploy-plan.json'
@@ -193,22 +222,23 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// First we retrive the confimap and then use it within the pod definition
 
 	// Get ConfigMap by label
-	var configMapList corev1.ConfigMapList
-	if err := r.List(ctx, &configMapList, client.MatchingLabels{
-		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
-		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL: "optimization-starter",
-	}); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Error listing ConfigMaps (optimization starter).", loggerName))
+	// optimization-starter contains the scripts to run the optimization
+	// optimization-scripts contains the core optimizaiton scripts
+	var configMapList map[string]corev1.ConfigMap
+	configMapList, err := getOptimizationConfigMaps(ctx, r)
+	if err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error listing ConfigMaps (optimization scripts).", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	// we expect to have only one configmap
-	if len(configMapList.Items) != 1 {
-		logger.Info(fmt.Sprintf("[%s]\t Multiple configmaps exist (optimization-starter)", loggerName))
-		return ctrl.Result{}, nil
 	}
 
 	// Define Pod
-	pod := defineOptimizationPod(ctx, r, configMapList)
+	// The instance name is as the SkyCluster name
+	// If they differ the name of SkyCluster should be passed
+	pod := defineOptimizationPod(configMapList, instance.Name, tasks, taskLocations, tasksEdges)
+	// The pod is in skycluster namespace
+	// The ilptask is in the default namespace, and cross namespace reference is not allowed
+	// The pod need to be taken care of manually if created in skycluster namespace
+	// So we create it in default namespace for now
 	if err := r.Create(ctx, pod); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Failed to create Pod", loggerName))
 		return ctrl.Result{}, err
@@ -220,11 +250,89 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info(fmt.Sprintf("[%s]\t Failed to update ILPTask status", loggerName))
 		return ctrl.Result{}, err
 	}
-	logger.Info(fmt.Sprintf("[%s]\t ILPTask scheduled for optimization.", loggerName))
+	logger.Info(fmt.Sprintf("[%s]\t ILPTask scheduled. Pod Created.", loggerName))
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-func defineOptimizationPod(ctx context.Context, r *ILPTaskReconciler, configMapList corev1.ConfigMapList) *corev1.Pod {
+func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
+	tasks := make([]string, 0)
+	tasks = append(tasks, "# header")
+	for _, component := range skyCluster.Spec.SkyComponents {
+		cmpntName := component.Component.Name
+		cmpntKind := strings.ToLower(component.Component.Kind)
+		cmpntApiVersion := component.Component.APIVersion
+		// Each vs \in component.VirtualServices is a required service for this component
+		// and should be appeared in a new line in the tasks.csv
+		for _, vs := range component.VirtualServices {
+			// we set the quantity to 1 for now,
+			// for future sky services we can set the quantity as needed
+			vsNames := func(ss []string, t string, c string) string {
+				r := ""
+				for i, s := range ss {
+					r += fmt.Sprintf("%s_%s", t, s)
+					if i < len(ss)-1 {
+						r += c
+					}
+				}
+				return r
+			}(strings.Split(vs.Name, "__"), vs.Type, "__")
+			tasks = append(tasks, fmt.Sprintf("%s.%s, %s, %s, %s", cmpntName, cmpntKind, cmpntApiVersion, cmpntKind, vsNames))
+		}
+	}
+	return strings.Join(tasks, "\n")
+}
+
+func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) string {
+	taskLocations := make([]string, 0)
+	taskLocations = append(taskLocations, "# header")
+	for _, dpItem := range dp.Spec.DeploymentPolicies {
+		locs_permitted := make([]string, 0)
+		locs_required := make([]string, 0)
+		for _, loc := range dpItem.LocationConstraint.Permitted {
+			locs_permitted = append(locs_permitted, fmt.Sprintf(
+				"%s|%s||%s|%s",
+				loc.Name,
+				loc.Type,
+				loc.Region,
+				loc.Zone,
+			))
+		}
+		for _, loc := range dpItem.LocationConstraint.Required {
+			locs_required = append(locs_required, fmt.Sprintf(
+				"%s|%s||%s|%s",
+				loc.Name,
+				loc.Type,
+				loc.Region,
+				loc.Zone,
+			))
+		}
+		taskLocations = append(taskLocations, fmt.Sprintf(
+			"%s.%s, %s, %s, %s, %s, -1",
+			dpItem.ComponentRef.Name,
+			strings.ToLower(dpItem.ComponentRef.Kind),
+			dpItem.ComponentRef.APIVersion,
+			dpItem.ComponentRef.Kind,
+			strings.Join(locs_required, "__"), strings.Join(locs_permitted, "__")))
+	}
+	return strings.Join(taskLocations, "\n")
+}
+
+func getTasksEdgesFromDataflowPolicy(df *policyv1alpha1.DataflowPolicy) string {
+	taskEdges := make([]string, 0)
+	taskEdges = append(taskEdges, "# header")
+	for _, df := range df.Spec.DataDependencies {
+		srcName := df.From.Name + "." + strings.ToLower(df.From.Kind)
+		dstName := df.To.Name + "." + strings.ToLower(df.To.Kind)
+		// TODO: currently we set the total data transfer and leave the average data rate,
+		// We should later take it into consideration if possible
+		taskEdges = append(taskEdges, fmt.Sprintf(
+			"%s, %s, %s, %s, -1", srcName, dstName, df.Latency, df.TotalDataTransfer))
+	}
+	return strings.Join(taskEdges, "\n")
+}
+
+func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyClusterName, tasks, tasksLocations, tasksEdges string) *corev1.Pod {
+	// "optimization-starter", "optimization-scripts"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      OPTMIZATION_POD_NAME,
@@ -235,17 +343,26 @@ func defineOptimizationPod(ctx context.Context, r *ILPTaskReconciler, configMapL
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "skycluster-sva",
+			RestartPolicy:      corev1.RestartPolicyNever,
 			InitContainers: []corev1.Container{
 				{
 					Name: "kubectl",
 					// TODO: the image registry should be configurable
 					Image: "registry.skycluster.io/kubectl:latest",
+					Env: []corev1.EnvVar{
+						{Name: "TASKS", Value: tasks},
+						{Name: "TASKS_EDGES", Value: tasksEdges},
+						{Name: "TASKS_LOCATIONS", Value: tasksLocations},
+					},
 					Command: []string{
 						"/bin/sh",
 						"-c",
 					},
 					Args: []string{
-						configMapList.Items[0].Data["init.sh"],
+						strings.ReplaceAll(
+							configMapList["optimization-starter"].Data["init.sh"],
+							"__SKYCLUSTER__NAME__",
+							skyClusterName),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -263,9 +380,14 @@ func defineOptimizationPod(ctx context.Context, r *ILPTaskReconciler, configMapL
 						"/bin/sh",
 						"-c",
 					},
+					Env: []corev1.EnvVar{
+						{Name: "TASKS", Value: tasks},
+						{Name: "TASKS_EDGES", Value: tasksEdges},
+						{Name: "TASKS_LOCATIONS", Value: tasksLocations},
+					},
 					Args: []string{
 						strings.ReplaceAll(
-							configMapList.Items[0].Data["main.sh"],
+							configMapList["optimization-starter"].Data["main.sh"],
 							"__CONFIG_NAME__",
 							OPTMIZATION_POD_NAME),
 					},
@@ -287,7 +409,7 @@ func defineOptimizationPod(ctx context.Context, r *ILPTaskReconciler, configMapL
 					VolumeSource: corev1.VolumeSource{
 						ConfigMap: &corev1.ConfigMapVolumeSource{
 							LocalObjectReference: corev1.LocalObjectReference{
-								Name: configMapList.Items[0].Name,
+								Name: configMapList["optimization-scripts"].Name,
 							},
 						},
 					},
@@ -306,12 +428,35 @@ func defineOptimizationPod(ctx context.Context, r *ILPTaskReconciler, configMapL
 	return pod
 }
 
+func getOptimizationConfigMaps(ctx context.Context, r *ILPTaskReconciler) (map[string]corev1.ConfigMap, error) {
+	configMapLabels := []string{"optimization-starter", "optimization-scripts"}
+	cfgMapList := make(map[string]corev1.ConfigMap)
+	for _, label := range configMapLabels {
+		var configMapList corev1.ConfigMapList
+		if err := r.List(ctx, &configMapList, client.MatchingLabels{
+			corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+			corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL: label,
+		}); err != nil {
+			return nil, err
+		}
+		// we expect to have only one configmap
+		if len(configMapList.Items) != 1 {
+			return nil, errors.New("multiple configmaps exist (optimization-starter)")
+		}
+		if len(configMapList.Items) == 0 {
+			return nil, errors.New("no configmap found (optimization-starter)")
+		}
+		cfgMapList[label] = configMapList.Items[0]
+	}
+	return cfgMapList, nil
+}
+
 // Returns:
 // - podStatus: The current status of the pod.
 // - optimizationStatus: The status of the optimization process.
 // - deploymentPlan: The deployment plan details.
 // - error: An error object if an error occurred, otherwise nil.
-func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler, req ctrl.Request) (podStatus string, optmizationStatus string, deployPlan string, err error) {
+func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus string, optmizationStatus string, deployPlan string, err error) {
 	pod := &corev1.Pod{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
