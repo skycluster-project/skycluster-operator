@@ -61,6 +61,7 @@ import (
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 )
 
 // SkyClusterReconciler reconciles a SkyCluster object
@@ -113,6 +114,44 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// and anything else if it is not successful.
 	if skyCluster.Status.Optimization.Result != "" {
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPlan/Status already exists.", loggerName))
+		// We can now proceed with the deployment by creating SkyXRD object.
+		if skyCluster.Status.Optimization.Result == "Optimal" {
+			logger.Info(fmt.Sprintf("[%s]\t ILPTask is succeeded. Ready to create SkyXRD to initate the deployment.", loggerName))
+			manifests, err := createXRDs(r, ctx, req, skyCluster.Status.Optimization.DeployMap)
+			if err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error creating SkyXRD.", loggerName))
+				return ctrl.Result{}, err
+			}
+			// if the manifests are generated, we then create or update the SkyXRDs with the complete manifests
+			// and let it oversee the deployment process.
+			logger.Info(fmt.Sprintf("[%s]\t SkyXRDs manifests created successfully. Len: [%d]", loggerName, len(manifests)))
+			// Load SkyXRD and create/update it
+			skyXRD := &corev1alpha1.SkyXRD{}
+			if err := r.Get(ctx, req.NamespacedName, skyXRD); err != nil {
+				// Create the SkyXRD object
+				skyXRD = &corev1alpha1.SkyXRD{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      skyCluster.Name,
+						Namespace: skyCluster.Namespace,
+					},
+					Spec: corev1alpha1.SkyXRDSpec{
+						Manifests: manifests,
+					},
+				}
+				if err := ctrl.SetControllerReference(skyCluster, skyXRD, r.Scheme); err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
+					return ctrl.Result{}, err
+				}
+				if err := r.Create(ctx, skyXRD); err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error creating SkyXRD.", loggerName))
+					return ctrl.Result{}, err
+				}
+				logger.Info(fmt.Sprintf("[%s]\t SkyXRD created successfully.", loggerName))
+			} else {
+				logger.Info(fmt.Sprintf("[%s]\t SkyXRD already exists. Updating an existing plan is not supported yet.", loggerName))
+			}
+			return ctrl.Result{}, nil
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -123,15 +162,6 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// So we wait here for user intervention.
 	if skyCluster.Status.Optimization.Status == "Pending" {
 		logger.Info(fmt.Sprintf("[%s]\t ILPTask is pending (or failed). Waiting for the results.", loggerName))
-		return ctrl.Result{}, nil
-	}
-
-	// If the status is succeeded, the ILPTask has been completed
-	// and has updated the SkyCluster with the deployment plan
-	// We can now proceed with the deployment by creating
-	// SkyXRD object.
-	if skyCluster.Status.Optimization.Status == "Succeeded" {
-		logger.Info(fmt.Sprintf("[%s]\t ILPTask is succeeded. Ready to create SkyXRD to initate the deployment.", loggerName))
 		return ctrl.Result{}, nil
 	}
 
@@ -163,17 +193,6 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Get all uniqe flavors from configmaps and store them
 	allFlavors := getUniqueFlavors(allConfigMap)
 	logger.Info(fmt.Sprintf("[%s]\t Flavors [%d] found.", loggerName, len(allFlavors)))
-
-	// ########### ########### ########### ########### ###########
-	// List all deployments that have skycluster labels
-	allDeploy := &appsv1.DeploymentList{}
-	if err := r.List(ctx, allDeploy, client.MatchingLabels{
-		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
-	}); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Error listing SkyApps.", loggerName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	logger.Info(fmt.Sprintf("[%s]\t Deployments [%d] found.", loggerName, len(allDeploy.Items)))
 
 	// ########### ########### ########### ########### ###########
 	// We list all deployments along with other Sky Services in one go,
@@ -506,6 +525,135 @@ func deployExistsInDeploymentPolicy(deployName string, dpPolicy *policyv1alpha1.
 		}
 	}
 	return false
+}
+
+func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, error) {
+	providersManifests, err := generateProviderManifests(r, ctx, req, deployMap.Component)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error generating provider manifests.")
+	}
+	// for _, deployItem := range deployMap.Component {
+	// 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
+	// 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
+	// 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
+
+	// 	// For the component itself we check its kind and based on that we decide how to proceed:
+	// 	// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
+	// 	// 	If this is a Deployment, then we need to group the deployments based on the provider
+	// 	// Then using decreasing first fit, we identitfy the number and type of VMs required.
+	// 	// Then we create SkyK8SCluster with a controller and agents specified in previous step.
+	// 	// We also need to annotate deployments carefully and create services and istio resources accordingly.
+
+	// 	// // Now let's work on the component itself
+	// 	// obj, err := getUnstructuredObject(r, ctx, req, deployItem.Component)
+	// 	// // based on the type of services we may modify the objects' spec
+	// 	// switch deployItem.Component.Kind {
+	// 	// case "Deployment":
+	// 	// 	skyK8SCluster, skyK8SCtrl, skyK8SAgents, err := generateSkyK8SCluster(r, ctx, req, deployItem.Component)
+	// 	// 	skyDeploy, skyServices, err := generateSkyDeployments(r, ctx, req, deployItem.Component)
+	// 	// case "SkyVM":
+	// 	// 	obj := generateSkyVMs(r, ctx, req, deployItem.Component)
+	// 	// default:
+	// 	// 	// We only support above services for now...
+	// 	// 	logger.Info(fmt.Sprintf("[%s]\t Unsupported component type [%s]. Skipping...", loggerName, deployItem.Component.Kind))
+	// 	// }
+	// }
+
+	// convert to string yaml
+	manifests := make([]corev1alpha1.SkyService, 0)
+	for pName, manifest := range providersManifests {
+		manifestYAML, err := yaml.Marshal(&manifest.Object)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error marshalling provider manifests.")
+		}
+		manifests = append(manifests, corev1alpha1.SkyService{
+			Name:       pName,
+			Kind:       manifest.GetKind(),
+			APIVersion: manifest.GetAPIVersion(),
+			Manifest:   string(manifestYAML),
+		})
+	}
+	return manifests, nil
+}
+
+func generateProviderManifests(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, components []corev1alpha1.SkyComponent) (map[string]unstructured.Unstructured, error) {
+	// We need to group the components based on the providers
+	// and then generate the manifests for each provider
+	// We then return the manifests for each provider
+	uniqueProviders := make(map[string]corev1alpha1.ProviderRefSpec, 0)
+	for _, cmpnt := range components {
+		providerName := cmpnt.Provider.ProviderName
+		if _, ok := uniqueProviders[providerName]; ok {
+			continue
+		}
+		uniqueProviders[providerName] = cmpnt.Provider
+	}
+	// Now we have all unique providers
+	// We can now generate the manifests for each provider
+	manifests := map[string]unstructured.Unstructured{}
+	idx := 0
+	for providerName, provider := range uniqueProviders {
+		idx += 1
+		// We need to create the SkyProvider object
+		// We need to create the SkyK8SCluster
+		obj := &unstructured.Unstructured{}
+		obj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
+		obj.SetKind("SkyProvider")
+		// Namespace should be in a same namespace as its owner
+		obj.SetNamespace(req.Namespace)
+		obj.SetName(strings.ReplaceAll(providerName, ".", "-"))
+		// Set the provider's info
+		// There can be some clever way to set the flavor size based on the application need
+		// For simplicity, we use the default flavor introduced in the installation setup.
+		// The default flavor is automatically set in the composition.
+		// ProviderName includes providerName.ProviderRegion.ProviderZone.ProviderType
+		spec := map[string]interface{}{
+			"forProvider": map[string]interface{}{
+				"vpcCidr": fmt.Sprintf("10.%d.3.0/24", idx),
+			},
+			"providerRef": map[string]string{
+				"providerName":   strings.Split(providerName, ".")[0],
+				"providerRegion": provider.ProviderRegion,
+				"providerZone":   provider.ProviderZone,
+			},
+		}
+		obj.Object["spec"] = spec
+		// if the provider is part of "SAVI", we need to add some labels representing
+		// some external resources
+		objLabels := make(map[string]string, 0)
+		if strings.Contains(providerName, "os") {
+			if provider.ProviderRegion == "scinet" || provider.ProviderRegion == "vaughan" {
+				// get the gloabl CM
+				globalCMList := &corev1.ConfigMapList{}
+				if err := r.List(ctx, globalCMList, client.MatchingLabels{
+					corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL:   strings.Split(providerName, ".")[0],
+					corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL: provider.ProviderRegion,
+					corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL:   "global",
+					corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL:   "global",
+					corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:     corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+				}); err != nil {
+					return nil, errors.Wrap(err, "Error listing ConfigMaps.")
+				}
+				if len(globalCMList.Items) != 1 {
+					return nil, errors.New("More than one ConfigMap found when generating manifests and this should not be happening.")
+				}
+				globalCM := globalCMList.Items[0]
+				for k, v := range globalCM.Data {
+					if strings.Contains(k, "ext-") {
+						objLabels[fmt.Sprintf("%s/%s", corev1alpha1.SKYCLUSTER_API, k)] = v
+					}
+				}
+				objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(providerName, ".")[0]
+				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = provider.ProviderRegion
+				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = provider.ProviderZone
+				objLabels[corev1alpha1.SKYCLUSTER_PAUSE] = "true"
+			}
+		}
+		obj.SetLabels(objLabels)
+		manifests[providerName] = *obj
+	}
+	return manifests, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -14,7 +14,7 @@ func GetNestedField(obj map[string]interface{}, fields ...string) (map[string]in
 		if val, ok := m[field].(map[string]interface{}); ok {
 			m = val
 		} else {
-			return nil, errors.New(fmt.Sprintf("field %s not found in the object or its type is not map[string]interface{}", field))
+			return nil, fmt.Errorf("field %s not found in the object or its type is not map[string]interface{}", field)
 		}
 	}
 	return m, nil // the last field is not found in the object

@@ -91,4 +91,12 @@ resources:
   kind: ILPTask
   path: github.com/etesami/skycluster-manager/api/core/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: skycluster.io
+  group: core
+  kind: SkyXRD
+  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  version: v1alpha1
 version: "3"
