@@ -62,6 +62,17 @@ type VirtualService struct {
 	Type string `json:"type,omitempty"`
 }
 
+type DeployMapEdge struct {
+	From    SkyComponent `json:"from"`
+	To      SkyComponent `json:"to"`
+	Latency string       `json:"latency,omitempty"`
+}
+
+type DeployMap struct {
+	Component []SkyComponent  `json:"components,omitempty"`
+	Edges     []DeployMapEdge `json:"edges,omitempty"`
+}
+
 type SkyComponent struct {
 	Component corev1.ObjectReference `json:"component"`
 	Provider  ProviderRefSpec        `json:"provider,omitempty"`

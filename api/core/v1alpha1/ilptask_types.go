@@ -21,17 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type DeployMapEdge struct {
-	From    SkyComponent `json:"from"`
-	To      SkyComponent `json:"to"`
-	Latency string       `json:"latency,omitempty"`
-}
-
-type DeployMap struct {
-	Component []SkyComponent  `json:"components,omitempty"`
-	Edges     []DeployMapEdge `json:"edges,omitempty"`
-}
-
 type OptimizationSpec struct {
 	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
 	Status       string                      `json:"status,omitempty"`

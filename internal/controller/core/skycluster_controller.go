@@ -56,6 +56,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	errors2 "errors"
+
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
 	"github.com/pkg/errors"
@@ -107,60 +109,59 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// ########### ########### ########### ########### ###########
 	// We are all good, let's check the deployment plan
 	// If we already have the deployment plan, no need to make any changes
-	if skyCluster.Status.DeploymentPlanStatus != "" || skyCluster.Status.DeploymentPlan != "" {
+	// The Result can be "Optimal" if the optimization is successful
+	// and anything else if it is not successful.
+	if skyCluster.Status.Optimization.Result != "" {
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPlan/Status already exists.", loggerName))
 		return ctrl.Result{}, nil
 	}
 
+	// If the status is not empty (pending), the ILPTask has been created,
+	// We should wait until the results are avaialble
+	// If the optimization fails, the status will not be updated as the
+	// ILPTask controller will not propagate the status to the SkyCluster
+	// So we wait here for user intervention.
+	if skyCluster.Status.Optimization.Status == "Pending" {
+		logger.Info(fmt.Sprintf("[%s]\t ILPTask is pending (or failed). Waiting for the results.", loggerName))
+		return ctrl.Result{}, nil
+	}
+
+	// If the status is succeeded, the ILPTask has been completed
+	// and has updated the SkyCluster with the deployment plan
+	// We can now proceed with the deployment by creating
+	// SkyXRD object.
+	if skyCluster.Status.Optimization.Status == "Succeeded" {
+		logger.Info(fmt.Sprintf("[%s]\t ILPTask is succeeded. Ready to create SkyXRD to initate the deployment.", loggerName))
+		return ctrl.Result{}, nil
+	}
+
+	// If the status is anything else than an empty string, we should not continue.
+	// Something may have gone wrone.
+	if skyCluster.Status.Optimization.Status != "" {
+		logger.Info(fmt.Sprintf("[%s]\t ILPTask is not succeeded. Status is [%s]. Please check the status.",
+			loggerName, skyCluster.Status.Optimization.Status))
+		return ctrl.Result{}, nil
+	}
+
+	// We ready to continnue and create the ILPTask for optimization
 	// Get dataflow and deployment policies as we need them later
-	dfPolicy := &policyv1alpha1.DataflowPolicy{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: req.Namespace,
-		Name:      skyCluster.Spec.DataflowPolicyRef.Name,
-	}, dfPolicy); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy not found.", loggerName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy found.", loggerName))
 
-	dpPolicy := &policyv1alpha1.DeploymentPolicy{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: req.Namespace,
-		Name:      skyCluster.Spec.DeploymentPolciyRef.Name,
-	}, dpPolicy); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy not found.", loggerName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy found.", loggerName))
-
+	// dfPolicy, err1 := getDFPolicy(r, ctx, req, loggerName)
+	dpPolicy, err2 := getDPPolicy(r, ctx, req, loggerName)
 	// Get all configmap with skycluster labels to store flavor sizes
 	// We will use flavors to specify requirements for each deployment
-	allConfigMap := &corev1.ConfigMapList{}
-	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
-		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
-		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL: corev1alpha1.SKYCLUSTER_VSERVICES_LABEL,
-	}); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Error listing ConfigMaps.", loggerName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+	allConfigMap, err3 := getAllConfigMap(r, ctx, req, loggerName)
+	if err2 != nil || err3 != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
+		return ctrl.Result{}, errors2.Join(err2, err3)
 	}
-	logger.Info(fmt.Sprintf("[%s]\t ConfigMaps [%d] found.", loggerName, len(allConfigMap.Items)))
+	// if err1 != nil || err2 != nil || err3 != nil {
+	// 	logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
+	// 	return ctrl.Result{}, errors2.Join(err1, err2, err3)
+	// }
 
 	// Get all uniqe flavors from configmaps and store them
-	allFlavors := make([]string, 0)
-	allFlavors_set := make(map[string]struct{}, 0)
-	for _, cm := range allConfigMap.Items {
-		for k := range cm.Data {
-			if !strings.Contains(k, "skyvm_flavor") {
-				continue
-			}
-			flavorName := strings.Split(k, "_")[2]
-			if _, ok := allFlavors_set[flavorName]; ok {
-				continue
-			}
-			allFlavors = append(allFlavors, flavorName)
-			allFlavors_set[flavorName] = struct{}{}
-		}
-	}
+	allFlavors := getUniqueFlavors(allConfigMap)
 	logger.Info(fmt.Sprintf("[%s]\t Flavors [%d] found.", loggerName, len(allFlavors)))
 
 	// ########### ########### ########### ########### ###########
@@ -175,91 +176,9 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	logger.Info(fmt.Sprintf("[%s]\t Deployments [%d] found.", loggerName, len(allDeploy.Items)))
 
 	// ########### ########### ########### ########### ###########
-	// Check each deployments' pod template and check its cpu and memory limits, and request, then
-	// Comparing the requirements with flavors, we select the minimum flavor that satisfies the requirements
-	deploysLocReqConstraints := make(map[string][]corev1alpha1.ProviderRefSpec)
-	deploysLocPerConstraints := make(map[string][]corev1alpha1.ProviderRefSpec)
-	for _, deploy := range allDeploy.Items {
-		// the deployment name should be the same as the component name in the deployment policy
-		// if not, we ignore the deployment
-		if !deployExistsInDeploymentPolicy(deploy.GetObjectMeta().GetName(), dpPolicy) {
-			continue
-		}
-		minCPU, minRAM := getPodMinimumFlavor(deploy)
-		logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%dvCPU-%dGB].", loggerName, deploy.GetObjectMeta().GetName(), minCPU, minRAM))
-
-		// Select all flavors that satisfy the requirements
-		okFlavors, err := getProperFlavorsForPod(minCPU, minRAM, allFlavors)
-		if err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-
-		// Set the deployment as a key and the location constraints as value
-		k := deploy.GetObjectMeta().GetName() + "." + deploy.GetObjectKind().GroupVersionKind().Kind
-
-		// Get the location policies of each deployment
-		// Using the name of the deployment, we search through dpPolicy
-		for _, dp := range dpPolicy.Spec.DeploymentPolicies {
-			// If the deployment name matches the deploymentRef name we check its location constraints
-			if dp.ComponentRef.Name == deploy.GetObjectMeta().GetName() {
-				locs_permitted := make([]corev1alpha1.ProviderRefSpec, 0)
-				for _, loc := range dp.LocationConstraint.Permitted {
-					locs_permitted = append(locs_permitted, corev1alpha1.ProviderRefSpec{
-						ProviderName:   loc.Name,
-						ProviderType:   loc.Type,
-						ProviderRegion: loc.Region,
-						ProviderZone:   loc.Zone,
-					})
-				}
-				locs_required := make([]corev1alpha1.ProviderRefSpec, 0)
-				for _, loc := range dp.LocationConstraint.Required {
-					locs_required = append(locs_required, corev1alpha1.ProviderRefSpec{
-						ProviderName:   loc.Name,
-						ProviderType:   loc.Type,
-						ProviderRegion: loc.Region,
-						ProviderZone:   loc.Zone,
-					})
-				}
-				deploysLocPerConstraints[k] = locs_permitted
-				deploysLocReqConstraints[k] = locs_required
-			}
-		}
-
-		// We also add the reference to this deployment to the SkyCluster spec.skyComponents
-		// The provider field is not set as it will be set by the optimizer
-		skyCluster.Spec.SkyComponents = append(
-			skyCluster.Spec.SkyComponents, corev1alpha1.SkyComponent{
-				Component: corev1.ObjectReference{
-					APIVersion: deploy.APIVersion,
-					Kind:       deploy.Kind,
-					Namespace:  deploy.Namespace,
-					Name:       deploy.Name,
-				},
-				LocationConstraint: corev1alpha1.LocationConstraint{
-					Required:  deploysLocReqConstraints[k],
-					Permitted: deploysLocPerConstraints[k],
-				},
-				VirtualServices: []corev1alpha1.VirtualService{
-					{Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"},
-				},
-			})
-
-		// // Update the deployment
-		// if err := r.Update(ctx, &deploy); err != nil {
-		// 	logger.Info(fmt.Sprintf("[%s]\t Error updating Deployment.", loggerName))
-		// 	return ctrl.Result{}, client.IgnoreNotFound(err)
-		// }
-	}
-
-	// ########### ########### ########### ########### ###########
-	// In addition to deployments, there may be other Sky Services referenced in
-	// DeploymentPolicy object. We need to check them as well and include them in the optimization.
+	// We list all deployments along with other Sky Services in one go,
+	// and include them in the optimization.
 	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
-		if dp.ComponentRef.Kind == "Deployment" {
-			// This is a deployment, we have already processed it
-			continue
-		}
 		// Get the object's performance and location constraints
 		gv, err := schema.ParseGroupVersion(dp.ComponentRef.APIVersion)
 		if err != nil {
@@ -306,20 +225,42 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		}
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
-		nestedObj, err := GetNestedField(obj.Object, "spec")
-		if err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
-			return ctrl.Result{}, err
-		}
-		for nestedField, nestedFieldValue := range nestedObj {
-			// Check if these fields is considered a "virtual service"
-			if slices.Contains(corev1alpha1.SkyVMVirtualServices, nestedField) {
-				// Construct virtual service name (e.g. skyvm_flavor_2vCPU-4GB)
-				objVservice := fmt.Sprintf(
-					"%s|1", nestedFieldValue.(string))
-				objVServices = append(objVServices, corev1alpha1.VirtualService{
-					Name: objVservice,
-					Type: fmt.Sprintf("%s_%s", strings.ToLower(dp.ComponentRef.Kind), nestedField)})
+		if dp.ComponentRef.Kind == "Deployment" {
+			minCPU, minRAM, err := getPodMinimumFlavor(r, ctx, req, dp.ComponentRef.Name)
+			if err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
+				return ctrl.Result{}, err
+			}
+			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%dvCPU-%dGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
+
+			// Select all flavors that satisfy the requirements
+			okFlavors, err := getProperFlavorsForPod(minCPU, minRAM, allFlavors)
+			if err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
+				return ctrl.Result{}, client.IgnoreNotFound(err)
+			}
+			objVServices = append(objVServices, corev1alpha1.VirtualService{
+				Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"})
+		} else {
+			nestedObj, err := GetNestedField(obj.Object, "spec")
+			if err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
+				return ctrl.Result{}, err
+			}
+			for nestedField, nestedFieldValue := range nestedObj {
+				// Check if these fields is considered a "virtual service"
+				// TODO: Potentially a better system for managing the virtual services
+				// relationship and dependencies can be implemented, but for now
+				// we just copy whatever fields in the Spec field of the components
+				// that is not empty, (e.g. flavor, image, etc. for SkyVM)
+				if slices.Contains(corev1alpha1.SkyVMVirtualServices, nestedField) {
+					// Construct virtual service name (e.g. skyvm_flavor_2vCPU-4GB)
+					objVservice := fmt.Sprintf(
+						"%s|1", nestedFieldValue.(string))
+					objVServices = append(objVServices, corev1alpha1.VirtualService{
+						Name: objVservice,
+						Type: fmt.Sprintf("%s_%s", strings.ToLower(dp.ComponentRef.Kind), nestedField)})
+				}
 			}
 		}
 
@@ -337,18 +278,8 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					Required:  locs_required,
 					Permitted: locs_permitted,
 				},
-				// TODO: Potentially a better system for managing the virtual services
-				// relationship and dependencies can be implemented, but for now
-				// we just copy whatever fields in the Spec field of the components
-				// that is not empty, (e.g. flavor, image, etc. for SkyVM)
 				VirtualServices: objVServices,
 			})
-
-		// // Update the object
-		// if err := r.Update(ctx, obj); err != nil {
-		// 	logger.Info(fmt.Sprintf("[%s]\t Error updating Object.", loggerName))
-		// 	return ctrl.Result{}, client.IgnoreNotFound(err)
-		// }
 	}
 
 	// ########### ########### ########### ########### ###########
@@ -375,7 +306,11 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	skyCluster.Status.DeploymentPlanStatus = "Pending"
+	// This is the status of the pod optimization
+	// Upon successful completion, the ILPTask controller
+	// will update the SkyCluster object with the deployment plan
+	// and set the status and result of the optimization accordingly
+	skyCluster.Status.Optimization.Status = "Pending"
 	// Save the SkyCluster object status
 	if err := r.Status().Update(ctx, skyCluster); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster.", loggerName))
@@ -388,6 +323,57 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func getUniqueFlavors(allConfigMap *corev1.ConfigMapList) []string {
+	allFlavors := make([]string, 0)
+	allFlavors_set := make(map[string]struct{}, 0)
+	for _, cm := range allConfigMap.Items {
+		for k := range cm.Data {
+			if !strings.Contains(k, "skyvm_flavor") {
+				continue
+			}
+			flavorName := strings.Split(k, "_")[2]
+			if _, ok := allFlavors_set[flavorName]; ok {
+				continue
+			}
+			allFlavors = append(allFlavors, flavorName)
+			allFlavors_set[flavorName] = struct{}{}
+		}
+	}
+	return allFlavors
+}
+
+func getDFPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*policyv1alpha1.DataflowPolicy, error) {
+	// This has the same name as DPPolicy, SkyCluster, ILPTask
+	dfPolicy := &policyv1alpha1.DataflowPolicy{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace, Name: req.Name,
+	}, dfPolicy); err != nil {
+		return nil, errors.Wrap(err, "Error getting DataflowPolicy.")
+	}
+	return dfPolicy, nil
+}
+
+func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*policyv1alpha1.DeploymentPolicy, error) {
+	dpPolicy := &policyv1alpha1.DeploymentPolicy{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace, Name: req.Name,
+	}, dpPolicy); err != nil {
+		return nil, errors.Wrap(err, "Error getting DeploymentPolicy.")
+	}
+	return dpPolicy, nil
+}
+
+func getAllConfigMap(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*corev1.ConfigMapList, error) {
+	allConfigMap := &corev1.ConfigMapList{}
+	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL: corev1alpha1.SKYCLUSTER_VSERVICES_LABEL,
+	}); err != nil {
+		return nil, errors.Wrap(err, "Error listing ConfigMaps.")
+	}
+	return allConfigMap, nil
 }
 
 func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, error) {
@@ -416,7 +402,14 @@ func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, 
 	return okFlavors, nil
 }
 
-func getPodMinimumFlavor(deploy appsv1.Deployment) (int, int) {
+func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (int, int, error) {
+	// Get the deployment first
+	deploy := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace, Name: deployName,
+	}, deploy); err != nil {
+		return -1, -1, err
+	}
 	// Get the pod template
 	podTemplate := deploy.Spec.Template
 	// Get the containers
@@ -479,7 +472,7 @@ func getPodMinimumFlavor(deploy appsv1.Deployment) (int, int) {
 	// This would be the minimum flavor required for the deployment
 	minCPU := max(slices.Max(minimumFlavorCPU), 1)
 	minRAM := max(slices.Max(minimumFlavorRAM), 2)
-	return minCPU, minRAM
+	return minCPU, minRAM, nil
 }
 
 func getLocationConstraints(dp policyv1alpha1.DeploymentPolicyItem) ([]string, []string) {
