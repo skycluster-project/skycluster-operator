@@ -39,6 +39,118 @@ spec:
           spec:
             description: SkyVMSpec defines the desired state of SkyVM.
             properties:
+              flavor:
+                description: Flavor is the size of the VM
+                type: string
+              iPForwarding:
+                description: IPForwarding is whether the VM should have IP forwarding
+                  enabled
+                type: boolean
+              image:
+                description: Image is the image to use for the VM
+                type: string
+              providerRef:
+                description: ProviderRef is the reference to the provider that this
+                  VM should be deployed to
+                properties:
+                  providerName:
+                    type: string
+                  providerRegion:
+                    type: string
+                  providerRegionAlias:
+                    type: string
+                  providerType:
+                    type: string
+                  providerZone:
+                    type: string
+                type: object
+              publicIp:
+                description: PublicIP is whether the VM should have a public IP
+                type: boolean
+              publicKey:
+                description: PublicKey is the SSH public key to add to the VM
+                type: string
+              secGroup:
+                description: SecGroup is the security group definition to apply to
+                  the VM
+                items:
+                  properties:
+                    description:
+                      type: string
+                    tcpPorts:
+                      items:
+                        properties:
+                          fromPort:
+                            type: integer
+                          toPort:
+                            type: integer
+                        required:
+                        - fromPort
+                        - toPort
+                        type: object
+                      type: array
+                    udpPorts:
+                      items:
+                        properties:
+                          fromPort:
+                            type: integer
+                          toPort:
+                            type: integer
+                        required:
+                        - fromPort
+                        - toPort
+                        type: object
+                      type: array
+                  type: object
+                type: array
+              userData:
+                description: UserData is the cloud-init script to run on the VM, shoud
+                  follow the cloud-init format
+                type: string
+            type: object
+          status:
+            description: SkyVMStatus defines the observed state of SkyVM.
+            properties:
+              conditions:
+                description: A Condition that may apply to a resource.
+                properties:
+                  lastTransitionTime:
+                    description: |-
+                      LastTransitionTime is the last time this condition transitioned from one
+                      status to another.
+                    format: date-time
+                    type: string
+                  message:
+                    description: |-
+                      A Message containing details about this condition's last transition from
+                      one status to another, if any.
+                    type: string
+                  observedGeneration:
+                    description: |-
+                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                      with respect to the current state of the instance.
+                    format: int64
+                    type: integer
+                  reason:
+                    description: A Reason for this condition's last transition from
+                      one status to another.
+                    type: string
+                  status:
+                    description: Status of this condition; is it currently True, False,
+                      or Unknown?
+                    type: string
+                  type:
+                    description: |-
+                      Type of this condition. At most one of each condition type may apply to
+                      a resource at any point in time.
+                    type: string
+                required:
+                - lastTransitionTime
+                - reason
+                - status
+                - type
+                type: object
               dependedBy:
                 items:
                   description: ObjectReference contains enough information to let
@@ -131,69 +243,6 @@ spec:
                   type: object
                   x-kubernetes-map-type: atomic
                 type: array
-              flavor:
-                type: string
-              image:
-                type: string
-              preemptible:
-                type: boolean
-              providerRef:
-                properties:
-                  providerName:
-                    type: string
-                  providerRegion:
-                    type: string
-                  providerRegionAlias:
-                    type: string
-                  providerType:
-                    type: string
-                  providerZone:
-                    type: string
-                type: object
-            type: object
-          status:
-            description: SkyVMStatus defines the observed state of SkyVM.
-            properties:
-              conditions:
-                description: A Condition that may apply to a resource.
-                properties:
-                  lastTransitionTime:
-                    description: |-
-                      LastTransitionTime is the last time this condition transitioned from one
-                      status to another.
-                    format: date-time
-                    type: string
-                  message:
-                    description: |-
-                      A Message containing details about this condition's last transition from
-                      one status to another, if any.
-                    type: string
-                  observedGeneration:
-                    description: |-
-                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
-                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                      with respect to the current state of the instance.
-                    format: int64
-                    type: integer
-                  reason:
-                    description: A Reason for this condition's last transition from
-                      one status to another.
-                    type: string
-                  status:
-                    description: Status of this condition; is it currently True, False,
-                      or Unknown?
-                    type: string
-                  type:
-                    description: |-
-                      Type of this condition. At most one of each condition type may apply to
-                      a resource at any point in time.
-                    type: string
-                required:
-                - lastTransitionTime
-                - reason
-                - status
-                - type
-                type: object
             type: object
         type: object
     served: true

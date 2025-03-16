@@ -238,13 +238,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&corecontroller.SkyProviderReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
-		os.Exit(1)
-	}
 	if err = (&corecontroller.SkyVMReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),

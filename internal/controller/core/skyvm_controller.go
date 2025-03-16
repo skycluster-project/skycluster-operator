@@ -22,7 +22,6 @@ import (
 
 	// corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -45,18 +44,6 @@ func (r *SkyVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	logger := log.FromContext(ctx)
 	logName := "SkyVM"
 	logger.Info(fmt.Sprintf("[%s]\tReconciler started for %s", logName, req.Name))
-	// modified := false
-
-	// dependenciesMap := []*SkyVMDependencyMap{}
-	// depSpecs := SkyDependencies["SkyVM"]
-
-	// // Check dependencies for the current object
-	// skyVMDesc := corev1.ObjectReference{
-	// 	Name:       req.Name,
-	// 	Namespace:  req.Namespace,
-	// 	Kind:       "SkyVM",
-	// 	APIVersion: corev1alpha1.SKYCLUSTER_COREGROUP,
-	// }
 
 	// // Fetch the object
 	// var skyVM corev1alpha1.SkyVM
@@ -247,70 +234,6 @@ func (r *SkyVMReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// 	}
 	// }
 	return ctrl.Result{}, nil
-}
-
-func (r *SkyVMReconciler) NewSkyProviderObject(ctx context.Context, skyVM *corev1alpha1.SkyVM) (*corev1alpha1.SkyProvider, error) {
-
-	skyProvider := &corev1alpha1.SkyProvider{}
-	skyProvider.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   corev1alpha1.SKYCLUSTER_COREGROUP,
-		Version: corev1alpha1.SKYCLUSTER_VERSION,
-		Kind:    "SkyProvider",
-	})
-	skyProvider.SetNamespace(skyVM.Namespace)
-	skyProvider.SetName(skyVM.Name)
-
-	// Public Key
-	// Retrive the secret value and use publicKey field for the xSkyProvider
-	// For a VM, we require the public Key to exists as a secret
-	// and if it does not exist, we return an error
-	// if skyVM.Spec.KeypairRef == nil {
-	// 	return nil, fmt.Errorf("keypairRef is required")
-	// }
-	// // we should check if it is avaialbe before proceeding
-	// secret := &corev1.Secret{}
-	// keyName := skyVM.Spec.KeypairRef
-	// if err := r.Get(ctx, client.ObjectKey{Namespace: skyVM.Namespace, Name: keyName.Name}, secret); err != nil {
-	// 	return nil, errors.Wrap(err, "failed to get secret for key pair, does it exist? Same namespace?")
-	// }
-	// skyProvider.Spec.KeypairRef = skyVM.Spec.KeypairRef
-
-	// If we are creating a new SkyProvider object, we adopt the current security group
-	// TODO: If the SkyProvider object already exists, we should
-	// add an object corresponding to the security group
-	// if skyVM.Spec.SecGroup != nil {
-	// 	skyProvider.Spec.SecGroup = *skyVM.Spec.SecGroup
-	// } else {
-	// 	// some default security group
-	// 	secgroup := corev1alpha1.SecGroup{
-	// 		TCPPorts: []corev1alpha1.PortSpec{
-	// 			{
-	// 				FromPort: 22,
-	// 				ToPort:   22,
-	// 			},
-	// 		},
-	// 	}
-	// 	skyProvider.Spec.SecGroup = secgroup
-	// }
-
-	// Set the providerRef field
-	providerRef := skyVM.Spec.ProviderRef
-	skyProvider.Spec.ProviderRef = providerRef
-
-	annot := map[string]string{
-		"crossplane.io/paused": "true",
-	}
-	skyProvider.SetAnnotations(annot)
-	providerLabels := map[string]string{
-		corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL:   skyVM.Spec.ProviderRef.ProviderName,
-		corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL: skyVM.Spec.ProviderRef.ProviderRegion,
-		corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL:   skyVM.Spec.ProviderRef.ProviderZone,
-		corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL:   skyVM.Spec.ProviderRef.ProviderType,
-		corev1alpha1.SKYCLUSTER_PROJECTID_LABEL:      skyVM.Labels[corev1alpha1.SKYCLUSTER_PROJECTID_LABEL],
-	}
-	skyProvider.SetLabels(providerLabels)
-
-	return skyProvider, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

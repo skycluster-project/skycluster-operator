@@ -22,19 +22,44 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type SecGroup struct {
+	Description string     `json:"description,omitempty"`
+	TCPPorts    []PortSpec `json:"tcpPorts,omitempty"`
+	UDPPorts    []PortSpec `json:"udpPorts,omitempty"`
+}
+
+type PortSpec struct {
+	FromPort int `json:"fromPort"`
+	ToPort   int `json:"toPort"`
+}
+
 // SkyVMSpec defines the desired state of SkyVM.
 type SkyVMSpec struct {
-	Flavor      string                   `json:"flavor,omitempty"`
-	Preemptible bool                     `json:"preemptible,omitempty"`
-	Image       string                   `json:"image,omitempty"`
-	ProviderRef ProviderRefSpec          `json:"providerRef,omitempty"`
-	DependsOn   []corev1.ObjectReference `json:"dependsOn,omitempty"`
-	DependedBy  []corev1.ObjectReference `json:"dependedBy,omitempty"`
+	// Flavor is the size of the VM
+	Flavor string `json:"flavor,omitempty"`
+	// Image is the image to use for the VM
+	Image string `json:"image,omitempty"`
+	// UserData is the cloud-init script to run on the VM, shoud follow the cloud-init format
+	UserData string `json:"userData,omitempty"`
+	// PublicIP is whether the VM should have a public IP
+	PublicIP bool `json:"publicIp,omitempty"`
+	// PublicKey is the SSH public key to add to the VM
+	PublicKey string `json:"publicKey,omitempty"`
+	// IPForwarding is whether the VM should have IP forwarding enabled
+	IPForwarding bool `json:"iPForwarding,omitempty"`
+	// SecGroup is the security group definition to apply to the VM
+	SecGroup []SecGroup `json:"secGroup,omitempty"`
+	// ProviderRef is the reference to the provider that this VM should be deployed to
+	ProviderRef ProviderRefSpec `json:"providerRef,omitempty"`
 }
+
+// Other fields: Preemptible (bool)
 
 // SkyVMStatus defines the observed state of SkyVM.
 type SkyVMStatus struct {
-	Conditions xpv1.Condition `json:"conditions,omitempty"`
+	DependsOn  []corev1.ObjectReference `json:"dependsOn,omitempty"`
+	DependedBy []corev1.ObjectReference `json:"dependedBy,omitempty"`
+	Conditions xpv1.Condition           `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

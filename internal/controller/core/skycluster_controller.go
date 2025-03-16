@@ -528,51 +528,65 @@ func deployExistsInDeploymentPolicy(deployName string, dpPolicy *policyv1alpha1.
 }
 
 func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, error) {
+	manifests := make([]corev1alpha1.SkyService, 0)
+	skyObjs := map[string]unstructured.Unstructured{}
+	// ######### Providers
+	// Each deployment comes with component info (e.g. kind and apiVersion and name)
+	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
+	// We extract all provider's info and create corresponding SkyProvider objects for each provider
 	providersManifests, err := generateProviderManifests(r, ctx, req, deployMap.Component)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error generating provider manifests.")
 	}
-	// for _, deployItem := range deployMap.Component {
-	// 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
-	// 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
-	// 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
+	for skyObjName, obj := range providersManifests {
+		skyObjs[skyObjName] = obj
+	}
 
-	// 	// For the component itself we check its kind and based on that we decide how to proceed:
-	// 	// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
-	// 	// 	If this is a Deployment, then we need to group the deployments based on the provider
-	// 	// Then using decreasing first fit, we identitfy the number and type of VMs required.
-	// 	// Then we create SkyK8SCluster with a controller and agents specified in previous step.
-	// 	// We also need to annotate deployments carefully and create services and istio resources accordingly.
+	// ######### Deployments
+	for _, deployItem := range deployMap.Component {
+		// For each component we check its kind and based on that we decide how to proceed:
+		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
+		// 	If this is a Deployment, then we need to group the deployments based on the provider
+		// Then using decreasing first fit, we identitfy the number and type of VMs required.
+		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
+		// We also need to annotate deployments carefully and create services and istio resources accordingly.
 
-	// 	// // Now let's work on the component itself
-	// 	// obj, err := getUnstructuredObject(r, ctx, req, deployItem.Component)
-	// 	// // based on the type of services we may modify the objects' spec
-	// 	// switch deployItem.Component.Kind {
-	// 	// case "Deployment":
-	// 	// 	skyK8SCluster, skyK8SCtrl, skyK8SAgents, err := generateSkyK8SCluster(r, ctx, req, deployItem.Component)
-	// 	// 	skyDeploy, skyServices, err := generateSkyDeployments(r, ctx, req, deployItem.Component)
-	// 	// case "SkyVM":
-	// 	// 	obj := generateSkyVMs(r, ctx, req, deployItem.Component)
-	// 	// default:
-	// 	// 	// We only support above services for now...
-	// 	// 	logger.Info(fmt.Sprintf("[%s]\t Unsupported component type [%s]. Skipping...", loggerName, deployItem.Component.Kind))
-	// 	// }
-	// }
-
-	// convert to string yaml
-	manifests := make([]corev1alpha1.SkyService, 0)
-	for pName, manifest := range providersManifests {
+		// Now let's work on the component itself
+		// obj := getUnstructuredObject(req, deployItem.Component)
+		// based on the type of services we may modify the objects' spec
+		switch strings.ToLower(deployItem.Component.Kind) {
+		case "deployment":
+			fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
+		// 	skyK8SCluster, skyK8SCtrl, skyK8SAgents, err := generateSkyK8SCluster(r, ctx, req, deployItem.Component)
+		// 	skyDeploy, skyServices, err := generateSkyDeployments(r, ctx, req, deployItem.Component)
+		case "skyvm":
+			skyObj, err := generateSkyVMManifest(r, ctx, req, deployItem)
+			if err != nil {
+				return nil, errors.Wrap(err, "Error generating SkyVM manifest.")
+			}
+			for skyObjName, obj := range skyObj {
+				fmt.Printf("[Generate]\t Adding SkyVM [%s] to the list.\n", skyObjName)
+				skyObjs[skyObjName] = obj
+			}
+		default:
+			// We only support above services for now...
+			return nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.Component.Kind))
+		}
+	}
+	for objName, manifest := range skyObjs {
 		manifestYAML, err := yaml.Marshal(&manifest.Object)
 		if err != nil {
-			return nil, errors.Wrap(err, "Error marshalling provider manifests.")
+			return nil, errors.Wrap(err, "Error marshalling SkyVM manifests.")
 		}
 		manifests = append(manifests, corev1alpha1.SkyService{
-			Name:       pName,
+			// We use original name without replacement of "."
+			Name:       objName,
 			Kind:       manifest.GetKind(),
 			APIVersion: manifest.GetAPIVersion(),
 			Manifest:   string(manifestYAML),
 		})
 	}
+
 	return manifests, nil
 }
 
@@ -647,13 +661,67 @@ func generateProviderManifests(r *SkyClusterReconciler, ctx context.Context, req
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(providerName, ".")[0]
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = provider.ProviderRegion
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = provider.ProviderZone
-				objLabels[corev1alpha1.SKYCLUSTER_PAUSE] = "true"
+				objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+				objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = providerName
 			}
 		}
 		obj.SetLabels(objLabels)
+		// We use original name with "." as the key and also
+		// will use this as the SkyXRD.manifests.name value
 		manifests[providerName] = *obj
 	}
 	return manifests, nil
+}
+
+func generateSkyVMManifest(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, component corev1alpha1.SkyComponent) (map[string]unstructured.Unstructured, error) {
+	// Components name are set as "name.kind" and we need to get the name only
+	// Please check ILPTask controller to see how names are set.
+	cmpntName := strings.Split(component.Component.Name, ".")[0]
+	xrdObj := &unstructured.Unstructured{}
+	xrdObj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
+	// Should be the same as SkyObj, here it should be SkyVM
+	xrdObj.SetKind(component.Component.Kind)
+	xrdObj.SetNamespace(req.Namespace)
+	// TODO: There may be issues with names containing "."
+	// and we keep the original name in the labels
+	// Also, the SkyXRD object contains the original name
+	xrdObj.SetName(component.Component.Name)
+
+	// Get the corresponding Sky object to extract fields and set them in the XRD object
+	skyObj := &unstructured.Unstructured{}
+	skyObj.SetAPIVersion(component.Component.APIVersion)
+	skyObj.SetKind(component.Component.Kind)
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace,
+		Name:      cmpntName,
+	}, skyObj); err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("error getting object [%s].", component.Component.Name))
+	}
+	spec, err := GetNestedField(skyObj.Object, "spec")
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("error getting nested field for object [%s].", component.Component.Name))
+	}
+	xrdObj.Object["spec"] = map[string]interface{}{
+		"forProvider": spec,
+		"providerRef": map[string]string{
+			"providerName":   strings.Split(component.Provider.ProviderName, ".")[0],
+			"providerRegion": component.Provider.ProviderRegion,
+			"providerZone":   component.Provider.ProviderZone,
+		},
+	}
+
+	objLabels := make(map[string]string, 0)
+	objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(component.Provider.ProviderName, ".")[0]
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = component.Provider.ProviderRegion
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = component.Provider.ProviderZone
+	objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = component.Component.Name
+	objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+	xrdObj.SetLabels(objLabels)
+
+	return map[string]unstructured.Unstructured{
+		component.Component.Name: *xrdObj,
+	}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

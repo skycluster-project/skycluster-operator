@@ -287,7 +287,7 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 	tasks = append(tasks, "# header")
 	for _, component := range skyCluster.Spec.SkyComponents {
 		cmpntName := component.Component.Name
-		cmpntKind := strings.ToLower(component.Component.Kind)
+		cmpntKind := component.Component.Kind
 		cmpntApiVersion := component.Component.APIVersion
 		// Each vs \in component.VirtualServices is a required service for this component
 		// and should be appeared in a new line in the tasks.csv
@@ -304,7 +304,7 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 				}
 				return r
 			}(strings.Split(vs.Name, "__"), vs.Type, "__")
-			tasks = append(tasks, fmt.Sprintf("%s.%s, %s, %s, %s", cmpntName, cmpntKind, cmpntApiVersion, cmpntKind, vsNames))
+			tasks = append(tasks, fmt.Sprintf("%s.%s, %s, %s, %s", cmpntName, strings.ToLower(cmpntKind), cmpntApiVersion, cmpntKind, vsNames))
 		}
 	}
 	return strings.Join(tasks, "\n")

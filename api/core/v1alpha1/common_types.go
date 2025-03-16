@@ -12,7 +12,8 @@ var (
 	SKYCLUSTER_VERSION              = "v1alpha1"
 	SKYCLUSTER_MANAGEDBY_LABEL      = SKYCLUSTER_API + "/managed-by"
 	SKYCLUSTER_MANAGEDBY_VALUE      = "skycluster"
-	SKYCLUSTER_PAUSE                = SKYCLUSTER_API + "/pause"
+	SKYCLUSTER_PAUSE_LABEL          = SKYCLUSTER_API + "/pause"
+	SKYCLUSTER_ORIGINAL_NAME_LABEL  = SKYCLUSTER_API + "/original-name"
 	SKYCLUSTER_CONFIGTYPE_LABEL     = SKYCLUSTER_API + "/config-type"
 	SKYCLUSTER_PROVIDERNAME_LABEL   = SKYCLUSTER_API + "/provider-name"
 	SKYCLUSTER_PROVIDERREGION_LABEL = SKYCLUSTER_API + "/provider-region"
@@ -25,33 +26,7 @@ var (
 	SKYCLUSTER_SubnetIndexField_LABEL  = "subnetIndex"
 	SKYCLUSTER_ProvdiderMappings_LABEL = "provider-mappings"
 	SKYCLUSTER_VSERVICES_LABEL         = "provider-vservices"
-	// SKYCLUSTER_FLAVORS                 = []string{
-	// 	"1vCPU-2GB", "1vCPU-4GB", "1vCPU-8GB",
-	// 	"2vCPU-4GB", "2vCPU-8GB", "2vCPU-16GB", "2vCPU-32GB",
-	// 	"4vCPU-8GB", "4vCPU-16GB", "4vCPU-32GB",
-	// 	"8vCPU-32GB",
-	// 	"12vCPU-32GB",
-	// }
 )
-
-// type SecGroupSpec struct {
-// 	SecGroup []SecGroup `json:"secgroup"`
-// }
-
-// type SecGroup struct {
-// 	TCPPorts []PortSpec `json:"tcpPorts,omitempty"`
-// 	UDPPorts []PortSpec `json:"udpPorts,omitempty"`
-// }
-
-// type PortSpec struct {
-// 	FromPort int `json:"fromPort"`
-// 	ToPort   int `json:"toPort"`
-// }
-
-// type KeypairRefSpec struct {
-// 	Name      string `json:"name,omitempty"`
-// 	Namespace string `json:"namespace,omitempty"`
-// }
 
 type LocationConstraint struct {
 	Required  []ProviderRefSpec `json:"required,omitempty"`
