@@ -64,6 +64,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type computeResource struct {
+	name    string
+	cpu     float64
+	ram     float64
+	usedCPU float64
+	usedRAM float64
+}
+
 // SkyClusterReconciler reconciles a SkyCluster object
 type SkyClusterReconciler struct {
 	client.Client
@@ -176,11 +184,11 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// We ready to continnue and create the ILPTask for optimization
 	// Get dataflow and deployment policies as we need them later
 
-	// dfPolicy, err1 := getDFPolicy(r, ctx, req, loggerName)
-	dpPolicy, err2 := getDPPolicy(r, ctx, req, loggerName)
+	// dfPolicy, err1 := getDFPolicy(r, ctx, req)
+	dpPolicy, err2 := getDPPolicy(r, ctx, req)
 	// Get all configmap with skycluster labels to store flavor sizes
 	// We will use flavors to specify requirements for each deployment
-	allConfigMap, err3 := getAllConfigMap(r, ctx, req, loggerName)
+	allConfigMap, err3 := getAllConfigMap(r, ctx, req)
 	if err2 != nil || err3 != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
 		return ctrl.Result{}, errors2.Join(err2, err3)
@@ -245,7 +253,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
 		if dp.ComponentRef.Kind == "Deployment" {
-			minCPU, minRAM, err := getPodMinimumFlavor(r, ctx, req, dp.ComponentRef.Name)
+			minCPU, minRAM, err := getPodMinimumResource(r, ctx, req, dp.ComponentRef.Name)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
 				return ctrl.Result{}, err
@@ -253,7 +261,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%dvCPU-%dGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
 
 			// Select all flavors that satisfy the requirements
-			okFlavors, err := getProperFlavorsForPod(minCPU, minRAM, allFlavors)
+			okFlavors, err := getCompatibleFlavors(minCPU, minRAM, allFlavors)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
 				return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -363,7 +371,7 @@ func getUniqueFlavors(allConfigMap *corev1.ConfigMapList) []string {
 	return allFlavors
 }
 
-func getDFPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*policyv1alpha1.DataflowPolicy, error) {
+func getDFPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*policyv1alpha1.DataflowPolicy, error) {
 	// This has the same name as DPPolicy, SkyCluster, ILPTask
 	dfPolicy := &policyv1alpha1.DataflowPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
@@ -374,7 +382,7 @@ func getDFPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request,
 	return dfPolicy, nil
 }
 
-func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*policyv1alpha1.DeploymentPolicy, error) {
+func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*policyv1alpha1.DeploymentPolicy, error) {
 	dpPolicy := &policyv1alpha1.DeploymentPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace, Name: req.Name,
@@ -384,7 +392,7 @@ func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request,
 	return dpPolicy, nil
 }
 
-func getAllConfigMap(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, loggerName string) (*corev1.ConfigMapList, error) {
+func getAllConfigMap(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*corev1.ConfigMapList, error) {
 	allConfigMap := &corev1.ConfigMapList{}
 	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
 		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
@@ -395,7 +403,26 @@ func getAllConfigMap(r *SkyClusterReconciler, ctx context.Context, req ctrl.Requ
 	return allConfigMap, nil
 }
 
-func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, error) {
+func getConfigMapForProvider(r *SkyClusterReconciler, ctx context.Context, ProviderName, ProviderRegion, ProviderZone string) (*corev1.ConfigMap, error) {
+	allConfigMap := &corev1.ConfigMapList{}
+	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:      corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:     corev1alpha1.SKYCLUSTER_VSERVICES_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL:   ProviderName,
+		corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL: ProviderRegion,
+		corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL:   ProviderZone,
+	}); err != nil {
+		return nil, errors.Wrap(err, "Error listing ConfigMaps.")
+	}
+	if len(allConfigMap.Items) != 1 {
+		return nil, errors.New(fmt.Sprintf("Error getting ConfigMap. More than one ConfigMap found for [%s], [%s], [%s].", ProviderName, ProviderRegion, ProviderZone))
+	}
+	return &allConfigMap.Items[0], nil
+}
+
+// getCompatibleFlavors returns the flavors names that satisfy the minimum
+// requirements for a compute resource. The flavors are in the format of "vCPU-RAM"
+func getCompatibleFlavors(minCPU, minRAM int, allFlavors []string) ([]string, error) {
 	okFlavors := make([]string, 0)
 	for _, skyFlavor := range allFlavors {
 		cpu := strings.Split(skyFlavor, "-")[0]
@@ -421,7 +448,12 @@ func getProperFlavorsForPod(minCPU, minRAM int, allFlavors []string) ([]string, 
 	return okFlavors, nil
 }
 
-func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (int, int, error) {
+// getPodMinimumResource returns the minimum resource required for a pod
+// based on the limits and requests of all its containers
+// It returns a tuple of (cpu, memory) in millicores and bytes
+// in specific sizes (1, 2, 4, 8, 16, 32) for memory and
+// (1, 2, 4, 8) for cpu
+func getPodMinimumResource(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (int, int, error) {
 	// Get the deployment first
 	deploy := &appsv1.Deployment{}
 	if err := r.Get(ctx, client.ObjectKey{
@@ -432,7 +464,9 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 	// Get the pod template
 	podTemplate := deploy.Spec.Template
 	// Get the containers
-	containers := podTemplate.Spec.Containers
+	containers := []corev1.Container{}
+	containers = append(containers, podTemplate.Spec.Containers...)
+	containers = append(containers, podTemplate.Spec.InitContainers...)
 	// Check each container
 	minimumFlavorCPU := make([]int, len(containers))
 	minimumFlavorRAM := make([]int, len(containers))
@@ -453,6 +487,8 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 					minimumFlavorCPU = append(minimumFlavorCPU, 2)
 				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
 					minimumFlavorCPU = append(minimumFlavorCPU, 4)
+				} else if v.Cmp(*res.NewMilliQuantity(8000, res.DecimalSI)) == 0 { // Added for 8 cores
+					minimumFlavorCPU = append(minimumFlavorCPU, 8)
 				}
 			}
 			if strings.Contains(k.String(), "memory") {
@@ -462,6 +498,12 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 					minimumFlavorRAM = append(minimumFlavorRAM, 2)
 				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
 					minimumFlavorRAM = append(minimumFlavorRAM, 4)
+				} else if v.Cmp(*res.NewQuantity(8<<30, res.BinarySI)) == 0 { // Added for 8 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 8)
+				} else if v.Cmp(*res.NewQuantity(16<<30, res.BinarySI)) == 0 { // Added for 16 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 16)
+				} else if v.Cmp(*res.NewQuantity(32<<30, res.BinarySI)) == 0 { // Added for 32 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 32)
 				}
 			}
 		}
@@ -474,6 +516,8 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 					minimumFlavorCPU = append(minimumFlavorCPU, 2)
 				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
 					minimumFlavorCPU = append(minimumFlavorCPU, 4)
+				} else if v.Cmp(*res.NewMilliQuantity(8000, res.DecimalSI)) == 0 { // Added for 8 cores
+					minimumFlavorCPU = append(minimumFlavorCPU, 8)
 				}
 			}
 			if strings.Contains(k.String(), "memory") {
@@ -483,6 +527,12 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 					minimumFlavorRAM = append(minimumFlavorRAM, 2)
 				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
 					minimumFlavorRAM = append(minimumFlavorRAM, 4)
+				} else if v.Cmp(*res.NewQuantity(8<<30, res.BinarySI)) == 0 { // Added for 8 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 8)
+				} else if v.Cmp(*res.NewQuantity(16<<30, res.BinarySI)) == 0 { // Added for 16 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 16)
+				} else if v.Cmp(*res.NewQuantity(32<<30, res.BinarySI)) == 0 { // Added for 32 GB
+					minimumFlavorRAM = append(minimumFlavorRAM, 32)
 				}
 			}
 		}
@@ -492,6 +542,40 @@ func getPodMinimumFlavor(r *SkyClusterReconciler, ctx context.Context, req ctrl.
 	minCPU := max(slices.Max(minimumFlavorCPU), 1)
 	minRAM := max(slices.Max(minimumFlavorRAM), 2)
 	return minCPU, minRAM, nil
+}
+
+// getContainerComputeResources returns the cpu and memory resources for a container
+// If the limits are set, it returns the limits, if not, it returns the requests
+func getContainerComputeResources(container corev1.Container) (float64, float64) {
+	// Get the resources
+	resources := container.Resources
+	// Get the limits
+	limits := resources.Limits
+	// Check the limits
+	cpuQtyLimit, cpuOkLimit := limits["cpu"]
+	memQtyLimit, memOkLimit := limits["memory"]
+
+	// Get the requests
+	requests := resources.Requests
+	// Check the requests
+	cpuQtyReq, cpuOkReq := requests["cpu"]
+	memQtyReq, memOkReq := requests["memory"]
+
+	var cpu float64
+	var mem float64
+	if cpuOkLimit {
+		cpu = cpuQtyLimit.AsApproximateFloat64()
+	} else if cpuOkReq {
+		cpu = cpuQtyReq.AsApproximateFloat64()
+	}
+	if memOkLimit {
+		memBytes := memQtyLimit.Value()
+		mem = float64(memBytes) / (1 << 30) // GiB
+	} else if memOkReq {
+		memBytes := memQtyReq.Value()
+		mem = float64(memBytes) / (1 << 30) // GiB
+	}
+	return cpu, mem
 }
 
 func getLocationConstraints(dp policyv1alpha1.DeploymentPolicyItem) ([]string, []string) {
@@ -527,67 +611,87 @@ func deployExistsInDeploymentPolicy(deployName string, dpPolicy *policyv1alpha1.
 	return false
 }
 
-func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, error) {
-	manifests := make([]corev1alpha1.SkyService, 0)
-	skyObjs := map[string]unstructured.Unstructured{}
-	// ######### Providers
-	// Each deployment comes with component info (e.g. kind and apiVersion and name)
-	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
-	// We extract all provider's info and create corresponding SkyProvider objects for each provider
-	providersManifests, err := generateProviderManifests(r, ctx, req, deployMap.Component)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error generating provider manifests.")
+// getMinComputeResource returns the minimum compute resource required for a deployment
+// based on all its containers' resources
+func getMinComputeResource(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (*computeResource, error) {
+	// We proceed with structured objects for simplicity instead of
+	// unsctructured objects
+	depObj := &appsv1.Deployment{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace, Name: deployName,
+	}, depObj); err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("Error getting deployment [%s].", deployName))
 	}
-	for skyObjName, obj := range providersManifests {
-		skyObjs[skyObjName] = obj
+	// Each deployment has a single pod but may contain multiple containers
+	// For each deployment (and subsequently each pod) we dervie the
+	// total cpu and memory for all its containers
+	allContainers := []corev1.Container{}
+	allContainers = append(allContainers, depObj.Spec.Template.Spec.Containers...)
+	allContainers = append(allContainers, depObj.Spec.Template.Spec.InitContainers...)
+	totalCPU, totalMem := 0.0, 0.0
+	for _, container := range allContainers {
+		cpu, mem := getContainerComputeResources(container)
+		totalCPU += cpu
+		totalMem += mem
 	}
+	return &computeResource{name: deployName, cpu: totalCPU, ram: totalMem}, nil
+}
 
-	// ######### Deployments
-	for _, deployItem := range deployMap.Component {
-		// For each component we check its kind and based on that we decide how to proceed:
-		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
-		// 	If this is a Deployment, then we need to group the deployments based on the provider
-		// Then using decreasing first fit, we identitfy the number and type of VMs required.
-		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
-		// We also need to annotate deployments carefully and create services and istio resources accordingly.
-
-		// Now let's work on the component itself
-		// obj := getUnstructuredObject(req, deployItem.Component)
-		// based on the type of services we may modify the objects' spec
-		switch strings.ToLower(deployItem.Component.Kind) {
-		case "deployment":
-			fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
-		// 	skyK8SCluster, skyK8SCtrl, skyK8SAgents, err := generateSkyK8SCluster(r, ctx, req, deployItem.Component)
-		// 	skyDeploy, skyServices, err := generateSkyDeployments(r, ctx, req, deployItem.Component)
-		case "skyvm":
-			skyObj, err := generateSkyVMManifest(r, ctx, req, deployItem)
-			if err != nil {
-				return nil, errors.Wrap(err, "Error generating SkyVM manifest.")
-			}
-			for skyObjName, obj := range skyObj {
-				fmt.Printf("[Generate]\t Adding SkyVM [%s] to the list.\n", skyObjName)
-				skyObjs[skyObjName] = obj
-			}
-		default:
-			// We only support above services for now...
-			return nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.Component.Kind))
+// attemptPlaceDeployment returns true if the deployment can be placed on any of given nodes
+// and if it is possible to use any node, it updates the corresponding
+// node with the new used cpu and memory
+func attemptPlaceDeployment(dep computeResource, nodes []computeResource) (bool, []computeResource) {
+	for i, node := range nodes {
+		if (node.cpu-node.usedCPU) >= dep.cpu && (node.ram-node.usedRAM) >= dep.ram {
+			nodes[i].usedCPU += dep.cpu
+			nodes[i].usedRAM += dep.ram
+			return true, nodes
 		}
 	}
-	for objName, manifest := range skyObjs {
-		manifestYAML, err := yaml.Marshal(&manifest.Object)
-		if err != nil {
-			return nil, errors.Wrap(err, "Error marshalling SkyVM manifests.")
-		}
-		manifests = append(manifests, corev1alpha1.SkyService{
-			// We use original name without replacement of "."
-			Name:       objName,
-			Kind:       manifest.GetKind(),
-			APIVersion: manifest.GetAPIVersion(),
-			Manifest:   string(manifestYAML),
-		})
-	}
+	return false, nodes
+}
 
-	return manifests, nil
+func sortComputeResources(i, j computeResource) int {
+	if i.cpu != j.cpu {
+		if i.cpu < j.cpu {
+			return -1
+		} else {
+			return 1
+		}
+	}
+	if i.ram != j.ram {
+		if i.ram < j.ram {
+			return -1
+		} else {
+			return 1
+		}
+	}
+	return 0
+}
+
+// computeResourcesForFlavors returns a list of computeResource structs
+// based on the flavor names in the input map
+func computeResourcesForFlavors(configData map[string]string) ([]computeResource, error) {
+	allFlavorsCpuRam := make([]computeResource, 0)
+	for k, _ := range configData {
+		if !strings.Contains(k, "skyvm_flavor") {
+			continue
+		}
+		// a flavor is in the form of "skyvm_flavor_2vCPU-4GB"
+		// we need to extract the cpu and ram from the flavor
+		flavor := strings.Split(k, "_")[2]
+		cpuString := strings.Split(flavor, "-")[0]
+		ramString := strings.Split(flavor, "-")[1]
+		cpu, err1 := strconv.Atoi(strings.Replace(cpuString, "vCPU", "", -1))
+		// The pod's ram resources are presented in GB, so
+		// We can keep the current format as the RAM are in GB
+		ram, err2 := strconv.Atoi(strings.Replace(ramString, "GB", "", -1))
+		if err1 != nil || err2 != nil {
+			return nil, errors.Wrap(err1, "Error converting flavor to int in assigning deployments to nodes.")
+		}
+		allFlavorsCpuRam = append(allFlavorsCpuRam, computeResource{name: flavor, cpu: float64(cpu), ram: float64(ram)})
+	}
+	return allFlavorsCpuRam, nil
 }
 
 func generateProviderManifests(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, components []corev1alpha1.SkyComponent) (map[string]unstructured.Unstructured, error) {
@@ -674,9 +778,7 @@ func generateProviderManifests(r *SkyClusterReconciler, ctx context.Context, req
 }
 
 func generateSkyVMManifest(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, component corev1alpha1.SkyComponent) (map[string]unstructured.Unstructured, error) {
-	// Components name are set as "name.kind" and we need to get the name only
-	// Please check ILPTask controller to see how names are set.
-	cmpntName := strings.Split(component.Component.Name, ".")[0]
+	cmpntName := component.Component.Name
 	xrdObj := &unstructured.Unstructured{}
 	xrdObj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
 	// Should be the same as SkyObj, here it should be SkyVM
@@ -722,6 +824,162 @@ func generateSkyVMManifest(r *SkyClusterReconciler, ctx context.Context, req ctr
 	return map[string]unstructured.Unstructured{
 		component.Component.Name: *xrdObj,
 	}, nil
+}
+
+func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, error) {
+	manifests := make([]corev1alpha1.SkyService, 0)
+	skyObjs := map[string]unstructured.Unstructured{}
+	// ######### Providers
+	// Each deployment comes with component info (e.g. kind and apiVersion and name)
+	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
+	// We extract all provider's info and create corresponding SkyProvider objects for each provider
+	providersManifests, err := generateProviderManifests(r, ctx, req, deployMap.Component)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error generating provider manifests.")
+	}
+	for skyObjName, obj := range providersManifests {
+		skyObjs[skyObjName] = obj
+	}
+
+	// ######### Deployments
+	allDeployments := make([]corev1alpha1.SkyComponent, 0)
+	for _, deployItem := range deployMap.Component {
+		// For each component we check its kind and based on that we decide how to proceed:
+		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
+		// 	If this is a Deployment, then we need to group the deployments based on the provider
+		// Then using decreasing first fit, we identitfy the number and type of VMs required.
+		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
+		// We also need to annotate deployments carefully and create services and istio resources accordingly.
+
+		// based on the type of services we may modify the objects' spec
+		switch strings.ToLower(deployItem.Component.Kind) {
+		case "deployment":
+			fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
+			allDeployments = append(allDeployments, deployItem)
+		case "skyvm":
+			skyObj, err := generateSkyVMManifest(r, ctx, req, deployItem)
+			if err != nil {
+				return nil, errors.Wrap(err, "Error generating SkyVM manifest.")
+			}
+			for skyObjName, obj := range skyObj {
+				fmt.Printf("[Generate]\t Adding SkyVM [%s] to the list.\n", skyObjName)
+				skyObjs[skyObjName] = obj
+			}
+		default:
+			// We only support above services for now...
+			return nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.Component.Kind))
+		}
+	}
+
+	// ######### Handle Deployments for SkyK8SCluster
+	// skyK8SCluster, skyK8SCtrl, skyK8SAgents, err := generateSkyK8SCluster(r, ctx, req, allDeployments)
+
+	for objName, manifest := range skyObjs {
+		manifestYAML, err := yaml.Marshal(&manifest.Object)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error marshalling SkyVM manifests.")
+		}
+		manifests = append(manifests, corev1alpha1.SkyService{
+			// We use original name without replacement of "."
+			Name:       objName,
+			Kind:       manifest.GetKind(),
+			APIVersion: manifest.GetAPIVersion(),
+			Manifest:   string(manifestYAML),
+		})
+	}
+
+	return manifests, nil
+}
+
+func generateSkyK8SCluster(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, components []corev1alpha1.SkyComponent) (SkyK8SCluster, SkyK8SCtrl, SkyK8SAgent *unstructured.Unstructured, err error) {
+	deploymentsPerProvider := make(map[string][]corev1alpha1.SkyComponent, 0)
+	for _, deployment := range components {
+		// ProviderName should uniquely identify the provider
+		// ProviderName = ProviderName.ProviderRegion.ProviderZone.ProviderType
+		providerName := deployment.Provider.ProviderName
+		if _, ok := deploymentsPerProvider[providerName]; ok {
+			deploymentsPerProvider[providerName] = append(deploymentsPerProvider[providerName], deployment)
+		} else {
+			deploymentsPerProvider[providerName] = []corev1alpha1.SkyComponent{deployment}
+		}
+	}
+
+	// For deployments per provider, we derive pods requirements (cpu, memory), then
+	// 1. Sort pods based on their (cpu and memory) requirements (decreasing)
+	// 2. Sort the bins (flavors) available within the provider (cpu, memory) in decreasing order
+	// 3. Assign each pod, the first existing bin that fits the pod requirements.
+	// 4. If no bins exist, we create the smallest bin and assign the pod to it.
+	// The cost of 4vCPU-8GB is exactly two times of 2vCPU-4GB, so for simplicity
+	// we create a new bin of the smallest size and continue adding deployments to it
+	// until we cannot assign anore more pods.
+	for pName, deployments := range deploymentsPerProvider {
+		// All of these deployments are for the same provider
+		sortedDeployments := make([]computeResource, len(deployments))
+		for _, dep := range deployments {
+			cr, err := getMinComputeResource(r, ctx, req, dep.Component.Name)
+			if err != nil {
+				return nil, nil, nil, errors.Wrap(err, fmt.Sprintf("Error getting minimum compute resource for deployment [%s].", dep.Component.Name))
+			}
+			sortedDeployments = append(sortedDeployments, *cr)
+		}
+		// Sort by CPU, then by RAM
+		slices.SortFunc(sortedDeployments, sortComputeResources)
+
+		// Get the provider's availalbe flavors
+		pNameTrimmed := strings.Split(pName, ".")[0]
+		// all deployments are for the same provider
+		pRegion := deployments[0].Provider.ProviderRegion
+		pZone := deployments[0].Provider.ProviderZone
+		providerConfig, err := getConfigMapForProvider(r, ctx, pNameTrimmed, pRegion, pZone)
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err,
+				fmt.Sprintf("[Generate SkyK8S]\t Error getting configmap for provider [%s].", pName))
+		}
+		// Get flavors as computeResource struct
+		pFlavors, err := computeResourcesForFlavors(providerConfig.Data)
+		if err != nil {
+			return nil, nil, nil, errors.Wrap(err,
+				fmt.Sprintf("[Generate SkyK8S]\t Error getting resources from flavors for provider [%s].", pName))
+		}
+		slices.SortFunc(pFlavors, sortComputeResources)
+
+		// Now we have sorted deployments and sorted provider's flavors
+		// We can now proceed with the bin packing algorithm
+		nodes := make([]computeResource, 0)
+		for _, dep := range sortedDeployments {
+			ok, nodesPlaced := attemptPlaceDeployment(dep, nodes)
+			if !ok {
+				minComputeResource, err := getMinComputeResource(r, ctx, req, dep.name)
+				if err != nil {
+					return nil, nil, nil, errors.Wrap(err, fmt.Sprintf("Error getting minimum compute resource for deployment [%s].", dep.name))
+				}
+				// we get the minimum flavor that can accomodate the deployment
+				// and add it to the nodes as a new bin
+				newComResource, ok := findSuitableComputeResource(*minComputeResource, pFlavors)
+				if !ok {
+					return nil, nil, nil, errors.New(fmt.Sprintf("could not finding suitable compute resource for deployment [%s].", dep.name))
+				}
+				nodes = append(nodes, *newComResource)
+				slices.SortFunc(nodes, sortComputeResources)
+			} else {
+				nodes = nodesPlaced
+			}
+		}
+	}
+
+	return nil, nil, nil, nil
+}
+
+// findSuitableComputeResource returns the name of the compute resource that satisfies the
+// minimum requirements for the given compute resource. If no compute resource satisfies
+// the requirements, it returns an empty string
+func findSuitableComputeResource(cmResource computeResource, allComputeResources []computeResource) (*computeResource, bool) {
+	for _, cr := range allComputeResources {
+		if cr.cpu >= cmResource.cpu && cr.ram >= cmResource.ram {
+			return &computeResource{name: cr.name, cpu: cr.cpu, ram: cr.ram}, true
+		}
+	}
+	return nil, false
 }
 
 // SetupWithManager sets up the controller with the Manager.

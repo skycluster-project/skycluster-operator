@@ -29,6 +29,10 @@ spec:
             done
         ports:
         - containerPort: 8080
+        resources:
+          limits:
+            cpu: 0.5
+            memory: 512Mi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -73,6 +77,10 @@ spec:
             done
         ports:
         - containerPort: 8080
+        resources:
+          limits:
+            cpu: 0.5
+            memory: 512Mi
 ---
 apiVersion: svc.skycluster.io/v1alpha1
 kind: SkyVM
@@ -114,6 +122,10 @@ spec:
             done
         ports:
         - containerPort: 8080
+        resources:
+          limits:
+            cpu: 0.5
+            memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
