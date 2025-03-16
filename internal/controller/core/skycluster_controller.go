@@ -46,7 +46,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	res "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -224,10 +223,8 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			Namespace: req.Namespace,
 			Name:      dp.ComponentRef.Name,
 		}, obj); err != nil {
-			logger.Info(
-				fmt.Sprintf(
-					"[%s]\t Object not found: Name: [%s], Kind: [%s].",
-					loggerName, dp.ComponentRef.Name, dp.ComponentRef.Kind))
+			logger.Info(fmt.Sprintf("[%s]\t Object not found: Name: [%s], Kind: [%s].",
+				loggerName, dp.ComponentRef.Name, dp.ComponentRef.Kind))
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		logger.Info(fmt.Sprintf("[%s]\t Object found.", loggerName))
@@ -253,12 +250,12 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
 		if dp.ComponentRef.Kind == "Deployment" {
-			minCPU, minRAM, err := calculatePodMinimumResources(r, ctx, req, dp.ComponentRef.Name)
+			minCPU, minRAM, err := calculateDeploymentResources(r, ctx, req, dp.ComponentRef.Name)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
 				return ctrl.Result{}, err
 			}
-			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%dvCPU-%dGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
+			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%F vCPU, %fGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
 
 			// Select all flavors that satisfy the requirements
 			okFlavors, err := getCompatibleFlavors(minCPU, minRAM, allFlavors)
@@ -424,15 +421,17 @@ func getProviderConfigMap(r *SkyClusterReconciler, ctx context.Context, Provider
 
 // getCompatibleFlavors returns the flavors names that satisfy the minimum
 // requirements for a compute resource. The flavors are in the format of "vCPU-RAM"
-func getCompatibleFlavors(minCPU, minRAM int, allFlavors []string) ([]string, error) {
+func getCompatibleFlavors(minCPU, minRAM float64, allFlavors []string) ([]string, error) {
 	okFlavors := make([]string, 0)
 	for _, skyFlavor := range allFlavors {
 		cpu := strings.Split(skyFlavor, "-")[0]
 		cpu = strings.Replace(cpu, "vCPU", "", -1)
-		cpu_int, err1 := strconv.Atoi(cpu)
+		cpu_int, err1 := (strconv.Atoi(cpu))
+		cpu_float := float64(cpu_int)
 		ram := strings.Split(skyFlavor, "-")[1]
 		ram = strings.Replace(ram, "GB", "", -1)
-		ram_int, err2 := strconv.Atoi(ram)
+		ram_int, err2 := (strconv.Atoi(ram))
+		ram_float := float64(ram_int)
 		if err1 != nil || err2 != nil {
 			if err1 != nil {
 				return nil, errors.Wrap(err1, "Error converting flavor spec to int.")
@@ -443,25 +442,22 @@ func getCompatibleFlavors(minCPU, minRAM int, allFlavors []string) ([]string, er
 			// if there are error processing the flavors we ignore them and not add them to the list
 			continue
 		}
-		if cpu_int >= minCPU && ram_int >= minRAM {
+		if cpu_float >= minCPU && ram_float >= minRAM {
 			okFlavors = append(okFlavors, fmt.Sprintf("%s|1", skyFlavor))
 		}
 	}
 	return okFlavors, nil
 }
 
-// calculatePodMinimumResources returns the minimum resource required for a pod
+// calculateDeploymentMinResources returns the minimum resource required for a deployment
 // based on the limits and requests of all its containers
-// It returns a tuple of (cpu, memory) in millicores and bytes
-// in specific sizes (1, 2, 4, 8, 16, 32) for memory and
-// (1, 2, 4, 8) for cpu
-func calculatePodMinimumResources(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (int, int, error) {
+func calculateDeploymentResources(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (float64, float64, error) {
 	// Get the deployment first
 	deploy := &appsv1.Deployment{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace, Name: deployName,
 	}, deploy); err != nil {
-		return -1, -1, err
+		return 0.0, 0.0, err
 	}
 	// Get the pod template
 	podTemplate := deploy.Spec.Template
@@ -470,79 +466,17 @@ func calculatePodMinimumResources(r *SkyClusterReconciler, ctx context.Context, 
 	containers = append(containers, podTemplate.Spec.Containers...)
 	containers = append(containers, podTemplate.Spec.InitContainers...)
 	// Check each container
-	minimumFlavorCPU := make([]int, len(containers))
-	minimumFlavorRAM := make([]int, len(containers))
+	cpus := make([]float64, 0)
+	mems := make([]float64, 0)
 	for _, container := range containers {
-		// Get the resources
-		resources := container.Resources
-		// Get the limits
-		limits := resources.Limits
-		// Get the requests
-		requests := resources.Requests
-		// Check the limits
-
-		for k, v := range limits {
-			if strings.Contains(k.String(), "cpu") {
-				if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 1)
-				} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 2)
-				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 4)
-				} else if v.Cmp(*res.NewMilliQuantity(8000, res.DecimalSI)) == 0 { // Added for 8 cores
-					minimumFlavorCPU = append(minimumFlavorCPU, 8)
-				}
-			}
-			if strings.Contains(k.String(), "memory") {
-				if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 1)
-				} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 2)
-				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 4)
-				} else if v.Cmp(*res.NewQuantity(8<<30, res.BinarySI)) == 0 { // Added for 8 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 8)
-				} else if v.Cmp(*res.NewQuantity(16<<30, res.BinarySI)) == 0 { // Added for 16 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 16)
-				} else if v.Cmp(*res.NewQuantity(32<<30, res.BinarySI)) == 0 { // Added for 32 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 32)
-				}
-			}
-		}
-		// Check the requests
-		for k, v := range requests {
-			if strings.Contains(k.String(), "cpu") {
-				if v.Cmp(*res.NewMilliQuantity(1000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 1)
-				} else if v.Cmp(*res.NewMilliQuantity(2000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 2)
-				} else if v.Cmp(*res.NewMilliQuantity(4000, res.DecimalSI)) == 0 {
-					minimumFlavorCPU = append(minimumFlavorCPU, 4)
-				} else if v.Cmp(*res.NewMilliQuantity(8000, res.DecimalSI)) == 0 { // Added for 8 cores
-					minimumFlavorCPU = append(minimumFlavorCPU, 8)
-				}
-			}
-			if strings.Contains(k.String(), "memory") {
-				if v.Cmp(*res.NewQuantity(1<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 1)
-				} else if v.Cmp(*res.NewQuantity(2<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 2)
-				} else if v.Cmp(*res.NewQuantity(4<<30, res.BinarySI)) == 0 {
-					minimumFlavorRAM = append(minimumFlavorRAM, 4)
-				} else if v.Cmp(*res.NewQuantity(8<<30, res.BinarySI)) == 0 { // Added for 8 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 8)
-				} else if v.Cmp(*res.NewQuantity(16<<30, res.BinarySI)) == 0 { // Added for 16 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 16)
-				} else if v.Cmp(*res.NewQuantity(32<<30, res.BinarySI)) == 0 { // Added for 32 GB
-					minimumFlavorRAM = append(minimumFlavorRAM, 32)
-				}
-			}
-		}
+		cpu, mem := getContainerComputeResources(container)
+		cpus = append(cpus, cpu)
+		mems = append(mems, mem)
 	}
 	// across all containers, get the maximum of all request and limits for both cpu and memory
 	// This would be the minimum flavor required for the deployment
-	minCPU := max(slices.Max(minimumFlavorCPU), 1)
-	minRAM := max(slices.Max(minimumFlavorRAM), 2)
+	minCPU := max(slices.Max(cpus), 1)
+	minRAM := max(slices.Max(mems), 2)
 	return minCPU, minRAM, nil
 }
 

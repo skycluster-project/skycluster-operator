@@ -52,11 +52,11 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	skyxrd := &corev1alpha1.SkyXRD{}
 	if err := r.Get(ctx, req.NamespacedName, skyxrd); err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\tunable to fetch object, maybe it is deleted?", logName))
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		return ctrl.Result{}, nil
 	}
 
 	for _, xrd := range skyxrd.Spec.Manifests {
-		var obj map[string]interface{}
+		var obj map[string]any
 		if err := yaml.Unmarshal([]byte(xrd.Manifest), &obj); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to unmarshal object", logName))
 			return ctrl.Result{}, err
@@ -76,10 +76,10 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			return ctrl.Result{}, err
 		}
 
-		if err := r.Create(ctx, unstrObj); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\tunable to create object", logName))
-			return ctrl.Result{}, err
-		}
+		// if err := r.Create(ctx, unstrObj); err != nil {
+		// 	logger.Error(err, fmt.Sprintf("[%s]\tunable to create object", logName))
+		// 	return ctrl.Result{}, err
+		// }
 		logger.Info(fmt.Sprintf("[%s]\tcreated object [%s]", logName, xrd.Name))
 		break
 	}
