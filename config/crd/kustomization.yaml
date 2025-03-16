@@ -2,13 +2,13 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/core.skycluster.io_skyvms.yaml
 - bases/policy.skycluster.io_dataflowpolicies.yaml
 - bases/policy.skycluster.io_deploymentpolicies.yaml
 - bases/core.skycluster.io_deployments.yaml
 - bases/core.skycluster.io_skyclusters.yaml
 - bases/core.skycluster.io_ilptasks.yaml
 - bases/core.skycluster.io_skyxrds.yaml
+- bases/svc.skycluster.io_skyvms.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

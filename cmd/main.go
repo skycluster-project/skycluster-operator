@@ -40,6 +40,7 @@ import (
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
 	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
 	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
@@ -64,6 +65,7 @@ func init() {
 
 	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(svcv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -238,13 +240,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&corecontroller.SkyVMReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyVM")
-		os.Exit(1)
-	}
 	if err = (&corecontroller.SkyXRDReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),

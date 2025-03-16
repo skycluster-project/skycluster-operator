@@ -17,20 +17,26 @@ limitations under the License.
 package v1alpha1
 
 import (
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	// xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type SecGroup struct {
-	Description string     `json:"description,omitempty"`
-	TCPPorts    []PortSpec `json:"tcpPorts,omitempty"`
-	UDPPorts    []PortSpec `json:"udpPorts,omitempty"`
+	// Description is the description of the security group
+	Description string `json:"description,omitempty"`
+	// TCPPorts is the list of TCP ports to open
+	TCPPorts []PortSpec `json:"tcpPorts,omitempty"`
+	// UDPPorts is the list of UDP ports to open
+	UDPPorts []PortSpec `json:"udpPorts,omitempty"`
 }
 
 type PortSpec struct {
+	// FromPort is the starting port number
 	FromPort int `json:"fromPort"`
-	ToPort   int `json:"toPort"`
+	// ToPort is the ending port number
+	ToPort int `json:"toPort"`
 }
 
 // SkyVMSpec defines the desired state of SkyVM.
@@ -50,17 +56,16 @@ type SkyVMSpec struct {
 	// SecGroup is the security group definition to apply to the VM
 	SecGroup []SecGroup `json:"secGroup,omitempty"`
 	// ProviderRef is the reference to the provider that this VM should be deployed to
-	ProviderRef ProviderRefSpec `json:"providerRef,omitempty"`
+	ProviderRef corev1alpha1.ProviderRefSpec `json:"providerRef,omitempty"`
 }
-
-// Other fields: Preemptible (bool)
 
 // SkyVMStatus defines the observed state of SkyVM.
 type SkyVMStatus struct {
 	DependsOn  []corev1.ObjectReference `json:"dependsOn,omitempty"`
 	DependedBy []corev1.ObjectReference `json:"dependedBy,omitempty"`
-	Conditions xpv1.Condition           `json:"conditions,omitempty"`
 }
+
+// Other fields: Conditions xpv1.Condition           `json:"conditions,omitempty"`
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -85,8 +90,4 @@ type SkyVMList struct {
 
 func init() {
 	SchemeBuilder.Register(&SkyVM{}, &SkyVMList{})
-}
-
-func (obj *SkyVM) GetProviderRef() ProviderRefSpec {
-	return obj.Spec.ProviderRef
 }

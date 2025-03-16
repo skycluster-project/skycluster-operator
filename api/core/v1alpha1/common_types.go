@@ -78,11 +78,3 @@ type MetricSpec struct {
 	Port     int    `json:"port"`
 	Protocol string `json:"protocol"`
 }
-
-// type ObjectDescriptor struct {
-// 	Name      string `json:"name"`
-// 	Namespace string `json:"namespace"`
-// 	Group     string `json:"group"`
-// 	Kind      string `json:"kind"`
-// 	Version   string `json:"version,omitempty"`
-// }

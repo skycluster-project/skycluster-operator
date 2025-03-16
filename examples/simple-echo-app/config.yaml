@@ -74,7 +74,7 @@ spec:
         ports:
         - containerPort: 8080
 ---
-apiVersion: core.skycluster.io/v1alpha1
+apiVersion: svc.skycluster.io/v1alpha1
 kind: SkyVM
 metadata:
   name: skyvm-test
@@ -170,7 +170,7 @@ spec:
       totalDataTransfer: 1GB
       averageDataRate: 0.1GB/s
     - from:
-        apiVersion: core.skycluster.io/v1alpha1
+        apiVersion: svc.skycluster.io/v1alpha1
         kind: SkyVM
         name: skyvm-test
       to:
@@ -233,7 +233,7 @@ spec:
             region: scinet
     - componentRef:
         name: skyvm-test
-        apiVersion: core.skycluster.io/v1alpha1
+        apiVersion: svc.skycluster.io/v1alpha1
         kind: SkyVM
       locationConstraint:
         permitted: 

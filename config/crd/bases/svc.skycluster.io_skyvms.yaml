@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.17.0
-  name: skyvms.core.skycluster.io
+  name: skyvms.svc.skycluster.io
 spec:
-  group: core.skycluster.io
+  group: svc.skycluster.io
   names:
     kind: SkyVM
     listKind: SkyVMList
@@ -76,13 +76,18 @@ spec:
                 items:
                   properties:
                     description:
+                      description: Description is the description of the security
+                        group
                       type: string
                     tcpPorts:
+                      description: TCPPorts is the list of TCP ports to open
                       items:
                         properties:
                           fromPort:
+                            description: FromPort is the starting port number
                             type: integer
                           toPort:
+                            description: ToPort is the ending port number
                             type: integer
                         required:
                         - fromPort
@@ -90,11 +95,14 @@ spec:
                         type: object
                       type: array
                     udpPorts:
+                      description: UDPPorts is the list of UDP ports to open
                       items:
                         properties:
                           fromPort:
+                            description: FromPort is the starting port number
                             type: integer
                           toPort:
+                            description: ToPort is the ending port number
                             type: integer
                         required:
                         - fromPort
@@ -111,46 +119,6 @@ spec:
           status:
             description: SkyVMStatus defines the observed state of SkyVM.
             properties:
-              conditions:
-                description: A Condition that may apply to a resource.
-                properties:
-                  lastTransitionTime:
-                    description: |-
-                      LastTransitionTime is the last time this condition transitioned from one
-                      status to another.
-                    format: date-time
-                    type: string
-                  message:
-                    description: |-
-                      A Message containing details about this condition's last transition from
-                      one status to another, if any.
-                    type: string
-                  observedGeneration:
-                    description: |-
-                      ObservedGeneration represents the .metadata.generation that the condition was set based upon.
-                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
-                      with respect to the current state of the instance.
-                    format: int64
-                    type: integer
-                  reason:
-                    description: A Reason for this condition's last transition from
-                      one status to another.
-                    type: string
-                  status:
-                    description: Status of this condition; is it currently True, False,
-                      or Unknown?
-                    type: string
-                  type:
-                    description: |-
-                      Type of this condition. At most one of each condition type may apply to
-                      a resource at any point in time.
-                    type: string
-                required:
-                - lastTransitionTime
-                - reason
-                - status
-                - type
-                type: object
               dependedBy:
                 items:
                   description: ObjectReference contains enough information to let
