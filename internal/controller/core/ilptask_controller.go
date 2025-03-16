@@ -78,7 +78,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
 			Name:      OPTMIZATION_POD_NAME,
 		}, pod); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to get Pod for deletion", loggerName))
+			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		if err := r.Delete(ctx, pod); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Failed to delete Pod.", loggerName))

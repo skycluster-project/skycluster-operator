@@ -79,7 +79,7 @@ spec:
         - containerPort: 8080
         resources:
           limits:
-            cpu: 0.5
+            cpu: 1.5
             memory: 512Mi
 ---
 apiVersion: svc.skycluster.io/v1alpha1
@@ -213,10 +213,7 @@ spec:
       locationConstraint:
         permitted:
           - region: scinet
-          - region: vaughan
         required:
-          - type: edge
-            region: vaughan
           - type: edge
             region: scinet
     - componentRef:
