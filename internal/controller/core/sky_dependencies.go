@@ -23,7 +23,6 @@ type SkyVMDependencyMap struct {
 	Updated         bool                       `json:"updated,omitempty"`
 	Created         bool                       `json:"created,omitempty"`
 	Deleted         bool                       `json:"deleted,omitempty"`
-	SkyProviderObj  *corev1alpha1.SkyProvider  `json:"skyProviderObj,omitempty"`
 	UnstructuredObj *unstructured.Unstructured `json:"unstructuredObj,omitempty"`
 }
 

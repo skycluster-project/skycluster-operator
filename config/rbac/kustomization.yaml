@@ -43,7 +43,4 @@ resources:
 - core_skyvm_admin_role.yaml
 - core_skyvm_editor_role.yaml
 - core_skyvm_viewer_role.yaml
-- core_skyprovider_admin_role.yaml
-- core_skyprovider_editor_role.yaml
-- core_skyprovider_viewer_role.yaml
 

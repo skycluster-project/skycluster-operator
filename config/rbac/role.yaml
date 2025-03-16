@@ -35,7 +35,6 @@ rules:
   resources:
   - ilptasks
   - skyclusters
-  - skyproviders
   - skyvms
   verbs:
   - create
@@ -50,7 +49,6 @@ rules:
   resources:
   - ilptasks/finalizers
   - skyclusters/finalizers
-  - skyproviders/finalizers
   - skyvms/finalizers
   verbs:
   - update
@@ -59,7 +57,6 @@ rules:
   resources:
   - ilptasks/status
   - skyclusters/status
-  - skyproviders/status
   - skyvms/status
   verbs:
   - get
