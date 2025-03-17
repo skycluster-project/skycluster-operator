@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v2"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -55,6 +56,11 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if skyApp.Status.Objects != nil {
+		logger.Info(fmt.Sprintf("[%s]\t SkyApp already reconciled.", loggerName))
+		return ctrl.Result{}, nil
+	}
+
 	// We need to create deployment and services for the remote cluster.
 	// We have the base manifest in spec.manifest and we need to create
 	// the Kubernetes Provider "objects" for the remote cluster.
@@ -71,34 +77,40 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Update the status with the objects that will be created
 	for _, obj := range manifests {
-		yamlObj, err := createYAMLManifest(obj.Object, obj.GetName(), obj.GetAPIVersion(), obj.GetKind())
+		yamlObj, err := generateYAMLManifest(obj.Object)
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Error creating YAML manifest.", loggerName))
 			return ctrl.Result{}, err
 		}
 		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
-			Name:       yamlObj.Name,
-			Kind:       yamlObj.Kind,
-			APIVersion: yamlObj.APIVersion,
-			Manifest:   yamlObj.Manifest,
+			ComponentRef: corev1.ObjectReference{
+				Name:       obj.GetName(),
+				Kind:       obj.GetKind(),
+				APIVersion: obj.GetAPIVersion(),
+			},
+			Manifest: yamlObj,
 		})
 	}
 
 	// Update the status with the objects that will be created
 	for _, obj := range manifestCfg {
-		yamlObj, err := createYAMLManifest(obj.Object, obj.GetName(), obj.GetAPIVersion(), obj.GetKind())
+		yamlObj, err := generateYAMLManifest(obj.Object)
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Error creating YAML manifest.", loggerName))
 			return ctrl.Result{}, err
 		}
 		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
-			Name:       yamlObj.Name,
-			Kind:       yamlObj.Kind,
-			APIVersion: yamlObj.APIVersion,
-			Manifest:   yamlObj.Manifest,
+			ComponentRef: corev1.ObjectReference{
+				Name:       obj.GetName(),
+				Kind:       obj.GetKind(),
+				APIVersion: obj.GetAPIVersion(),
+			},
+			Manifest: yamlObj,
 		})
 	}
 
+	// Update the status with the provider configuration name
+	logger.Info(fmt.Sprintf("[%s]\t Updating status with provider configuration name.", loggerName))
 	if err := r.Status().Update(ctx, skyApp); err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t Error updating status.", loggerName))
 		return ctrl.Result{}, err
@@ -107,25 +119,16 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-// createYAMLManifest creates a SkyService object from the given object
-// and marshals it into a YAML manifest
-func createYAMLManifest(obj any, name, kind, apiVersion string) (*corev1alpha1.SkyService, error) {
-	// It appears that if we proceed with the obj itself, the YAML
-	// is verbose and does not follow the format of the object (e.g. Deployment)
-	// But we can use json.Marshal and then yaml.Marshal as a workaround
+// generateYAMLManifest generates a string YAML manifest from the given object
+func generateYAMLManifest(obj any) (string, error) {
 	var inInterface map[string]interface{}
 	inrec, _ := json.Marshal(obj)
 	json.Unmarshal(inrec, &inInterface)
 	objYAML, err := yaml.Marshal(&inInterface)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error marshalling obj manifests.")
+		return "", errors.Wrap(err, "Error marshalling obj manifests.")
 	}
-	return &corev1alpha1.SkyService{
-		Name:       name,
-		Kind:       kind,
-		APIVersion: apiVersion,
-		Manifest:   string(objYAML),
-	}, nil
+	return string(objYAML), nil
 }
 
 // getUniqueProviders returns a list of unique providers from the given manifests
@@ -133,10 +136,16 @@ func getUniqueProviders(manifests []corev1alpha1.SkyService) []corev1alpha1.Prov
 	pExists := map[string]any{}
 	providers := []corev1alpha1.ProviderRefSpec{}
 	for _, manifest := range manifests {
-		pID := fmt.Sprintf("%s-%s-%s",
-			manifest.ProviderRef.ProviderName,
-			manifest.ProviderRef.ProviderRegion,
-			manifest.ProviderRef.ProviderZone)
+		// ProviderName uniquely identifies a provider
+		// Only deployments are considered as the services do not tie to a provider
+		if strings.ToLower(manifest.ComponentRef.Kind) != "deployment" {
+			continue
+		}
+		pID := manifest.ProviderRef.ProviderName
+		// TODO: Remove this check
+		if pID == "os" {
+			fmt.Println("ProviderName cannot be 'os' [SkyApp]")
+		}
 		if _, ok := pExists[pID]; !ok {
 			providers = append(providers, manifest.ProviderRef)
 			pExists[pID] = struct{}{}
@@ -156,7 +165,20 @@ func sameProviders(p1, p2 corev1alpha1.ProviderRefSpec) bool {
 // getProviderId returns a unique identifier for the provider
 // based on the provider name, region, zone and type
 func getProviderId(p corev1alpha1.ProviderRefSpec) string {
-	return fmt.Sprintf("%s-%s-%s-%s", p.ProviderName, p.ProviderRegion, p.ProviderZone, p.ProviderType)
+	var parts []string
+	if p.ProviderName != "" {
+		parts = append(parts, p.ProviderName)
+	}
+	if p.ProviderRegion != "" {
+		parts = append(parts, p.ProviderRegion)
+	}
+	if p.ProviderZone != "" {
+		parts = append(parts, p.ProviderZone)
+	}
+	if p.ProviderType != "" {
+		parts = append(parts, p.ProviderType)
+	}
+	return strings.Join(parts, "-")
 }
 
 func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
@@ -164,11 +186,11 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 	// Generate deployment and service manifests
 	for _, manifest := range manifests {
 		// for deployment and services we only wrap them in "Object"
-		if strings.ToLower(manifest.Kind) == "deployment" || strings.ToLower(manifest.Kind) == "service" {
+		if strings.ToLower(manifest.ComponentRef.Kind) == "deployment" || strings.ToLower(manifest.ComponentRef.Kind) == "service" {
 			obj := &unstructured.Unstructured{}
 			obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
 			obj.SetKind("Object")
-			obj.SetName(manifest.Name)
+			obj.SetName(manifest.ComponentRef.Name)
 			obj.SetLabels(map[string]string{
 				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
 			})
@@ -180,7 +202,7 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 					"name": providerCfgName,
 				},
 			}
-			objs[manifest.Name] = *obj
+			objs[manifest.ComponentRef.Name] = *obj
 		}
 	}
 	return objs
@@ -195,7 +217,7 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 	// Then we set the failover attributes to all other
 	// providers we are allowed to send traffic
 	for _, manifest := range manifests {
-		if strings.ToLower(manifest.Kind) == "service" {
+		if strings.ToLower(manifest.ComponentRef.Kind) == "service" {
 
 			failovers := []map[string]string{}
 			// In default settings, we allow traffic to all other providers,
@@ -218,10 +240,10 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 				"apiVersion": "networking.istio.io/v1",
 				"kind":       "DestinationRule",
 				"metadata": map[string]interface{}{
-					"name": manifest.Name,
+					"name": manifest.ComponentRef.Name,
 				},
 				"spec": map[string]interface{}{
-					"host": manifest.Name,
+					"host": manifest.ComponentRef.Name,
 					"trafficPolicy": map[string]interface{}{
 						"loadBalancer": map[string]interface{}{
 							"simple": "LEAST_REQUEST",
@@ -237,7 +259,7 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 			obj := &unstructured.Unstructured{}
 			obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
 			obj.SetKind("Object")
-			obj.SetName(manifest.Name)
+			obj.SetName(manifest.ComponentRef.Name)
 			obj.SetLabels(map[string]string{
 				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
 			})
@@ -250,7 +272,7 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 				},
 			}
 
-			objs[manifest.Name] = *obj
+			objs[manifest.ComponentRef.Name] = *obj
 		}
 	}
 	return objs

@@ -286,9 +286,9 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 	tasks := make([]string, 0)
 	tasks = append(tasks, "# header")
 	for _, component := range skyCluster.Spec.SkyComponents {
-		cmpntName := component.Component.Name
-		cmpntKind := component.Component.Kind
-		cmpntApiVersion := component.Component.APIVersion
+		cmpntName := component.Components.Name
+		cmpntKind := component.Components.Kind
+		cmpntApiVersion := component.Components.APIVersion
 		// Each vs \in component.VirtualServices is a required service for this component
 		// and should be appeared in a new line in the tasks.csv
 		for _, vs := range component.VirtualServices {

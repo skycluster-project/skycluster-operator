@@ -61,13 +61,14 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to unmarshal object", logName))
 			return ctrl.Result{}, err
 		}
+
 		unstrObj := &unstructured.Unstructured{Object: obj}
-		unstrObj.SetAPIVersion(xrd.APIVersion)
-		unstrObj.SetKind(xrd.Kind)
+		unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
+		unstrObj.SetKind(xrd.ComponentRef.Kind)
 		// The name contains "." which is not allowed when working with xrds
 		// We keep the orignial name as the Name field for SkyService object
 		// and replace "." with "-" for the object name when we need to work with XRDs
-		unstrObj.SetName(strings.Replace(xrd.Name, ".", "-", -1))
+		unstrObj.SetName(strings.Replace(xrd.ComponentRef.Name, ".", "-", -1))
 		// unstrObj.SetAnnotations(map[string]string{
 		// 	"skycluster.io/pause": "true",
 		// })
@@ -80,7 +81,7 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		// 	logger.Error(err, fmt.Sprintf("[%s]\tunable to create object", logName))
 		// 	return ctrl.Result{}, err
 		// }
-		logger.Info(fmt.Sprintf("[%s]\tcreated object [%s]", logName, xrd.Name))
+		logger.Info(fmt.Sprintf("[%s]\tcreated object [%s]", logName, xrd.ComponentRef.Name))
 		break
 	}
 

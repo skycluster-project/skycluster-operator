@@ -41,28 +41,26 @@ type VirtualService struct {
 }
 
 type DeployMapEdge struct {
-	From    SkyComponent `json:"from"`
-	To      SkyComponent `json:"to"`
-	Latency string       `json:"latency,omitempty"`
+	From    SkyService `json:"from"`
+	To      SkyService `json:"to"`
+	Latency string     `json:"latency,omitempty"`
 }
 
 type DeployMap struct {
-	Component []SkyComponent  `json:"components,omitempty"`
+	Component []SkyService    `json:"components,omitempty"`
 	Edges     []DeployMapEdge `json:"edges,omitempty"`
 }
 
 type SkyService struct {
-	Name        string             `json:"name,omitempty"`
-	Kind        string             `json:"kind,omitempty"`
-	APIVersion  string             `json:"apiVersion,omitempty"`
-	Manifest    string             `json:"manifest,omitempty"`
-	ProviderRef ProviderRefSpec    `json:"providerRef,omitempty"`
-	Conditions  []metav1.Condition `json:"conditions,omitempty"`
+	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	Manifest     string                 `json:"manifest,omitempty"`
+	ProviderRef  ProviderRefSpec        `json:"providerRef,omitempty"`
+	Conditions   []metav1.Condition     `json:"conditions,omitempty"`
 }
 
 type SkyComponent struct {
-	Component corev1.ObjectReference `json:"component"`
-	Provider  ProviderRefSpec        `json:"provider,omitempty"`
+	Components corev1.ObjectReference `json:"component"`
+	Provider   ProviderRefSpec        `json:"provider,omitempty"`
 	// LocationConstraints specifies the location constraints for the SkyComponent
 	// It declartively specifies the provider and region where the SkyComponent should be deployed
 	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
