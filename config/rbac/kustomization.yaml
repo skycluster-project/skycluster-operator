@@ -22,6 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- svc_skyapp_admin_role.yaml
+- svc_skyapp_editor_role.yaml
+- svc_skyapp_viewer_role.yaml
 - svc_skyvm_admin_role.yaml
 - svc_skyvm_editor_role.yaml
 - svc_skyvm_viewer_role.yaml
@@ -43,3 +46,5 @@ resources:
 - policy_dataflowpolicy_admin_role.yaml
 - policy_dataflowpolicy_editor_role.yaml
 - policy_dataflowpolicy_viewer_role.yaml
+
+

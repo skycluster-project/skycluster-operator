@@ -127,6 +127,8 @@ spec:
             cpu: 0.5
             memory: 512Mi
 ---
+# The service should have the managed-by label set to skycluster
+# so that it can be managed by the Skycluster 
 apiVersion: v1
 kind: Service
 metadata:

@@ -19,6 +19,7 @@ var (
 	SKYCLUSTER_PROVIDERREGION_LABEL = SKYCLUSTER_API + "/provider-region"
 	SKYCLUSTER_PROVIDERZONE_LABEL   = SKYCLUSTER_API + "/provider-zone"
 	SKYCLUSTER_PROVIDERTYPE_LABEL   = SKYCLUSTER_API + "/provider-type"
+	SKYCLUSTER_PROVIDERID_LABEL     = SKYCLUSTER_API + "/provider-identifier"
 	SKYCLUSTER_PROJECTID_LABEL      = SKYCLUSTER_API + "/project-id"
 
 	// SkyClusterConfigType values

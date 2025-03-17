@@ -60,7 +60,7 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		Namespace: dpPolicy.Namespace,
 		Name:      dpPolicy.Name,
 	}, skyCluster); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found. Creating it.", loggerName))
+		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found. trying to create it.", loggerName))
 		skyCluster = &corev1alpha1.SkyCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      dpPolicy.Name,
@@ -79,18 +79,23 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 		if err := r.Create(ctx, skyCluster); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Failed to create SkyCluster.", loggerName))
-			return ctrl.Result{}, err
+			// We requeue the request to update the SkyCluster object
+			// This may happen because DFPolicy controller may create the SkyCluster object at the same time
+			return ctrl.Result{Requeue: true}, client.IgnoreAlreadyExists(err)
 		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// The SkyCluster object exists, update it by appending the name of the DataflowPolicy
-	logger.Info(fmt.Sprintf("[%s]\t Updating SkyCluster.", loggerName))
-	skyCluster.Spec.DeploymentPolciyRef.Name = dpPolicy.Name
-	if err := r.Update(ctx, skyCluster); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update SkyCluster.", loggerName))
-		return ctrl.Result{}, err
+	if skyCluster.Spec.DeploymentPolciyRef.Name == "" {
+		logger.Info(fmt.Sprintf("[%s]\t Updating SkyCluster.", loggerName))
+		skyCluster.Spec.DeploymentPolciyRef.Name = dpPolicy.Name
+		if err := r.Update(ctx, skyCluster); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update SkyCluster.", loggerName))
+			return ctrl.Result{}, err
+		}
 	}
+	logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy reconciled successfully.", loggerName))
 
 	return ctrl.Result{}, nil
 }

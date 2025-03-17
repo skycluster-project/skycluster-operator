@@ -43,6 +43,7 @@ import (
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
 	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
+	svccontroller "github.com/etesami/skycluster-manager/internal/controller/svc"
 	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
 	webhookpolicyv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/policy/v1alpha1"
 	// +kubebuilder:scaffold:imports
@@ -294,6 +295,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
+		os.Exit(1)
+	}
+	if err = (&svccontroller.SkyAppReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
