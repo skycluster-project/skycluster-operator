@@ -197,6 +197,7 @@ spec:
 ---
 # All components should be referenced by their name, apiGroup and kind
 # within the DeploymentPolicy object, otherwise they will not be considered
+# Required locations should be a subset of permitted locations
 apiVersion: policy.skycluster.io/v1alpha1
 kind: DeploymentPolicy
 metadata:
@@ -210,14 +211,17 @@ spec:
       performanceConstraint:
         responseTime: 100ms
         customMetrics:
-          - name: cache-hit-ratio
-            endpoint: /metrics/cache-hit-ratio
+          - name: custom-metric
+            endpoint: /metrics/custom-api
       locationConstraint:
         permitted:
-          - region: scinet
-        required:
           - type: edge
             region: scinet
+        required:
+          - region: scinet
+            zone: zone-27
+          - region: scinet
+            zone: zone-28
     - componentRef:
         name: caller
         apiVersion: apps/v1

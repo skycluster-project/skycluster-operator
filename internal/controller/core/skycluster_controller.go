@@ -60,6 +60,7 @@ import (
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -125,7 +126,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// We can now proceed with the deployment by creating SkyXRD object.
 		if skyCluster.Status.Optimization.Result == "Optimal" {
 			logger.Info(fmt.Sprintf("[%s]\t ILPTask is succeeded. Ready to create SkyXRD to initate the deployment.", loggerName))
-			manifests, err := createXRDs(r, ctx, req, skyCluster.Status.Optimization.DeployMap)
+			manifests, manfidestsDepSvc, err := r.createXRDs(ctx, req, skyCluster.Status.Optimization.DeployMap)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error creating SkyXRD.", loggerName))
 				return ctrl.Result{}, err
@@ -138,13 +139,8 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			if err := r.Get(ctx, req.NamespacedName, skyXRD); err != nil {
 				// Create the SkyXRD object
 				skyXRD = &corev1alpha1.SkyXRD{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      skyCluster.Name,
-						Namespace: skyCluster.Namespace,
-					},
-					Spec: corev1alpha1.SkyXRDSpec{
-						Manifests: manifests,
-					},
+					ObjectMeta: metav1.ObjectMeta{Name: skyCluster.Name, Namespace: skyCluster.Namespace},
+					Spec:       corev1alpha1.SkyXRDSpec{Manifests: manifests},
 				}
 				if err := ctrl.SetControllerReference(skyCluster, skyXRD, r.Scheme); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
@@ -158,6 +154,27 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			} else {
 				logger.Info(fmt.Sprintf("[%s]\t SkyXRD already exists. Updating an existing plan is not supported yet.", loggerName))
 			}
+
+			skyApp := &svcv1alpha1.SkyApp{}
+			if err := r.Get(ctx, req.NamespacedName, skyApp); err != nil {
+				// Create the SkyApp object
+				skyApp = &svcv1alpha1.SkyApp{
+					ObjectMeta: metav1.ObjectMeta{Name: skyCluster.Name, Namespace: skyCluster.Namespace},
+					Spec:       svcv1alpha1.SkyAppSpec{Manifests: manfidestsDepSvc},
+				}
+				if err := ctrl.SetControllerReference(skyCluster, skyApp, r.Scheme); err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
+					return ctrl.Result{}, err
+				}
+				if err := r.Create(ctx, skyApp); err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error creating SkyApp.", loggerName))
+					return ctrl.Result{}, err
+				}
+				logger.Info(fmt.Sprintf("[%s]\t SkyApp created successfully.", loggerName))
+			} else {
+				logger.Info(fmt.Sprintf("[%s]\t SkyApp already exists. Updating an existing plan is not supported yet.", loggerName))
+			}
+
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, nil
@@ -1018,8 +1035,9 @@ func generateSkyK8SCluster(r *SkyClusterReconciler, ctx context.Context, req ctr
 	}, nil
 }
 
-func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, error) {
+func (r *SkyClusterReconciler) createXRDs(ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, []corev1alpha1.SkyService, error) {
 	manifests := make([]corev1alpha1.SkyService, 0)
+	manifestsDepSvc := make([]corev1alpha1.SkyService, 0)
 	skyObjs := map[string]unstructured.Unstructured{}
 	// ######### Providers
 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
@@ -1027,7 +1045,7 @@ func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, 
 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
 	providersManifests, err := generateProviderManifests(r, ctx, req, deployMap.Component)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error generating provider manifests.")
+		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
 	}
 	for skyObjName, obj := range providersManifests {
 		skyObjs[skyObjName] = obj
@@ -1051,21 +1069,21 @@ func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, 
 		case "skyvm":
 			skyObj, err := generateSkyVMManifest(r, ctx, req, deployItem)
 			if err != nil {
-				return nil, errors.Wrap(err, "Error generating SkyVM manifest.")
+				return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")
 			}
 			for skyObjName, obj := range skyObj {
 				skyObjs[skyObjName] = obj
 			}
 		default:
 			// We only support above services for now...
-			return nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.Component.Kind))
+			return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.Component.Kind))
 		}
 	}
 
 	// ######### Handle Deployments for SkyK8SCluster
 	skyK8SObj, err := generateSkyK8SCluster(r, ctx, req, allDeployments)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
+		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
 	}
 	for n, obj := range skyK8SObj {
 		skyObjs[n] = obj
@@ -1076,7 +1094,7 @@ func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, 
 	// We create manifest and submit it to the SkyAPP controller for further processing
 	depManifests, svcManifests, err := r.generateSkyAppManifests(ctx, req, deployMap)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error generating SkyApp manifests.")
+		return nil, nil, errors.Wrap(err, "Error generating SkyApp manifests.")
 	}
 
 	// Handle unstructured objects
@@ -1085,7 +1103,7 @@ func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, 
 		// The name coming from SkyServices is composed of name.kind
 		man, err := createYAMLManifest(manifest.Object, objName, manifest.GetKind(), manifest.GetAPIVersion())
 		if err != nil {
-			return nil, errors.Wrap(err, "Error creating YAML manifest.")
+			return nil, nil, errors.Wrap(err, "Error creating YAML manifest.")
 		}
 		manifests = append(manifests, *man)
 	}
@@ -1097,19 +1115,19 @@ func createXRDs(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, 
 	for depName, depManifest := range depManifests {
 		man, err := createYAMLManifest(depManifest, depName, "SkyApp", "svc.skycluster.io/v1alpha1")
 		if err != nil {
-			return nil, errors.Wrap(err, "Error creating YAML manifest.")
+			return nil, nil, errors.Wrap(err, "Error creating YAML manifest.")
 		}
-		manifests = append(manifests, *man)
+		manifestsDepSvc = append(manifestsDepSvc, *man)
 	}
 	for svcName, svcManifest := range svcManifests {
 		man, err := createYAMLManifest(svcManifest, svcName, "SkyApp", "svc.skycluster.io/v1alpha1")
 		if err != nil {
-			return nil, errors.Wrap(err, "Error creating YAML manifest.")
+			return nil, nil, errors.Wrap(err, "Error creating YAML manifest.")
 		}
-		manifests = append(manifests, *man)
+		manifestsDepSvc = append(manifestsDepSvc, *man)
 	}
 
-	return manifests, nil
+	return manifests, manifestsDepSvc, nil
 }
 
 // generateSkyAppManifests generates the deployments and services manifests for the application

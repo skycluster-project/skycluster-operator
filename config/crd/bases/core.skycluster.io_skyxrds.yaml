@@ -108,6 +108,19 @@ spec:
                       type: string
                     name:
                       type: string
+                    providerRef:
+                      properties:
+                        providerName:
+                          type: string
+                        providerRegion:
+                          type: string
+                        providerRegionAlias:
+                          type: string
+                        providerType:
+                          type: string
+                        providerZone:
+                          type: string
+                      type: object
                   type: object
                 type: array
             type: object

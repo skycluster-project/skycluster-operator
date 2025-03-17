@@ -23,12 +23,15 @@ import (
 
 // SkyAppSpec defines the desired state of SkyApp.
 type SkyAppSpec struct {
-	// Manifests is a list of manifests to apply to the cluster
+	// Manifests is a list of manifests that should be applied to the cluster
 	Manifests []corev1alpha1.SkyService `json:"manifests,omitempty"`
 }
 
 // SkyAppStatus defines the observed state of SkyApp.
 type SkyAppStatus struct {
+	// Objects is a list of objects that will be created in the remote cluster
+	// Based on the manifests in the spec
+	Objects []corev1alpha1.SkyService `json:"objects,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -20,14 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type SkyService struct {
-	Name       string             `json:"name,omitempty"`
-	Kind       string             `json:"kind,omitempty"`
-	APIVersion string             `json:"apiVersion,omitempty"`
-	Manifest   string             `json:"manifest,omitempty"`
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
-}
-
 // SkyXRDSpec defines the desired state of SkyXRD.
 type SkyXRDSpec struct {
 	// Manifests is a list of manifests to apply to the cluster

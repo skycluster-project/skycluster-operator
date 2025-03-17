@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var (
@@ -48,6 +49,15 @@ type DeployMapEdge struct {
 type DeployMap struct {
 	Component []SkyComponent  `json:"components,omitempty"`
 	Edges     []DeployMapEdge `json:"edges,omitempty"`
+}
+
+type SkyService struct {
+	Name        string             `json:"name,omitempty"`
+	Kind        string             `json:"kind,omitempty"`
+	APIVersion  string             `json:"apiVersion,omitempty"`
+	Manifest    string             `json:"manifest,omitempty"`
+	ProviderRef ProviderRefSpec    `json:"providerRef,omitempty"`
+	Conditions  []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type SkyComponent struct {

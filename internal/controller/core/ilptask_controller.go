@@ -127,7 +127,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 				// If the optimization result is "Optimal" and status is "Succeeded",
 				// We have the deployment plan and we can update the SkyCluster object.
-				skyCluster, err = updateSkyCluster(ctx, r, req, deployPlan, "Optimal", "Succeeded")
+				skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
 				if err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Failed to get SkyCluster upon updating with ILPTask results.", loggerName))
 					return ctrl.Result{}, err
@@ -266,7 +266,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-func updateSkyCluster(ctx context.Context, r *ILPTaskReconciler, req ctrl.Request, deployPlan corev1alpha1.DeployMap, result, status string) (*corev1alpha1.SkyCluster, error) {
+func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan corev1alpha1.DeployMap, result, status string) (*corev1alpha1.SkyCluster, error) {
 	skyCluster := &corev1alpha1.SkyCluster{}
 	// It has a same name as the ILPTask
 	if err := r.Get(ctx, client.ObjectKey{
