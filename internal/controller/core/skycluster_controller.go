@@ -39,10 +39,8 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -62,7 +60,6 @@ import (
 	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
 )
 
 type computeResource struct {
@@ -202,10 +199,10 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Get dataflow and deployment policies as we need them later
 
 	// dfPolicy, err1 := getDFPolicy(r, ctx, req)
-	dpPolicy, err2 := getDPPolicy(r, ctx, req)
+	dpPolicy, err2 := r.getDPPolicy(ctx, req)
 	// Get all configmap with skycluster labels to store flavor sizes
 	// We will use flavors to specify requirements for each deployment
-	allConfigMap, err3 := getAllConfigMap(r, ctx, req)
+	allConfigMap, err3 := r.getAllConfigMap(ctx)
 	if err2 != nil || err3 != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
 		return ctrl.Result{}, errors2.Join(err2, err3)
@@ -268,7 +265,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
 		if dp.ComponentRef.Kind == "Deployment" {
-			minCPU, minRAM, err := calculateDeploymentResources(r, ctx, req, dp.ComponentRef.Name)
+			minCPU, minRAM, err := r.calculateDeploymentResources(ctx, req, dp.ComponentRef.Name)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
 				return ctrl.Result{}, err
@@ -367,38 +364,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-// getUniqueFlavors returns a list of unique flavors from all configmaps
-func getUniqueFlavors(allConfigMap *corev1.ConfigMapList) []string {
-	allFlavors := make([]string, 0)
-	allFlavors_set := make(map[string]struct{}, 0)
-	for _, cm := range allConfigMap.Items {
-		for k := range cm.Data {
-			if !strings.Contains(k, "skyvm_flavor") {
-				continue
-			}
-			flavorName := strings.Split(k, "_")[2]
-			if _, ok := allFlavors_set[flavorName]; ok {
-				continue
-			}
-			allFlavors = append(allFlavors, flavorName)
-			allFlavors_set[flavorName] = struct{}{}
-		}
-	}
-	return allFlavors
-}
-
-func getDFPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*policyv1alpha1.DataflowPolicy, error) {
-	// This has the same name as DPPolicy, SkyCluster, ILPTask
-	dfPolicy := &policyv1alpha1.DataflowPolicy{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: req.Namespace, Name: req.Name,
-	}, dfPolicy); err != nil {
-		return nil, errors.Wrap(err, "Error getting DataflowPolicy.")
-	}
-	return dfPolicy, nil
-}
-
-func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*policyv1alpha1.DeploymentPolicy, error) {
+func (r *SkyClusterReconciler) getDPPolicy(ctx context.Context, req ctrl.Request) (*policyv1alpha1.DeploymentPolicy, error) {
 	dpPolicy := &policyv1alpha1.DeploymentPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace, Name: req.Name,
@@ -408,7 +374,7 @@ func getDPPolicy(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request)
 	return dpPolicy, nil
 }
 
-func getAllConfigMap(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request) (*corev1.ConfigMapList, error) {
+func (r *SkyClusterReconciler) getAllConfigMap(ctx context.Context) (*corev1.ConfigMapList, error) {
 	allConfigMap := &corev1.ConfigMapList{}
 	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
 		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
@@ -437,39 +403,9 @@ func (r *SkyClusterReconciler) getProviderConfigMap(ctx context.Context, Provide
 	return &allConfigMap.Items[0], nil
 }
 
-// getCompatibleFlavors returns the flavors names that satisfy the minimum
-// requirements for a compute resource. The flavors are in the format of "vCPU-RAM"
-func getCompatibleFlavors(minCPU, minRAM float64, allFlavors []string) ([]string, error) {
-	okFlavors := make([]string, 0)
-	for _, skyFlavor := range allFlavors {
-		cpu := strings.Split(skyFlavor, "-")[0]
-		cpu = strings.Replace(cpu, "vCPU", "", -1)
-		cpu_int, err1 := (strconv.Atoi(cpu))
-		cpu_float := float64(cpu_int)
-		ram := strings.Split(skyFlavor, "-")[1]
-		ram = strings.Replace(ram, "GB", "", -1)
-		ram_int, err2 := (strconv.Atoi(ram))
-		ram_float := float64(ram_int)
-		if err1 != nil || err2 != nil {
-			if err1 != nil {
-				return nil, errors.Wrap(err1, "Error converting flavor spec to int.")
-			}
-			if err2 != nil {
-				return nil, errors.Wrap(err1, "Error converting flavor spec to int.")
-			}
-			// if there are error processing the flavors we ignore them and not add them to the list
-			continue
-		}
-		if cpu_float >= minCPU && ram_float >= minRAM {
-			okFlavors = append(okFlavors, fmt.Sprintf("%s|1", skyFlavor))
-		}
-	}
-	return okFlavors, nil
-}
-
 // calculateDeploymentMinResources returns the minimum resource required for a deployment
 // based on the limits and requests of all its containers
-func calculateDeploymentResources(r *SkyClusterReconciler, ctx context.Context, req ctrl.Request, deployName string) (float64, float64, error) {
+func (r *SkyClusterReconciler) calculateDeploymentResources(ctx context.Context, req ctrl.Request, deployName string) (float64, float64, error) {
 	// Get the deployment first
 	deploy := &appsv1.Deployment{}
 	if err := r.Get(ctx, client.ObjectKey{
@@ -498,73 +434,6 @@ func calculateDeploymentResources(r *SkyClusterReconciler, ctx context.Context, 
 	return minCPU, minRAM, nil
 }
 
-// getContainerComputeResources returns the cpu and memory resources for a container
-// If the limits are set, it returns the limits, if not, it returns the requests
-func getContainerComputeResources(container corev1.Container) (float64, float64) {
-	// Get the resources
-	resources := container.Resources
-	// Get the limits
-	limits := resources.Limits
-	// Check the limits
-	cpuQtyLimit, cpuOkLimit := limits["cpu"]
-	memQtyLimit, memOkLimit := limits["memory"]
-
-	// Get the requests
-	requests := resources.Requests
-	// Check the requests
-	cpuQtyReq, cpuOkReq := requests["cpu"]
-	memQtyReq, memOkReq := requests["memory"]
-
-	var cpu float64
-	var mem float64
-	if cpuOkLimit {
-		cpu = cpuQtyLimit.AsApproximateFloat64()
-	} else if cpuOkReq {
-		cpu = cpuQtyReq.AsApproximateFloat64()
-	}
-	if memOkLimit {
-		memBytes := memQtyLimit.Value()
-		mem = float64(memBytes) / (1 << 30) // GiB
-	} else if memOkReq {
-		memBytes := memQtyReq.Value()
-		mem = float64(memBytes) / (1 << 30) // GiB
-	}
-	return cpu, mem
-}
-
-func getLocationConstraints(dp policyv1alpha1.DeploymentPolicyItem) ([]string, []string) {
-	// Get the location constraints
-	locationConstraints := dp.LocationConstraint
-	// Get the permitted locations
-	permittedLocations := locationConstraints.Permitted
-	// Get the required locations
-	requiredLocations := locationConstraints.Required
-	// Set the permitted and required locations as annotations
-	locs_permitted := make([]string, 0)
-	for _, loc := range permittedLocations {
-		// Name, Type, RegionAlias, Region
-		locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
-		locs_permitted = append(locs_permitted, locDetails)
-	}
-
-	locs_required := make([]string, 0)
-	for _, loc := range requiredLocations {
-		// Name, Type, RegionAlias, Region
-		locDetails := loc.Name + "|" + loc.Type + "||" + loc.Region
-		locs_required = append(locs_required, locDetails)
-	}
-	return locs_permitted, locs_required
-}
-
-func deployExistsInDeploymentPolicy(deployName string, dpPolicy *policyv1alpha1.DeploymentPolicy) bool {
-	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
-		if dp.ComponentRef.Name == deployName {
-			return true
-		}
-	}
-	return false
-}
-
 // calculateMinComputeResource returns the minimum compute resource required for a deployment
 // based on all its containers' resources
 func (r *SkyClusterReconciler) calculateMinComputeResource(ctx context.Context, req ctrl.Request, deployName string) (*computeResource, error) {
@@ -589,163 +458,6 @@ func (r *SkyClusterReconciler) calculateMinComputeResource(ctx context.Context, 
 		totalMem += mem
 	}
 	return &computeResource{name: deployName, cpu: totalCPU, ram: totalMem}, nil
-}
-
-// attemptPlaceDeployment returns true if the deployment can be placed on any of given nodes
-// and if it is possible to use any node, it updates the corresponding
-// node with the new used cpu and memory
-func attemptPlaceDeployment(dep computeResource, nodes []computeResource) (bool, []computeResource) {
-	for i, node := range nodes {
-		if (node.cpu-node.usedCPU) >= dep.cpu && (node.ram-node.usedRAM) >= dep.ram {
-			nodes[i].usedCPU += dep.cpu
-			nodes[i].usedRAM += dep.ram
-			return true, nodes
-		}
-	}
-	return false, nodes
-}
-
-func sortComputeResources(i, j computeResource) int {
-	if i.cpu != j.cpu {
-		if i.cpu < j.cpu {
-			return -1
-		} else {
-			return 1
-		}
-	}
-	if i.ram != j.ram {
-		if i.ram < j.ram {
-			return -1
-		} else {
-			return 1
-		}
-	}
-	return 0
-}
-
-// computeResourcesForFlavors returns a list of computeResource structs
-// based on the flavor names in the input map
-func computeResourcesForFlavors(configData map[string]string) ([]computeResource, error) {
-	allFlavorsCpuRam := make([]computeResource, 0)
-	for k, _ := range configData {
-		if !strings.Contains(k, "skyvm_flavor") {
-			continue
-		}
-		// a flavor is in the form of "skyvm_flavor_2vCPU-4GB"
-		// we need to extract the cpu and ram from the flavor
-		flavor := strings.Split(k, "_")[2]
-		cpuString := strings.Split(flavor, "-")[0]
-		ramString := strings.Split(flavor, "-")[1]
-		cpu, err1 := strconv.Atoi(strings.Replace(cpuString, "vCPU", "", -1))
-		// The pod's ram resources are presented in GB, so
-		// We can keep the current format as the RAM are in GB
-		ram, err2 := strconv.Atoi(strings.Replace(ramString, "GB", "", -1))
-		if err1 != nil || err2 != nil {
-			return nil, errors.Wrap(err1, "Error converting flavor to int in assigning deployments to nodes.")
-		}
-		allFlavorsCpuRam = append(allFlavorsCpuRam, computeResource{name: flavor, cpu: float64(cpu), ram: float64(ram)})
-	}
-	return allFlavorsCpuRam, nil
-}
-
-// findSuitableComputeResource returns the name of the compute resource that satisfies the
-// minimum requirements for the given compute resource. If no compute resource satisfies
-// the requirements, it returns an empty string
-func findSuitableComputeResource(cmResource computeResource, allComputeResources []computeResource) (*computeResource, bool) {
-	for _, cr := range allComputeResources {
-		if cr.cpu >= cmResource.cpu && cr.ram >= cmResource.ram {
-			return &computeResource{name: cr.name, cpu: cr.cpu, ram: cr.ram}, true
-		}
-	}
-	return nil, false
-}
-
-// generateNewDeplyFromDeploy generates a new deployment from the given deployment
-// with the same selector and template
-func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
-	newDeploy := appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: deploy.APIVersion,
-			Kind:       deploy.Kind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploy.Name,
-			Namespace: deploy.Namespace,
-			Labels:    deploy.Labels,
-		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: deploy.Spec.Replicas,
-			Selector: deploy.Spec.Selector,
-			Template: deploy.Spec.Template,
-		},
-	}
-	return newDeploy
-}
-
-// generateNewServiceFromService generates a new service from the given service
-// with the same selector and ports
-func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
-	newSvc := corev1.Service{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: svc.APIVersion,
-			Kind:       svc.Kind,
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-			Labels:    svc.Labels,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: svc.Spec.Selector,
-			Ports:    svc.Spec.Ports,
-		},
-	}
-	return newSvc
-}
-
-// createSkyServiceYAMLManifest creates a SkyService object from the given object
-// and marshals it into a YAML manifest
-func createSkyServiceYAMLManifest(obj any, name, kind, apiVersion string) (*corev1alpha1.SkyService, error) {
-	// It appears that if we proceed with the obj itself, the YAML
-	// is verbose and does not follow the format of the object (e.g. Deployment)
-	// But we can use json.Marshal and then yaml.Marshal as a workaround
-	var inInterface map[string]interface{}
-	inrec, _ := json.Marshal(obj)
-	json.Unmarshal(inrec, &inInterface)
-	objYAML, err := yaml.Marshal(&inInterface)
-	if err != nil {
-		return nil, errors.Wrap(err, "Error marshalling obj manifests.")
-	}
-	return &corev1alpha1.SkyService{
-		ComponentRef: corev1.ObjectReference{
-			Name:       name,
-			Kind:       kind,
-			APIVersion: apiVersion,
-		},
-		Manifest: string(objYAML),
-	}, nil
-}
-
-// generateYAMLManifest generates a string YAML manifest from the given object
-func generateYAMLManifest(obj any) (string, error) {
-	var inInterface map[string]interface{}
-	inrec, _ := json.Marshal(obj)
-	json.Unmarshal(inrec, &inInterface)
-	objYAML, err := yaml.Marshal(&inInterface)
-	if err != nil {
-		return "", errors.Wrap(err, "Error marshalling obj manifests.")
-	}
-	return string(objYAML), nil
-}
-
-// deplyHasLabels returns true if the deployment has the given labels
-func deploymentHasLabels(deploy *appsv1.Deployment, labels map[string]string) bool {
-	for k, v := range labels {
-		if deploy.Spec.Template.ObjectMeta.Labels[k] != v {
-			return false
-		}
-	}
-	return true
 }
 
 func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, req ctrl.Request, components []corev1alpha1.SkyService) (map[string]corev1alpha1.SkyService, error) {
@@ -820,7 +532,7 @@ func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, re
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(providerName, ".")[0]
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = provider.ProviderRegion
 				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = provider.ProviderZone
-				objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+				// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
 				objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = providerName
 			}
 		}
@@ -893,8 +605,8 @@ func (r *SkyClusterReconciler) generateSkyVMManifest(ctx context.Context, req ct
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = component.ProviderRef.ProviderRegion
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = component.ProviderRef.ProviderZone
 	objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = component.ComponentRef.Name
-	// TODO: Remove the pause label before releasing
-	objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+	// // TODO: Remove the pause label before releasing
+	// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
 	xrdObj.SetLabels(objLabels)
 
 	yamlXrdObj, err := generateYAMLManifest(xrdObj)
@@ -1005,7 +717,7 @@ func (r *SkyClusterReconciler) generateSkyK8SCluster(ctx context.Context, req ct
 
 	objLabels := make(map[string]string, 0)
 	objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
-	objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+	// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
 	xrdObj.SetLabels(objLabels)
 
 	// For controller, any of the provider can be used,
@@ -1101,68 +813,6 @@ func (r *SkyClusterReconciler) generateSkyK8SCluster(ctx context.Context, req ct
 			ProviderZone:   ctrlProvider.ProviderZone,
 		},
 	}, nil
-}
-
-func (r *SkyClusterReconciler) createXRDs(ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, []corev1alpha1.SkyService, error) {
-	manifests := make([]corev1alpha1.SkyService, 0)
-	// skyObjs := map[string]unstructured.Unstructured{}
-	// ######### Providers
-	// Each deployment comes with component info (e.g. kind and apiVersion and name)
-	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
-	// We extract all provider's info and create corresponding SkyProvider objects for each provider
-	providersManifests, err := r.generateProviderManifests(ctx, req, deployMap.Component)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
-	}
-	for _, obj := range providersManifests {
-		manifests = append(manifests, obj)
-		// skyObjs[skyObjName] = obj
-	}
-
-	// ######### Deployments
-	allDeployments := make([]corev1alpha1.SkyService, 0)
-	for _, deployItem := range deployMap.Component {
-		// For each component we check its kind and based on that we decide how to proceed:
-		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
-		// 	If this is a Deployment, then we need to group the deployments based on the provider
-		// Then using decreasing first fit, we identitfy the number and type of VMs required.
-		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
-		// We also need to annotate deployments carefully and create services and istio resources accordingly.
-
-		// based on the type of services we may modify the objects' spec
-		switch strings.ToLower(deployItem.ComponentRef.Kind) {
-		case "deployment":
-			// fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
-			allDeployments = append(allDeployments, deployItem)
-		case "skyvm":
-			skyObj, err := r.generateSkyVMManifest(ctx, req, deployItem)
-			if err != nil {
-				return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")
-			}
-			manifests = append(manifests, *skyObj)
-		default:
-			// We only support above services for now...
-			return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.ComponentRef.Kind))
-		}
-	}
-
-	// ######### Handle Deployments for SkyK8SCluster
-	skyK8SObj, err := r.generateSkyK8SCluster(ctx, req, allDeployments)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
-	}
-	manifests = append(manifests, *skyK8SObj)
-
-	// In addition to K8S cluster manfiests, we also generate application manifests
-	// (i.e. deployments, services, istio configurations, etc.) and
-	// submit them to the remote cluster using Kubernetes Provider (object)
-	// We create manifest and submit it to the SkyAPP controller for further processing
-	appManifests, err := r.generateSkyAppManifests(ctx, req, deployMap)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "Error generating SkyApp manifests.")
-	}
-
-	return manifests, appManifests, nil
 }
 
 // generateSkyAppManifests generates the deployments and services manifests for the application
@@ -1290,6 +940,68 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 	}
 
 	return manifests, nil
+}
+
+func (r *SkyClusterReconciler) createXRDs(ctx context.Context, req ctrl.Request, deployMap corev1alpha1.DeployMap) ([]corev1alpha1.SkyService, []corev1alpha1.SkyService, error) {
+	manifests := make([]corev1alpha1.SkyService, 0)
+	// skyObjs := map[string]unstructured.Unstructured{}
+	// ######### Providers
+	// Each deployment comes with component info (e.g. kind and apiVersion and name)
+	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
+	// We extract all provider's info and create corresponding SkyProvider objects for each provider
+	providersManifests, err := r.generateProviderManifests(ctx, req, deployMap.Component)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
+	}
+	for _, obj := range providersManifests {
+		manifests = append(manifests, obj)
+		// skyObjs[skyObjName] = obj
+	}
+
+	// ######### Deployments
+	allDeployments := make([]corev1alpha1.SkyService, 0)
+	for _, deployItem := range deployMap.Component {
+		// For each component we check its kind and based on that we decide how to proceed:
+		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
+		// 	If this is a Deployment, then we need to group the deployments based on the provider
+		// Then using decreasing first fit, we identitfy the number and type of VMs required.
+		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
+		// We also need to annotate deployments carefully and create services and istio resources accordingly.
+
+		// based on the type of services we may modify the objects' spec
+		switch strings.ToLower(deployItem.ComponentRef.Kind) {
+		case "deployment":
+			// fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
+			allDeployments = append(allDeployments, deployItem)
+		case "skyvm":
+			skyObj, err := r.generateSkyVMManifest(ctx, req, deployItem)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")
+			}
+			manifests = append(manifests, *skyObj)
+		default:
+			// We only support above services for now...
+			return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.ComponentRef.Kind))
+		}
+	}
+
+	// ######### Handle Deployments for SkyK8SCluster
+	skyK8SObj, err := r.generateSkyK8SCluster(ctx, req, allDeployments)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
+	}
+	manifests = append(manifests, *skyK8SObj)
+
+	// In addition to K8S cluster manfiests, we also generate application manifests
+	// (i.e. deployments, services, istio configurations, etc.) and
+	// submit them to the remote cluster using Kubernetes Provider (object)
+	// We create manifest and submit it to the SkyAPP controller for further processing
+	appManifests, err := r.generateSkyAppManifests(ctx, req, deployMap)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Error generating SkyApp manifests.")
+	}
+
+	return manifests, appManifests, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -92,6 +92,7 @@ rules:
   - svc.skycluster.io
   resources:
   - skyapps
+  - skyk8s
   verbs:
   - create
   - delete
@@ -104,13 +105,23 @@ rules:
   - svc.skycluster.io
   resources:
   - skyapps/finalizers
+  - skyk8s/finalizers
   verbs:
   - update
 - apiGroups:
   - svc.skycluster.io
   resources:
   - skyapps/status
+  - skyk8s/status
   verbs:
   - get
+  - patch
+  - update
+- apiGroups:
+  - xrds.skycluster.io
+  resources:
+  - skyk8sclusters
+  verbs:
+  - delete
   - patch
   - update

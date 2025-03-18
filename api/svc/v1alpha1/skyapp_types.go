@@ -31,7 +31,8 @@ type SkyAppSpec struct {
 type SkyAppStatus struct {
 	// Objects is a list of objects that will be created in the remote cluster
 	// Based on the manifests in the spec
-	Objects []corev1alpha1.SkyService `json:"objects,omitempty"`
+	Objects           []corev1alpha1.SkyService `json:"objects,omitempty"`
+	ProviderConfigRef string                    `json:"providerConfigRef,omitempty"`
 }
 
 // +kubebuilder:object:root=true

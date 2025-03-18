@@ -98,4 +98,9 @@ resources:
   kind: SkyApp
   path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
   version: v1alpha1
+- controller: true
+  domain: skycluster.io
+  group: svc
+  kind: SkyK8S
+  version: v1alpha1
 version: "3"
