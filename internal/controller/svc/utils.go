@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v2"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -38,6 +39,64 @@ func GetNestedField(obj map[string]any, fields ...string) (map[string]any, error
 		}
 	}
 	return m, nil // the last field is not found in the object
+}
+
+// GetNestedValue returns the nested value of a map[string]interface{} object
+func GetNestedValue(obj map[string]any, fields ...string) (any, error) {
+	f := fields[:len(fields)-1]
+	value, err := GetNestedField(obj, f...)
+	if err != nil {
+		return nil, err
+	}
+	if val, ok := value[fields[len(fields)-1]]; ok {
+		return val, nil
+	}
+	return nil, fmt.Errorf("field %s not found in the object", fields[len(fields)-1])
+}
+
+// GetMapString returns a map[string]string from a map[string]interface{}
+func GetMapString(m map[string]any) map[string]string {
+	res := map[string]string{}
+	for k, v := range m {
+		res[k] = fmt.Sprintf("%v", v)
+	}
+	return res
+}
+
+// RemoveFromList removes the element at the given index from the list
+func RemoveFromList(list []string, idx int) []string {
+	return append(list[:idx], list[idx+1:]...)
+}
+
+// RemoveFromConditionListByType removes the condition with the given type from the list
+func RemoveFromConditionListByType(list []metav1.Condition, key string) []metav1.Condition {
+	for i, item := range list {
+		if item.Type == key {
+			return append(list[:i], list[i+1:]...)
+		}
+	}
+	return list
+}
+
+// FindInList finds the index of the given key in the list of maps
+func FindInList(list []map[string]string, key string) int {
+	for i, item := range list {
+		if _, ok := item[key]; ok {
+			return i
+		}
+	}
+	return -1
+}
+
+// FindInListValue finds the index of the given key-value pair in the list of interfaces
+// The given key-value pair should be convertible to map[string]string
+func FindInListValue(list []any, key string, value string) int {
+	for i, item := range list {
+		if val, ok := item.(map[string]any)[key]; ok && val.(string) == value {
+			return i
+		}
+	}
+	return -1
 }
 
 // generateYAMLManifest generates a string YAML manifest from the given object
@@ -100,4 +159,26 @@ func getProviderId(p corev1alpha1.ProviderRefSpec) string {
 		parts = append(parts, p.ProviderType)
 	}
 	return strings.Join(parts, "-")
+}
+
+// getStatus returns the metav1.ConditionStatus based on the given status string
+func getStatus(status any) metav1.ConditionStatus {
+	if status == nil {
+		return metav1.ConditionUnknown
+	}
+	switch status {
+	case "True":
+		return metav1.ConditionTrue
+	case "False":
+		return metav1.ConditionFalse
+	default:
+		return metav1.ConditionUnknown
+	}
+}
+
+func getMessage(msg any) string {
+	if msg == nil {
+		return ""
+	}
+	return msg.(string)
 }

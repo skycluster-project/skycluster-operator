@@ -76,14 +76,7 @@ type ProviderRefSpec struct {
 	ProviderZone        string `json:"providerZone,omitempty"`
 }
 
-type MonitoringMetricSpec struct {
-	Type     string                 `json:"type"`
-	Resource corev1.ObjectReference `json:"resource,omitempty"`
-	Metric   MetricSpec             `json:"metric,omitempty"`
-}
-
-type MetricSpec struct {
-	Endpoint string `json:"endpoint"`
-	Port     int    `json:"port"`
-	Protocol string `json:"protocol"`
+type ConnectionSecret struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
