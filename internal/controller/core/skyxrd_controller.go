@@ -26,8 +26,10 @@ import (
 	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -44,12 +46,12 @@ type SkyXRDReconciler struct {
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logName := "SkyXRD"
-	logger.Info(fmt.Sprintf("[%s]\tReconciler started for %s", logName, req.Name))
+	logger.Info(fmt.Sprintf("[%s]\t Reconciler started for %s", logName, req.Name))
 
 	// Fetch the object
 	skyxrd := &corev1alpha1.SkyXRD{}
 	if err := r.Get(ctx, req.NamespacedName, skyxrd); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\tunable to fetch object, maybe it is deleted?", logName))
+		logger.Info(fmt.Sprintf("[%s]\t SkyXRD not found.", logName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -87,5 +89,8 @@ func (r *SkyXRDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.SkyXRD{}).
 		Named("core-skyxrd").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
 }

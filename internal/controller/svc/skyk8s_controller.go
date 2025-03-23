@@ -28,6 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
@@ -59,7 +60,7 @@ func (r *SkyK8SReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		Kind:    "SkyK8SCluster",
 	})
 	if err := r.Get(ctx, req.NamespacedName, skyk8s); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\tunable to fetch SkyK8SCluster. Not expected", logName))
+		logger.Info(fmt.Sprintf("[%s]\tunable to fetch SkyK8SCluster.", logName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -67,7 +68,7 @@ func (r *SkyK8SReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	k3sCfg, err := GetNestedField(skyk8s.Object, "status", "k3s")
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\tunable to get k3s config", logName))
-		return ctrl.Result{}, nil
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 		// return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	pCfgName := k3sCfg["providerConfig"].(string)
@@ -107,5 +108,8 @@ func (r *SkyK8SReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(obj,
 			&handler.EnqueueRequestForObject{},
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{})).
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
 }

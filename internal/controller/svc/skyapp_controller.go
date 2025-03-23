@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
@@ -246,5 +247,8 @@ func (r *SkyAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&svcv1alpha1.SkyApp{}).
 		Named("svc-skyapp").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
 }

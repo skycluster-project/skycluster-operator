@@ -4,12 +4,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
+	"gopkg.in/yaml.v2"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	"gopkg.in/yaml.v2"
+	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),
+		&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+}
 
 // GetNestedField returns the nested field of a map[string]interface{} object
 // It returns the nested field if it exists, and an error if it doesn't

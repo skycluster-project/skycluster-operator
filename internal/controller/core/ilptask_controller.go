@@ -43,6 +43,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
@@ -70,7 +71,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Fetch the ILPTask instance
 	instance := &corev1alpha1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t Failed to get ILPTask, maybe it is deleted?", loggerName))
+		logger.Info(fmt.Sprintf("[%s]\t ILPTask not found.", loggerName))
 		logger.Info(fmt.Sprintf("[%s]\t Deleting the optimization pod as the ILPTask is not found.", loggerName))
 		// Delete the optimization pod
 		pod := &corev1.Pod{}
@@ -514,5 +515,8 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.ILPTask{}).
 		Named("core-ilptask").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
 }
