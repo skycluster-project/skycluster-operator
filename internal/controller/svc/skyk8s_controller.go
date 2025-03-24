@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
+	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -65,7 +66,7 @@ func (r *SkyK8SReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	// we need to see if its ProviderConfigRef is set and if so, we update the SkyApp object.
-	k3sCfg, err := GetNestedField(skyk8s.Object, "status", "k3s")
+	k3sCfg, err := ctrlutils.GetNestedField(skyk8s.Object, "status", "k3s")
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\tunable to get k3s config", logName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)

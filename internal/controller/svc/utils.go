@@ -9,11 +9,13 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
+	"k8s.io/client-go/util/workqueue"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/util/workqueue"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
@@ -21,92 +23,6 @@ func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),
 		&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
 	)
-}
-
-// GetNestedField returns the nested field of a map[string]interface{} object
-// It returns the nested field if it exists, and an error if it doesn't
-// The fields are the keys to access the nested field
-func GetNestedField(obj map[string]any, fields ...string) (map[string]any, error) {
-	if len(fields) == 0 {
-		return nil, errors.New("no fields provided")
-	}
-	m := obj
-	for _, field := range fields {
-		if val, ok := m[field].(map[string]any); ok {
-			m = val
-		} else {
-			return nil, fmt.Errorf("field [%s] not found in the object or its type is not map[string]interface{}", field)
-		}
-	}
-	return m, nil // the last field is not found in the object
-}
-
-// GetNestedValue returns the nested value of a map[string]interface{} object
-func GetNestedValue(obj map[string]any, fields ...string) (any, error) {
-	f := fields[:len(fields)-1]
-	value, err := GetNestedField(obj, f...)
-	if err != nil {
-		return nil, err
-	}
-	if val, ok := value[fields[len(fields)-1]]; ok {
-		return val, nil
-	}
-	return nil, fmt.Errorf("field %s not found in the object", fields[len(fields)-1])
-}
-
-// GetMapString returns a map[string]string from a map[string]interface{}
-func GetMapString(m map[string]any) map[string]string {
-	res := map[string]string{}
-	for k, v := range m {
-		res[k] = fmt.Sprintf("%v", v)
-	}
-	return res
-}
-
-// RemoveFromList removes the element at the given index from the list
-func RemoveFromList(list []string, idx int) []string {
-	return append(list[:idx], list[idx+1:]...)
-}
-
-// RemoveFromConditionListByType removes the condition with the given type from the list
-func RemoveFromConditionListByType(list []metav1.Condition, key string) []metav1.Condition {
-	for i, item := range list {
-		if item.Type == key {
-			return append(list[:i], list[i+1:]...)
-		}
-	}
-	return list
-}
-
-// FindInList finds the index of the given key in the list of maps
-func FindInList(list []map[string]string, key string) int {
-	for i, item := range list {
-		if _, ok := item[key]; ok {
-			return i
-		}
-	}
-	return -1
-}
-
-// FindInListValue finds the index of the given key-value pair in the list of interfaces
-// The given key-value pair should be convertible to map[string]string
-func FindInListValue(list []any, key string, value string) int {
-	for i, item := range list {
-		if val, ok := item.(map[string]any)[key]; ok && val.(string) == value {
-			return i
-		}
-	}
-	return -1
-}
-
-// FindInConditionList finds the index of the given key in the list of conditions
-func FindInConditionList(list []metav1.Condition, key string) int {
-	for i, item := range list {
-		if item.Type == key {
-			return i
-		}
-	}
-	return -1
 }
 
 // generateYAMLManifest generates a string YAML manifest from the given object
@@ -142,6 +58,24 @@ func getUniqueProviders(manifests []corev1alpha1.SkyService) []corev1alpha1.Prov
 		}
 	}
 	return providers
+}
+
+// GetProviderTypeFromConfigMap returns the provider type from the ConfigMap with the given providerLabels labels
+func getProviderTypeFromConfigMap(c client.Client, providerLabels map[string]string) (string, error) {
+	if configMaps, err := ctrlutils.GetConfigMapsByLabels(c, corev1alpha1.SKYCLUSTER_NAMESPACE, providerLabels); err != nil || configMaps == nil {
+		return "", errors.Wrap(err, "failed to get ConfigMaps by labels")
+	} else {
+		// check the length of the configMaps
+		if len(configMaps.Items) != 1 {
+			return "", errors.New(fmt.Sprintf("expected 1 ConfigMap, got %d", len(configMaps.Items)))
+		}
+		for _, configMap := range configMaps.Items {
+			if value, exists := configMap.Labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL]; exists {
+				return value, nil
+			}
+		}
+	}
+	return "", errors.New("provider type not found from any ConfigMap")
 }
 
 // sameProviders returns true if the two providers are the same
@@ -184,11 +118,4 @@ func getStatus(status any) metav1.ConditionStatus {
 	default:
 		return metav1.ConditionUnknown
 	}
-}
-
-func getMessage(msg any) string {
-	if msg == nil {
-		return ""
-	}
-	return msg.(string)
 }

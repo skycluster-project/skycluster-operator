@@ -14,6 +14,31 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+
+SkySetup.svc.skycluster.io composed of two objects:
+- SkySetup.xrds.skycluster.io
+- SkyGateway.xrds.skycluster.io
+
+The SkySetup (xrds) object is not expected to experience any failure after creation.
+This object creates the Keys, Security groups, etc.
+
+The SkyGateway object is the main object that creates the
+gateway VM. The gateway will be connected to the overlay server
+and is the NAT for other VMs and services. The Gateway object,
+however, can experience failures and should be able to recover
+from failures.
+
+We monitor the status of SkyGateway object once it is created
+and upon discovering a number of failures, we will destroy the object
+and create a new one, hoping that the new object will be healthy.
+
+It is important to note that some settings of the SkyGateway
+should be retained, such as private IP and perhaps the public IP.
+We maintain theses settings in the Status field of main object.
+
+*/
+
 package svc
 
 import (
@@ -32,6 +57,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
+	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
 )
 
 // SkySetupReconciler reconciles a SkySetup object
@@ -58,39 +84,19 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// The SkySetup object is assumed to be preliminary object and
-	// we don't expect it to experience any failure after creation.
-	// The SkySetup object creates the Keys, Security groups, etc.
-
-	// The SkyGateway object is the main object that creates the
-	// gateway VM. The gateway will be connected to the overlay server
-	// and is the NAT for other VMs and services. The Gateway object,
-	// however, can experience failures and should be able to recover
-	// from failures.
-	//
-	// We monitor the status of SkyGateway object once
-	// it is created and upon discovering any failure, we will destroy the object
-	// and create a new one.
-	//
-	// It is important to note that some settings
-	// of the SkyGateway should be retained, such as private IP and perhaps
-	// the public IP. We maintain theses settings in the Status field of this object.
-
 	// Create the SkyGateway object
 	stObj := &unstructured.Unstructured{}
-	// We have to use claim to utilize the namespaces
 	stObj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "SkySetup",
 	})
-	// TODO: Rename the object
+	// TODO: Rename the object to instance.Name
 	stObjName := "scinet-setup"
-	// stObj.SetName(instance.Name)
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: stObjName}, stObj); err != nil {
 		// if the SkySetup object does not exist, we create it
 		logger.Info(fmt.Sprintf("[%s]\t unable to fetch [SkySetup], creating a new one.", req.Name))
 		stObj.SetName(stObjName)
 		stObj.SetNamespace(instance.Namespace)
-		stObj.Object["metadata"] = map[string]any{"labels": instance.Labels}
+		stObj.SetLabels(instance.Labels)
 		stObj.Object["spec"] = map[string]any{
 			"forProvider": instance.Spec.ForProvider,
 			"providerRef": instance.Spec.ProviderRef,
@@ -113,14 +119,13 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	gwObj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "SkyGateway",
 	})
-	// TODO: Rename the object
-	// gwObj.SetName(instance.Name)
+	// TODO: Rename the object to instance.Name
 	gwName := "scinet-gw"
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: gwName}, gwObj); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t unable to fetch [SkyGateway], creating a new one", req.Name))
 		gwObj.SetName(gwName)
 		gwObj.SetNamespace(instance.Namespace)
-		gwObj.Object["metadata"] = map[string]any{"labels": instance.Labels}
+		gwObj.SetLabels(instance.Labels)
 		gwObj.Object["spec"] = map[string]any{
 			"forProvider": instance.Spec.ForProvider,
 			"providerRef": instance.Spec.ProviderRef,
@@ -138,12 +143,11 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// At these stage we have both objects and we can check their status
-	// we update the status of the current object
-	// to whatever the status of the both objects are
+	// we update the status of the current object to whatever the status of the both objects are
 
 	logger.Info(fmt.Sprintf("[%s]\t [SkySetup] and [SkyGateway] already exist, updating the status [%s]", loggerName, req.Name))
-	stConditions, err1 := GetNestedValue(stObj.Object, "status", "conditions")
-	gwConditions, err2 := GetNestedValue(gwObj.Object, "status", "conditions")
+	stConditions, err1 := ctrlutils.GetNestedValue(stObj.Object, "status", "conditions")
+	gwConditions, err2 := ctrlutils.GetNestedValue(gwObj.Object, "status", "conditions")
 	if err1 != nil || err2 != nil {
 		logger.Error(err1, fmt.Sprintf("[%s]\t unable to get conditions of SkySetup or SkyGateway", req.Name))
 		return ctrl.Result{}, err1
@@ -158,8 +162,8 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	stConditionsList, gwConditionsList := stConditions.([]any), gwConditions.([]any)
 
 	// Find the Ready condition in each of the objects
-	stIdx := FindInListValue(stConditionsList, "type", "Ready")
-	gwIdx := FindInListValue(gwConditionsList, "type", "Ready")
+	stIdx := ctrlutils.IndexOfMapValue(stConditionsList, "type", "Ready")
+	gwIdx := ctrlutils.IndexOfMapValue(gwConditionsList, "type", "Ready")
 	// Get the Ready conditions of the SkySetup and SkyGateway
 	stReadyCd := stConditionsList[stIdx].(map[string]any)
 	gwReadyCd := gwConditionsList[gwIdx].(map[string]any)
@@ -167,8 +171,8 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] Ready condition: %v", loggerName, gwReadyCd["status"]))
 
 	// TODO: We should only update the status if the status has changed
-	objStReadyCd := FindInConditionList(instance.Status.Conditions, "ReadySkySetup")
-	objGwReadyCd := FindInConditionList(instance.Status.Conditions, "ReadySkyGateway")
+	objStReadyCd := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "ReadySkySetup")
+	objGwReadyCd := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "ReadySkyGateway")
 	shouldUpdate := false
 	if objStReadyCd == -1 || objGwReadyCd == -1 {
 		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist, updating the status", loggerName))
@@ -180,8 +184,8 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if shouldUpdate {
 		logger.Info(fmt.Sprintf("[%s]\t Status of the objects has changed, updating the status", loggerName))
 		// If status exists in the list of conditions remove it first
-		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "ReadySkySetup")
-		objCond = RemoveFromConditionListByType(objCond, "ReadySkyGateway")
+		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "ReadySkySetup")
+		objCond = ctrlutils.RemoveConditionByType(objCond, "ReadySkyGateway")
 		// Add the Ready condition of the SkySetup object
 		t := metav1.Time{}
 		if err := t.UnmarshalQueryParameter(stReadyCd["lastTransitionTime"].(string)); err != nil {
@@ -191,8 +195,8 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			objCond = append(objCond, metav1.Condition{
 				Type:               "ReadySkySetup",
 				Status:             getStatus(stReadyCd["status"]),
-				Message:            getMessage(stReadyCd["message"]),
-				Reason:             getMessage(stReadyCd["reason"]),
+				Message:            ctrlutils.SafeString(stReadyCd["message"]),
+				Reason:             ctrlutils.SafeString(stReadyCd["reason"]),
 				LastTransitionTime: metav1.Time{Time: t.Time},
 			})
 		}
@@ -204,8 +208,8 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			objCond = append(objCond, metav1.Condition{
 				Type:               "ReadySkyGateway",
 				Status:             getStatus(gwReadyCd["status"]),
-				Message:            getMessage(gwReadyCd["message"]),
-				Reason:             getMessage(gwReadyCd["reason"]),
+				Message:            ctrlutils.SafeString(gwReadyCd["message"]),
+				Reason:             ctrlutils.SafeString(gwReadyCd["reason"]),
 				LastTransitionTime: metav1.Time{Time: t.Time},
 			})
 		}
@@ -219,7 +223,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Check the status of SkySetup and SkyGateway objects
-	if getMessage(stReadyCd["status"]) != "True" || getMessage(gwReadyCd["status"]) != "True" {
+	if ctrlutils.SafeString(stReadyCd["status"]) != "True" || ctrlutils.SafeString(gwReadyCd["status"]) != "True" {
 		logger.Info(fmt.Sprintf("[%s]\t SkySetup or SkyGateway is not ready, requeue the object in 30 seconds", loggerName))
 		// TODO: adjust the requeue time
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
@@ -233,7 +237,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// and the ProviderConfig data should be available through the status field
 	// The providerConfig name is availalbe in status.gateway.providerConfig
 
-	pConfigName, err := GetNestedValue(gwObj.Object, "status", "gateway", "providerConfig")
+	pConfigName, err := ctrlutils.GetNestedValue(gwObj.Object, "status", "gateway", "providerConfig")
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t unable to get providerConfig name", req.Name))
 		return ctrl.Result{}, err
@@ -259,7 +263,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				"sudoEnabled":       true,
 			},
 			"providerConfigRef": map[string]any{
-				"name": getMessage(pConfigName),
+				"name": ctrlutils.SafeString(pConfigName),
 			},
 		}
 		logger.Info(fmt.Sprintf("[%s]\t Setting owner [%s], [%s]", loggerName, scObj.GetAPIVersion(), scObj.GetKind()))
@@ -281,20 +285,20 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info(fmt.Sprintf("[%s]\t [Script] object already exists, checking the status", loggerName))
 	// The Script object exists, we can now check the status of the object
 	// TODO: Initially the status code does not exist, so the code will fail here
-	statusCode, err := GetNestedValue(scObj.Object, "status", "atProvider", "statusCode")
+	statusCode, err := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "statusCode")
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t unable to get statusCode of [Script]", req.Name))
 		return ctrl.Result{}, err
 	}
 	logger.Info(fmt.Sprintf("[%s]\t statusCode: [%d]", loggerName, statusCode))
-	stdOut, err1 := GetNestedValue(scObj.Object, "status", "atProvider", "stdout")
-	stdErr, err2 := GetNestedValue(scObj.Object, "status", "atProvider", "stderr")
+	stdOut, err1 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stdout")
+	stdErr, err2 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stderr")
 	if err1 != nil || err2 != nil {
 		logger.Error(err1, fmt.Sprintf("[%s]\t unable to get stdout or stderr of [Script]", req.Name))
 		return ctrl.Result{}, err1
 	}
 	// Get the condition Ready of the current object
-	objReadtCdIdx := FindInConditionList(instance.Status.Conditions, "Ready")
+	objReadtCdIdx := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "Ready")
 	if objReadtCdIdx == -1 {
 		// Condition does not exist, append a new Ready conditino
 		instance.Status.Conditions = append(instance.Status.Conditions, metav1.Condition{
@@ -304,7 +308,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			Message:            "",
 			LastTransitionTime: metav1.Time{Time: time.Now()},
 		})
-		objReadtCdIdx = FindInConditionList(instance.Status.Conditions, "Ready")
+		objReadtCdIdx = ctrlutils.IndexOfConditionType(instance.Status.Conditions, "Ready")
 	}
 	objReadyCd := instance.Status.Conditions[objReadtCdIdx]
 	// If the status code is 0, and we don't have the ready condition set to True
@@ -312,11 +316,11 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if statusCode.(int64) == 0 && objReadyCd.Status != "True" {
 		logger.Info(fmt.Sprintf("[%s]\t Script is healthy", loggerName))
 		// add a condition to the status of the current object
-		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
+		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "Ready")
 		objCond = append(objCond, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionTrue,
-			Message:            getMessage(stdOut) + getMessage(stdErr),
+			Message:            ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr),
 			Reason:             "Healthy",
 			LastTransitionTime: metav1.Time{Time: time.Now()},
 		})
@@ -343,11 +347,11 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		// We pass the stdout and stderr to the status of the current object
 		// Increase the counter and requeue the object to check the health again
 		logger.Info(fmt.Sprintf("[%s]\t Script is not healthy StatusCode: [%d], Counter: [%d]", loggerName, statusCode.(int64), instance.Status.Retries))
-		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
+		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "Ready")
 		objCond = append(objCond, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
-			Message:            getMessage(stdOut) + getMessage(stdErr),
+			Message:            ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr),
 			Reason:             "Unhealthy",
 			LastTransitionTime: metav1.Time{Time: time.Now()},
 		})
@@ -383,10 +387,6 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 	}
 
-	// at this stage we either create the SkySetuo object or we have already have it
-	// now we work in SkyGateway
-
-	//
 	// we have created both SkySetup and SkyGateway objects or we already have them
 	// now we check the status of SkyGateway and check its health
 	// To check the status of SkyGateway, we need to consider two things:
