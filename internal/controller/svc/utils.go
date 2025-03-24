@@ -9,13 +9,13 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v2"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
@@ -105,17 +105,14 @@ func getProviderId(p corev1alpha1.ProviderRefSpec) string {
 	return strings.Join(parts, "-")
 }
 
-// getStatus returns the metav1.ConditionStatus based on the given status string
-func getStatus(status any) metav1.ConditionStatus {
-	if status == nil {
-		return metav1.ConditionUnknown
+// getProviderCfgName returns the providerConfig name from the given object
+func getProviderCfgName(obj *unstructured.Unstructured) (string, error) {
+	pConfigName, err := ctrlutils.GetNestedValue(obj.Object, "status", "gateway", "providerConfig")
+	if err != nil {
+		return "", err
 	}
-	switch status {
-	case "True":
-		return metav1.ConditionTrue
-	case "False":
-		return metav1.ConditionFalse
-	default:
-		return metav1.ConditionUnknown
+	if _, ok := pConfigName.(string); !ok {
+		return "", fmt.Errorf("providerConfig name is not of type string")
 	}
+	return pConfigName.(string), nil
 }

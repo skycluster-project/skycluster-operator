@@ -84,6 +84,104 @@ func ListUnstructuredObjectsByFieldList(
 	return filteredObj, nil
 }
 
+// GetUnstructuredConditionByType retrieves the condition with the given type from the unstructured object
+func GetUnstructuredConditionByType(obj *unstructured.Unstructured, t string) (bool, map[string]any, error) {
+	conditions, err := GetNestedValue(obj.Object, "status", "conditions")
+	if err != nil {
+		return false, nil, err
+	}
+	if _, ok := conditions.([]any); !ok {
+		return false, nil, fmt.Errorf("conditions is not of type []any")
+	}
+	cds := conditions.([]any)
+	// Find the Ready condition in each of the objects
+	cdIdx := IndexOfMapValue(cds, "type", t)
+	if cdIdx == -1 {
+		return false, nil, nil
+	}
+	cd := cds[cdIdx].(map[string]any)
+	return true, cd, nil
+}
+
+// ParseConditionStatus returns the metav1.ConditionStatus based on the given status string
+func ParseConditionStatus(status any) metav1.ConditionStatus {
+	if status == nil {
+		return metav1.ConditionUnknown
+	}
+	switch status {
+	case "True":
+		return metav1.ConditionTrue
+	case "False":
+		return metav1.ConditionFalse
+	default:
+		return metav1.ConditionUnknown
+	}
+}
+
+// IndexOfTypedCondition finds the index of the given key in the list of conditions
+func IndexOfTypedCondition(list []metav1.Condition, key string) int {
+	for i, item := range list {
+		if item.Type == key {
+			return i
+		}
+	}
+	return -1
+}
+
+// GetTypedCondition retrieves the condition with the given type from the list of conditions
+func GetTypedCondition(conditions []metav1.Condition, t string) (bool, *metav1.Condition) {
+	// Find the Ready condition in each of the objects
+	cdIdx := IndexOfTypedCondition(conditions, t)
+	if cdIdx == -1 {
+		return false, nil
+	}
+	cd := conditions[cdIdx]
+	return true, &cd
+}
+
+// GetTypedConditionStatus retrieves the status of condition with the given type from the list of conditions
+// returns the condition value if it exists and nil otherwise
+func GetTypedConditionStatus(conditions []metav1.Condition, t string) *metav1.ConditionStatus {
+	// Find the Ready condition in each of the objects
+	cdIdx := IndexOfTypedCondition(conditions, t)
+	if cdIdx == -1 {
+		return nil
+	}
+	cd := conditions[cdIdx]
+	return &cd.Status
+}
+
+// SetTypedCondition sets the condition with the given type in the list of conditions
+func SetTypedCondition(conditions []metav1.Condition, t string, status metav1.ConditionStatus, reason, message string, tt metav1.Time) []metav1.Condition {
+	// Find the Ready condition in each of the objects
+	cdIdx := IndexOfTypedCondition(conditions, t)
+	if cdIdx == -1 {
+		conditions = append(conditions, metav1.Condition{
+			LastTransitionTime: tt,
+			Type:               t,
+			Status:             status,
+			Reason:             reason,
+			Message:            message,
+		})
+	} else {
+		conditions[cdIdx].LastTransitionTime = tt
+		conditions[cdIdx].Status = status
+		conditions[cdIdx].Reason = reason
+		conditions[cdIdx].Message = message
+	}
+	return conditions
+}
+
+// RemoveFromTypedCondition removes the condition with the given type from the list
+func RemoveFromTypedCondition(list []metav1.Condition, key string) []metav1.Condition {
+	for i, item := range list {
+		if item.Type == key {
+			return append(list[:i], list[i+1:]...)
+		}
+	}
+	return list
+}
+
 // GetNestedField retrieves a nested map within a map[string]any structure.
 // It traverses the object using the provided sequence of field names.
 // Example:
@@ -341,16 +439,6 @@ func RemoveStringAt(list []string, idx int) []string {
 	return append(list[:idx], list[idx+1:]...)
 }
 
-// RemoveConditionByType removes the condition with the given type from the list
-func RemoveConditionByType(list []metav1.Condition, key string) []metav1.Condition {
-	for i, item := range list {
-		if item.Type == key {
-			return append(list[:i], list[i+1:]...)
-		}
-	}
-	return list
-}
-
 // IndexOfMapKey finds the index of the given key in the list of maps
 func IndexOfMapKey(list []map[string]string, key string) int {
 	for i, item := range list {
@@ -366,16 +454,6 @@ func IndexOfMapKey(list []map[string]string, key string) int {
 func IndexOfMapValue(list []any, key string, value string) int {
 	for i, item := range list {
 		if val, ok := item.(map[string]any)[key]; ok && val.(string) == value {
-			return i
-		}
-	}
-	return -1
-}
-
-// IndexOfConditionType finds the index of the given key in the list of conditions
-func IndexOfConditionType(list []metav1.Condition, key string) int {
-	for i, item := range list {
-		if item.Type == key {
 			return i
 		}
 	}

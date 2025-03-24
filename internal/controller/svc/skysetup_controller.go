@@ -43,7 +43,9 @@ package svc
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -144,77 +146,65 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// At these stage we have both objects and we can check their status
 	// we update the status of the current object to whatever the status of the both objects are
-
 	logger.Info(fmt.Sprintf("[%s]\t [SkySetup] and [SkyGateway] already exist, updating the status [%s]", loggerName, req.Name))
-	stConditions, err1 := ctrlutils.GetNestedValue(stObj.Object, "status", "conditions")
-	gwConditions, err2 := ctrlutils.GetNestedValue(gwObj.Object, "status", "conditions")
+	f1, stReadyCd, err1 := ctrlutils.GetUnstructuredConditionByType(stObj, "Ready")
+	f2, gwReadyCd, err2 := ctrlutils.GetUnstructuredConditionByType(gwObj, "Ready")
 	if err1 != nil || err2 != nil {
-		logger.Error(err1, fmt.Sprintf("[%s]\t unable to get conditions of SkySetup or SkyGateway", req.Name))
-		return ctrl.Result{}, err1
+		logger.Error(errors.Join(err1, err2), fmt.Sprintf("[%s]\t unable to get Ready condition", req.Name))
+		return ctrl.Result{}, errors.Join(err1, err2)
 	}
-	// Check stConditions and gwConditions to be of type []any
-	if _, ok := stConditions.([]any); !ok {
-		if _, ok := gwConditions.([]any); !ok {
-			logger.Info(fmt.Sprintf("[%s]\t SkySetup conditions is not of type []any", loggerName))
-			return ctrl.Result{}, fmt.Errorf("SkySetup conditions is not of type []any")
-		}
+	if !f1 {
+		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist for SkySetup", loggerName))
+		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkySetup", metav1.ConditionUnknown, "Unknown", "SkySetup services is not ready", metav1.Now())
 	}
-	stConditionsList, gwConditionsList := stConditions.([]any), gwConditions.([]any)
+	if !f2 {
+		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist for SkyGateway", loggerName))
+		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkyGateway", metav1.ConditionUnknown, "Unknown", "SkyGateway services is not ready", metav1.Now())
+	}
+	if !f1 || !f2 {
+		// set the condition of the current object to Unknown and requeue
+		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionUnknown, "Unknown", "Dependent services are not ready", metav1.Now())
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
 
-	// Find the Ready condition in each of the objects
-	stIdx := ctrlutils.IndexOfMapValue(stConditionsList, "type", "Ready")
-	gwIdx := ctrlutils.IndexOfMapValue(gwConditionsList, "type", "Ready")
-	// Get the Ready conditions of the SkySetup and SkyGateway
-	stReadyCd := stConditionsList[stIdx].(map[string]any)
-	gwReadyCd := gwConditionsList[gwIdx].(map[string]any)
-	logger.Info(fmt.Sprintf("[%s]\t [SkySetup] Ready condition: %v", loggerName, stReadyCd["status"]))
-	logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] Ready condition: %v", loggerName, gwReadyCd["status"]))
-
-	// TODO: We should only update the status if the status has changed
-	objStReadyCd := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "ReadySkySetup")
-	objGwReadyCd := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "ReadySkyGateway")
+	// We should only update the status if the status has changed
+	f1, objStReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "ReadySkySetup")
+	f2, objGwReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "ReadySkyGateway")
 	shouldUpdate := false
-	if objStReadyCd == -1 || objGwReadyCd == -1 {
+	if !f1 || !f2 {
 		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist, updating the status", loggerName))
 		shouldUpdate = true
-	} else if instance.Status.Conditions[objStReadyCd].Status != getStatus(stReadyCd["status"]) ||
-		instance.Status.Conditions[objGwReadyCd].Status != getStatus(gwReadyCd["status"]) {
-		shouldUpdate = true
+	}
+	// If both conditions exist, we check if the status has changed
+	if f1 && f2 {
+		if objStReadyCd.Status != ctrlutils.ParseConditionStatus(stReadyCd["status"]) ||
+			objGwReadyCd.Status != ctrlutils.ParseConditionStatus(gwReadyCd["status"]) {
+			shouldUpdate = true
+		}
 	}
 	if shouldUpdate {
 		logger.Info(fmt.Sprintf("[%s]\t Status of the objects has changed, updating the status", loggerName))
-		// If status exists in the list of conditions remove it first
-		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "ReadySkySetup")
-		objCond = ctrlutils.RemoveConditionByType(objCond, "ReadySkyGateway")
 		// Add the Ready condition of the SkySetup object
 		t := metav1.Time{}
 		if err := t.UnmarshalQueryParameter(stReadyCd["lastTransitionTime"].(string)); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
 			return ctrl.Result{}, err
 		} else {
-			objCond = append(objCond, metav1.Condition{
-				Type:               "ReadySkySetup",
-				Status:             getStatus(stReadyCd["status"]),
-				Message:            ctrlutils.SafeString(stReadyCd["message"]),
-				Reason:             ctrlutils.SafeString(stReadyCd["reason"]),
-				LastTransitionTime: metav1.Time{Time: t.Time},
-			})
+			status := ctrlutils.ParseConditionStatus(stReadyCd["status"])
+			message := ctrlutils.SafeString(stReadyCd["message"])
+			reason := ctrlutils.SafeString(stReadyCd["reason"])
+			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkySetup", status, reason, message, t)
 		}
 		// Add the Ready condition of the SkyGateway object
 		if err := t.UnmarshalQueryParameter(gwReadyCd["lastTransitionTime"].(string)); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
 			return ctrl.Result{}, err
 		} else {
-			objCond = append(objCond, metav1.Condition{
-				Type:               "ReadySkyGateway",
-				Status:             getStatus(gwReadyCd["status"]),
-				Message:            ctrlutils.SafeString(gwReadyCd["message"]),
-				Reason:             ctrlutils.SafeString(gwReadyCd["reason"]),
-				LastTransitionTime: metav1.Time{Time: t.Time},
-			})
+			status := ctrlutils.ParseConditionStatus(gwReadyCd["status"])
+			message := ctrlutils.SafeString(gwReadyCd["message"])
+			reason := ctrlutils.SafeString(gwReadyCd["reason"])
+			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkyGateway", status, reason, message, t)
 		}
-		instance.Status.Conditions = objCond
-		// TODO: Move update status block to the end
 		if err := r.Status().Update(ctx, instance); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
 			return ctrl.Result{}, err
@@ -223,6 +213,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Check the status of SkySetup and SkyGateway objects
+	// If resources are not ready, we requeue the object
 	if ctrlutils.SafeString(stReadyCd["status"]) != "True" || ctrlutils.SafeString(gwReadyCd["status"]) != "True" {
 		logger.Info(fmt.Sprintf("[%s]\t SkySetup or SkyGateway is not ready, requeue the object in 30 seconds", loggerName))
 		// TODO: adjust the requeue time
@@ -231,22 +222,18 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	// If the Ready status of the SkySetup and SkyGateway are True,
 	// we can now check the health of the service using the monitoring data
-	// For this purpose, we only support ssh connection and
+
+	// We only support ssh connection for now and
 	// we use provider-ssh to connect to the machine and query its health
+
 	// A provider config data should be created as part of SkyGateway object
 	// and the ProviderConfig data should be available through the status field
-	// The providerConfig name is availalbe in status.gateway.providerConfig
-
-	pConfigName, err := ctrlutils.GetNestedValue(gwObj.Object, "status", "gateway", "providerConfig")
+	pConfigName, err := getProviderCfgName(gwObj)
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t unable to get providerConfig name", req.Name))
 		return ctrl.Result{}, err
 	}
-	if _, ok := pConfigName.(string); !ok {
-		logger.Info(fmt.Sprintf("[%s]\t providerConfig name is not of type string", loggerName))
-		return ctrl.Result{}, fmt.Errorf("providerConfig name is not of type string")
-	}
-	logger.Info(fmt.Sprintf("[%s]\t Script providerConfig name: [%s]", loggerName, pConfigName.(string)))
+	logger.Info(fmt.Sprintf("[%s]\t [Script] Script providerConfig name: [%s]", loggerName, pConfigName))
 	// Now we can create Script object using unstructured object
 	scObj := &unstructured.Unstructured{}
 	scObj.SetGroupVersionKind(schema.GroupVersionKind{
@@ -263,16 +250,14 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 				"sudoEnabled":       true,
 			},
 			"providerConfigRef": map[string]any{
-				"name": ctrlutils.SafeString(pConfigName),
+				"name": pConfigName,
 			},
 		}
-		logger.Info(fmt.Sprintf("[%s]\t Setting owner [%s], [%s]", loggerName, scObj.GetAPIVersion(), scObj.GetKind()))
 		// set owner reference
 		if err := ctrl.SetControllerReference(instance, scObj, r.Scheme); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t unable to set owner reference for [Script]", req.Name))
 			return ctrl.Result{}, err
 		}
-		logger.Info(fmt.Sprintf("[%s]\t Creating [Script] object...", loggerName))
 		if err := r.Create(ctx, scObj); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t unable to create Script object", req.Name))
 			return ctrl.Result{}, err
@@ -282,131 +267,96 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: 15 * time.Second}, nil
 	}
 
-	logger.Info(fmt.Sprintf("[%s]\t [Script] object already exists, checking the status", loggerName))
 	// The Script object exists, we can now check the status of the object
-	// TODO: Initially the status code does not exist, so the code will fail here
+	// Initially the status code does not exist, so the code will fail here
+	logger.Info(fmt.Sprintf("[%s]\t [Script] object already exists, checking the status", loggerName))
 	statusCode, err := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "statusCode")
 	if err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t unable to get statusCode of [Script]", req.Name))
+		// TODO: should we requeue here?
 		return ctrl.Result{}, err
 	}
-	logger.Info(fmt.Sprintf("[%s]\t statusCode: [%d]", loggerName, statusCode))
+	logger.Info(fmt.Sprintf("[%s]\t [Script] statusCode: [%d]", loggerName, statusCode))
 	stdOut, err1 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stdout")
 	stdErr, err2 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stderr")
 	if err1 != nil || err2 != nil {
 		logger.Error(err1, fmt.Sprintf("[%s]\t unable to get stdout or stderr of [Script]", req.Name))
 		return ctrl.Result{}, err1
 	}
-	// Get the condition Ready of the current object
-	objReadtCdIdx := ctrlutils.IndexOfConditionType(instance.Status.Conditions, "Ready")
-	if objReadtCdIdx == -1 {
-		// Condition does not exist, append a new Ready conditino
-		instance.Status.Conditions = append(instance.Status.Conditions, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionUnknown,
-			Reason:             "Unknown",
-			Message:            "",
-			LastTransitionTime: metav1.Time{Time: time.Now()},
-		})
-		objReadtCdIdx = ctrlutils.IndexOfConditionType(instance.Status.Conditions, "Ready")
-	}
-	objReadyCd := instance.Status.Conditions[objReadtCdIdx]
+	f, objReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "Ready")
 	// If the status code is 0, and we don't have the ready condition set to True
 	// we proceed to update the status of the current object
-	if statusCode.(int64) == 0 && objReadyCd.Status != "True" {
-		logger.Info(fmt.Sprintf("[%s]\t Script is healthy", loggerName))
-		// add a condition to the status of the current object
-		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "Ready")
-		objCond = append(objCond, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionTrue,
-			Message:            ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr),
-			Reason:             "Healthy",
-			LastTransitionTime: metav1.Time{Time: time.Now()},
-		})
-		logger.Info(fmt.Sprintf("[%s]\t Updating the status of SkySetup appending to conditions.", loggerName))
-		instance.Status.Conditions = objCond
-		if err := r.Status().Update(ctx, instance); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
-			return ctrl.Result{}, err
+	shouldUpdate = false
+	if !f {
+		shouldUpdate = true
+	} else {
+		if statusCode.(int64) == 0 && objReadyCd.Status != "True" {
+			shouldUpdate = true
 		}
-		// TODO: Do we need to delete the script?
-		// logger.Info(fmt.Sprintf("[%s]\t Script is healthy, deleting the [Script].", loggerName))
-		// Delete the script and return
-		// if err := r.Delete(ctx, scObj); err != nil {
-		// 	logger.Error(err, fmt.Sprintf("[%s]\t unable to delete Script object", req.Name))
-		// 	return ctrl.Result{}, err
-		// }
-		// TODO: We can requeue for the next iteration but we return now for simplicity
-		logger.Info(fmt.Sprintf("[%s]\t [Done].", loggerName))
-		return ctrl.Result{}, nil
+		if statusCode.(int64) != 0 && objReadyCd.Status == "True" {
+			shouldUpdate = true
+		}
 	}
-	// Only if the status code is not 0, and the current status is True we update the status
-	if statusCode.(int64) != 0 && objReadyCd.Status == "True" {
-		// Failure happened
-		// We pass the stdout and stderr to the status of the current object
-		// Increase the counter and requeue the object to check the health again
-		logger.Info(fmt.Sprintf("[%s]\t Script is not healthy StatusCode: [%d], Counter: [%d]", loggerName, statusCode.(int64), instance.Status.Retries))
-		objCond := ctrlutils.RemoveConditionByType(instance.Status.Conditions, "Ready")
-		objCond = append(objCond, metav1.Condition{
-			Type:               "Ready",
-			Status:             metav1.ConditionFalse,
-			Message:            ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr),
-			Reason:             "Unhealthy",
-			LastTransitionTime: metav1.Time{Time: time.Now()},
-		})
-		logger.Info(fmt.Sprintf("[%s]\t Updated the conditions.", loggerName))
-		instance.Status.Conditions = objCond
-		// we let the script to remain in the system, hoping that it will reconcile
-		// we wait for "retries" times before we delete the object and create it again.
-		instance.Status.Retries++
-		if err := r.Status().Update(ctx, instance); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
-			return ctrl.Result{}, err
+
+	if shouldUpdate {
+		status := metav1.ConditionTrue
+		message := ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr)
+		logger.Info(fmt.Sprintf("[%s]\t [Script] Updating the status of SkySetup appending to conditions.", loggerName))
+		tt := metav1.Time{Time: time.Now()}
+		// The service is healthy, update the status of the object and reset the `retries`
+		if statusCode.(int64) == 0 {
+			reason := "Healthy"
+			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", status, reason, message, tt)
+			instance.Status.Retries = 0
+			if err := r.Status().Update(ctx, instance); err != nil {
+				logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
+				return ctrl.Result{}, err
+			}
+			logger.Info(fmt.Sprintf("[%s]\t [Script] Script is updated and healthy", loggerName))
+			// TODO: Do we need to delete the script?
+			// TODO: Do we need to requeue for the next iteration?
+			return ctrl.Result{}, nil
 		}
-		if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
-			logger.Info(fmt.Sprintf("[%s]\t Maximum retries reached, deleting the [Script].", loggerName))
-			// We have reached the maximum number of retries
-			// we delete the object and create it again
-			if instance.Spec.Monitoring.FailureAction == "RECREATE" {
-				logger.Info(fmt.Sprintf("[%s]\t Recreating the [SkySetup] object...", loggerName))
-				// if err := r.Delete(ctx, scObj); err != nil {
-				// 	logger.Error(err, fmt.Sprintf("[%s]\t unable to delete Script object", req.Name))
-				// 	return ctrl.Result{}, err
-				// }
-				// logger.Info(fmt.Sprintf("[%s]\t Script object deleted...", loggerName))
-				// if err := r.Delete(ctx, gwObj); err != nil {
-				// 	logger.Error(err, fmt.Sprintf("[%s]\t unable to delete SkyGateway object", req.Name))
-				// 	return ctrl.Result{}, err
-				// }
-				// logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] object deleted...", loggerName))
-				// We requeue the object and try again
-				// TODO: Adjust the time
-				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		if statusCode.(int64) != 0 {
+			// Increase the counter and requeue the object to check the health again
+			reason := "Unhealthy"
+			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", status, reason, message, tt)
+			logger.Info(fmt.Sprintf("[%s]\t [Script] Script is not healthy. (StatusCode: [%d], Counter: [%d])", loggerName, statusCode.(int64), instance.Status.Retries))
+
+			// we let the script to remain in the system, hoping that it will reconcile
+			// we wait for "retries" times before we delete the object and create it again.
+			instance.Status.Retries++
+			if err := r.Status().Update(ctx, instance); err != nil {
+				logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
+				return ctrl.Result{}, err
+			}
+
+			// If we reach the maximum number of retries we delete the SkyGateway object
+			// A new object will be created in the next iteration
+			if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
+				logger.Info(fmt.Sprintf("[%s]\t [Script] Maximum retries reached, deleting the [Script].", loggerName))
+				if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
+					logger.Info(fmt.Sprintf("[%s]\t Recreating the [SkySetup] object...", loggerName))
+					// TODO: if any data should be reused, we should handle it here
+					// if err := r.Delete(ctx, scObj); err != nil {
+					// 	logger.Error(err, fmt.Sprintf("[%s]\t unable to delete Script objsect", req.Name))
+					// 	return ctrl.Result{}, err
+					// }
+					// logger.Info(fmt.Sprintf("[%s]\t Script object deleted...", loggerName))
+					// if err := r.Delete(ctx, gwObj); err != nil {
+					// 	logger.Error(err, fmt.Sprintf("[%s]\t unable to delete SkyGateway object", req.Name))
+					// 	return ctrl.Result{}, err
+					// }
+					// logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] object deleted...", loggerName))
+					// We requeue the object and try again
+					// TODO: Adjust the time
+					return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+				}
 			}
 		}
 	}
 
-	// we have created both SkySetup and SkyGateway objects or we already have them
-	// now we check the status of SkyGateway and check its health
-	// To check the status of SkyGateway, we need to consider two things:
-	//   1. The conditions of the corresponding xrd object
-	//   2. Using the monitoring data as part of "instance" object,
-	//      we should establish a monitoring connection and check the service health
-	//      For SkyGateway, the connnection should be established through ssh and the
-	//      "checkCommand" script should be executed to determine the health of the serrvice.
-
-	// To do this, we first query the conditions of xrds, and look for the Ready condition,
-	// if this condition exists, we continue to the next step.
-	// xrdStatus, err := GetNestedField(gwObj.Object, "status", "conditions")
-
-	// TO check the serivce status, we need to establish a connection to the servive.
-
-	// if both items are created we have to get the status of them
-	// we can either watch the status of the objects created, or we can
-	// requeue the current object and check the status of the objects in the next iteration
-	// I think requeueing is better, simpler and more easy to implement
-	logger.Info(fmt.Sprintf("[%s]\t Nothing to update, statusCode: [%d].", loggerName, statusCode.(int64)))
+	logger.Info(fmt.Sprintf("[%s]\t Object is updated. StatusCode: [%d].", loggerName, statusCode.(int64)))
 	return ctrl.Result{}, nil
 }
 
