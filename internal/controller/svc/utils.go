@@ -99,6 +99,16 @@ func FindInListValue(list []any, key string, value string) int {
 	return -1
 }
 
+// FindInConditionList finds the index of the given key in the list of conditions
+func FindInConditionList(list []metav1.Condition, key string) int {
+	for i, item := range list {
+		if item.Type == key {
+			return i
+		}
+	}
+	return -1
+}
+
 // generateYAMLManifest generates a string YAML manifest from the given object
 func generateYAMLManifest(obj any) (string, error) {
 	var inInterface map[string]interface{}

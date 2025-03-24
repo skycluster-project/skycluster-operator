@@ -167,44 +167,56 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] Ready condition: %v", loggerName, gwReadyCd["status"]))
 
 	// TODO: We should only update the status if the status has changed
-	// Update the status of the current object
-	// If status exists in the list of conditions remove it first
-	objCond := RemoveFromConditionListByType(instance.Status.Conditions, "ReadySkySetup")
-	objCond = RemoveFromConditionListByType(objCond, "ReadySkyGateway")
-	// Add the Ready condition of the SkySetup object
-	t := metav1.Time{}
-	if err := t.UnmarshalQueryParameter(stReadyCd["lastTransitionTime"].(string)); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
-		return ctrl.Result{}, err
-	} else {
-		objCond = append(objCond, metav1.Condition{
-			Type:               "ReadySkySetup",
-			Status:             getStatus(stReadyCd["status"]),
-			Message:            getMessage(stReadyCd["message"]),
-			Reason:             getMessage(stReadyCd["reason"]),
-			LastTransitionTime: metav1.Time{Time: t.Time},
-		})
+	objStReadyCd := FindInConditionList(instance.Status.Conditions, "ReadySkySetup")
+	objGwReadyCd := FindInConditionList(instance.Status.Conditions, "ReadySkyGateway")
+	shouldUpdate := false
+	if objStReadyCd == -1 || objGwReadyCd == -1 {
+		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist, updating the status", loggerName))
+		shouldUpdate = true
+	} else if instance.Status.Conditions[objStReadyCd].Status != getStatus(stReadyCd["status"]) ||
+		instance.Status.Conditions[objGwReadyCd].Status != getStatus(gwReadyCd["status"]) {
+		shouldUpdate = true
 	}
-	// Add the Ready condition of the SkyGateway object
-	if err := t.UnmarshalQueryParameter(gwReadyCd["lastTransitionTime"].(string)); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
-		return ctrl.Result{}, err
-	} else {
-		objCond = append(objCond, metav1.Condition{
-			Type:               "ReadySkyGateway",
-			Status:             getStatus(gwReadyCd["status"]),
-			Message:            getMessage(gwReadyCd["message"]),
-			Reason:             getMessage(gwReadyCd["reason"]),
-			LastTransitionTime: metav1.Time{Time: t.Time},
-		})
+	if shouldUpdate {
+		logger.Info(fmt.Sprintf("[%s]\t Status of the objects has changed, updating the status", loggerName))
+		// If status exists in the list of conditions remove it first
+		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "ReadySkySetup")
+		objCond = RemoveFromConditionListByType(objCond, "ReadySkyGateway")
+		// Add the Ready condition of the SkySetup object
+		t := metav1.Time{}
+		if err := t.UnmarshalQueryParameter(stReadyCd["lastTransitionTime"].(string)); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
+			return ctrl.Result{}, err
+		} else {
+			objCond = append(objCond, metav1.Condition{
+				Type:               "ReadySkySetup",
+				Status:             getStatus(stReadyCd["status"]),
+				Message:            getMessage(stReadyCd["message"]),
+				Reason:             getMessage(stReadyCd["reason"]),
+				LastTransitionTime: metav1.Time{Time: t.Time},
+			})
+		}
+		// Add the Ready condition of the SkyGateway object
+		if err := t.UnmarshalQueryParameter(gwReadyCd["lastTransitionTime"].(string)); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
+			return ctrl.Result{}, err
+		} else {
+			objCond = append(objCond, metav1.Condition{
+				Type:               "ReadySkyGateway",
+				Status:             getStatus(gwReadyCd["status"]),
+				Message:            getMessage(gwReadyCd["message"]),
+				Reason:             getMessage(gwReadyCd["reason"]),
+				LastTransitionTime: metav1.Time{Time: t.Time},
+			})
+		}
+		instance.Status.Conditions = objCond
+		// TODO: Move update status block to the end
+		if err := r.Status().Update(ctx, instance); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
+			return ctrl.Result{}, err
+		}
+		logger.Info(fmt.Sprintf("[%s]\t Updated the conditions [ReadySkySetup] and [ReadySkyGateway].", loggerName))
 	}
-	instance.Status.Conditions = objCond
-	// TODO: Move update status block to the end
-	if err := r.Status().Update(ctx, instance); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
-		return ctrl.Result{}, err
-	}
-	logger.Info(fmt.Sprintf("[%s]\t Updated the conditions [ReadySkySetup] and [ReadySkyGateway].", loggerName))
 
 	// Check the status of SkySetup and SkyGateway objects
 	if getMessage(stReadyCd["status"]) != "True" || getMessage(gwReadyCd["status"]) != "True" {
@@ -274,16 +286,33 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Error(err, fmt.Sprintf("[%s]\t unable to get statusCode of [Script]", req.Name))
 		return ctrl.Result{}, err
 	}
+	logger.Info(fmt.Sprintf("[%s]\t statusCode: [%d]", loggerName, statusCode))
 	stdOut, err1 := GetNestedValue(scObj.Object, "status", "atProvider", "stdout")
 	stdErr, err2 := GetNestedValue(scObj.Object, "status", "atProvider", "stderr")
 	if err1 != nil || err2 != nil {
 		logger.Error(err1, fmt.Sprintf("[%s]\t unable to get stdout or stderr of [Script]", req.Name))
 		return ctrl.Result{}, err1
 	}
-	if statusCode.(int64) == 0 {
+	// Get the condition Ready of the current object
+	objReadtCdIdx := FindInConditionList(instance.Status.Conditions, "Ready")
+	if objReadtCdIdx == -1 {
+		// Condition does not exist, append a new Ready conditino
+		instance.Status.Conditions = append(instance.Status.Conditions, metav1.Condition{
+			Type:               "Ready",
+			Status:             metav1.ConditionUnknown,
+			Reason:             "Unknown",
+			Message:            "",
+			LastTransitionTime: metav1.Time{Time: time.Now()},
+		})
+		objReadtCdIdx = FindInConditionList(instance.Status.Conditions, "Ready")
+	}
+	objReadyCd := instance.Status.Conditions[objReadtCdIdx]
+	// If the status code is 0, and we don't have the ready condition set to True
+	// we proceed to update the status of the current object
+	if statusCode.(int64) == 0 && objReadyCd.Status != "True" {
 		logger.Info(fmt.Sprintf("[%s]\t Script is healthy", loggerName))
 		// add a condition to the status of the current object
-		objCond = RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
+		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
 		objCond = append(objCond, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionTrue,
@@ -308,12 +337,13 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info(fmt.Sprintf("[%s]\t [Done].", loggerName))
 		return ctrl.Result{}, nil
 	}
-	if statusCode.(int64) != 0 {
+	// Only if the status code is not 0, and the current status is True we update the status
+	if statusCode.(int64) != 0 && objReadyCd.Status == "True" {
 		// Failure happened
 		// We pass the stdout and stderr to the status of the current object
 		// Increase the counter and requeue the object to check the health again
 		logger.Info(fmt.Sprintf("[%s]\t Script is not healthy StatusCode: [%d], Counter: [%d]", loggerName, statusCode.(int64), instance.Status.Retries))
-		objCond = RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
+		objCond := RemoveFromConditionListByType(instance.Status.Conditions, "Ready")
 		objCond = append(objCond, metav1.Condition{
 			Type:               "Ready",
 			Status:             metav1.ConditionFalse,
@@ -376,7 +406,7 @@ func (r *SkySetupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// we can either watch the status of the objects created, or we can
 	// requeue the current object and check the status of the objects in the next iteration
 	// I think requeueing is better, simpler and more easy to implement
-	logger.Info(fmt.Sprintf("[%s]\t Unknown service health, statusCode: [%d].", loggerName, statusCode.(int64)))
+	logger.Info(fmt.Sprintf("[%s]\t Nothing to update, statusCode: [%d].", loggerName, statusCode.(int64)))
 	return ctrl.Result{}, nil
 }
 
