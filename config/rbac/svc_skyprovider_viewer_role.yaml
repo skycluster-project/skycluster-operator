@@ -11,12 +11,12 @@ metadata:
   labels:
     app.kubernetes.io/name: skycluster-manager
     app.kubernetes.io/managed-by: kustomize
-  name: svc-skysetup-viewer-role
+  name: svc-skyprovider-viewer-role
 rules:
 - apiGroups:
   - svc.skycluster.io
   resources:
-  - skysetups
+  - skyproviders
   verbs:
   - get
   - list
@@ -24,6 +24,6 @@ rules:
 - apiGroups:
   - svc.skycluster.io
   resources:
-  - skysetups/status
+  - skyproviders/status
   verbs:
   - get

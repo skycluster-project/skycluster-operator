@@ -24,17 +24,17 @@ import (
 	// TODO (user): Add any additional imports if needed
 )
 
-var _ = Describe("SkySetup Webhook", func() {
+var _ = Describe("SkyProvider Webhook", func() {
 	var (
-		obj       *svcv1alpha1.SkySetup
-		oldObj    *svcv1alpha1.SkySetup
-		validator SkySetupCustomValidator
+		obj       *svcv1alpha1.SkyProvider
+		oldObj    *svcv1alpha1.SkyProvider
+		validator SkyProviderCustomValidator
 	)
 
 	BeforeEach(func() {
-		obj = &svcv1alpha1.SkySetup{}
-		oldObj = &svcv1alpha1.SkySetup{}
-		validator = SkySetupCustomValidator{}
+		obj = &svcv1alpha1.SkyProvider{}
+		oldObj = &svcv1alpha1.SkyProvider{}
+		validator = SkyProviderCustomValidator{}
 		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
 		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
 		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
@@ -45,7 +45,7 @@ var _ = Describe("SkySetup Webhook", func() {
 		// TODO (user): Add any teardown logic common to all tests
 	})
 
-	Context("When creating or updating SkySetup under Validating Webhook", func() {
+	Context("When creating or updating SkyProvider under Validating Webhook", func() {
 		// TODO (user): Add logic for validating webhooks
 		// Example:
 		// It("Should deny creation if a required field is missing", func() {

@@ -76,9 +76,9 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
-      path: /validate-svc-skycluster-io-v1alpha1-skysetup
+      path: /validate-svc-skycluster-io-v1alpha1-skyprovider
   failurePolicy: Fail
-  name: vskysetup-v1alpha1.kb.io
+  name: vskyprovider-v1alpha1.kb.io
   rules:
   - apiGroups:
     - svc.skycluster.io
@@ -88,5 +88,5 @@ webhooks:
     - CREATE
     - UPDATE
     resources:
-    - skysetups
+    - skyproviders
   sideEffects: None

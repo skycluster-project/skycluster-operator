@@ -109,7 +109,7 @@ resources:
   controller: true
   domain: skycluster.io
   group: svc
-  kind: SkySetup
+  kind: SkyProvider
   path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
   version: v1alpha1
   webhooks:

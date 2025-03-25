@@ -353,6 +353,18 @@ func CompareStringMap(objLabels map[string]string, labels map[string]string) boo
 	return true
 }
 
+// MergeStringMaps merges two maps and returns the result
+func MergeStringMaps(a, b map[string]string) map[string]string {
+	res := make(map[string]string)
+	for k, v := range a {
+		res[k] = v
+	}
+	for k, v := range b {
+		res[k] = v
+	}
+	return res
+}
+
 // StructToStringMap converts the given object to a map[string]string
 func StructToStringMap(obj any) map[string]string {
 	result := make(map[string]string)

@@ -15,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
 )
 
@@ -115,4 +116,75 @@ func getProviderCfgName(obj *unstructured.Unstructured) (string, error) {
 		return "", fmt.Errorf("providerConfig name is not of type string")
 	}
 	return pConfigName.(string), nil
+}
+
+// generateProviderGwSpec generates the provider gateway spec for the given provider spec
+func generateProviderGwSpec(spec svcv1alpha1.SkyProviderSpec) map[string]any {
+	forProvider := make(map[string]any)
+
+	// Gateway
+	gateway := make(map[string]any)
+	if spec.ProviderGateway.Flavor != "" {
+		gateway["flavor"] = spec.ProviderGateway.Flavor
+	}
+	if spec.ProviderGateway.PublicKey != "" {
+		gateway["publicKey"] = spec.ProviderGateway.PublicKey
+	}
+	if len(gateway) > 0 {
+		forProvider["gateway"] = gateway
+	}
+
+	// Overlay
+	overlay := make(map[string]any)
+	if spec.ProviderGateway.Overlay.Host != "" {
+		overlay["host"] = spec.ProviderGateway.Overlay.Host
+	}
+	if spec.ProviderGateway.Overlay.Port != 0 {
+		overlay["port"] = spec.ProviderGateway.Overlay.Port
+	}
+	if spec.ProviderGateway.Overlay.Token != "" {
+		overlay["token"] = spec.ProviderGateway.Overlay.Token
+	}
+	if len(overlay) > 0 {
+		forProvider["overlay"] = overlay
+	}
+
+	// ProviderRef
+	providerRef := make(map[string]any)
+	if spec.ProviderRef.ProviderName != "" {
+		providerRef["providerName"] = spec.ProviderRef.ProviderName
+	}
+	if spec.ProviderRef.ProviderType != "" {
+		providerRef["providerType"] = spec.ProviderRef.ProviderType
+	}
+	if spec.ProviderRef.ProviderZone != "" {
+		providerRef["providerZone"] = spec.ProviderRef.ProviderZone
+	}
+	if spec.ProviderRef.ProviderRegion != "" {
+		providerRef["providerRegion"] = spec.ProviderRef.ProviderRegion
+	}
+
+	return map[string]any{
+		"forProvider": forProvider,
+		"providerRef": providerRef,
+	}
+}
+
+// addDefaultLabels return the default skycluster labels
+func addDefaultLabels(providerSpec corev1alpha1.ProviderRefSpec) map[string]string {
+	labels := make(map[string]string)
+	if providerSpec.ProviderName != "" {
+		labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = providerSpec.ProviderName
+	}
+	if providerSpec.ProviderRegion != "" {
+		labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = providerSpec.ProviderRegion
+	}
+	if providerSpec.ProviderZone != "" {
+		labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = providerSpec.ProviderZone
+	}
+	if providerSpec.ProviderType != "" {
+		labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL] = providerSpec.ProviderType
+	}
+	labels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+	return labels
 }

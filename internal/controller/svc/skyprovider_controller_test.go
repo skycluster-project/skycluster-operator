@@ -30,7 +30,7 @@ import (
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
 )
 
-var _ = Describe("SkySetup Controller", func() {
+var _ = Describe("SkyProvider Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,13 +40,13 @@ var _ = Describe("SkySetup Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		skysetup := &svcv1alpha1.SkySetup{}
+		skyprovider := &svcv1alpha1.SkyProvider{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind SkySetup")
-			err := k8sClient.Get(ctx, typeNamespacedName, skysetup)
+			By("creating the custom resource for the Kind SkyProvider")
+			err := k8sClient.Get(ctx, typeNamespacedName, skyprovider)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &svcv1alpha1.SkySetup{
+				resource := &svcv1alpha1.SkyProvider{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,16 +59,16 @@ var _ = Describe("SkySetup Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &svcv1alpha1.SkySetup{}
+			resource := &svcv1alpha1.SkyProvider{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance SkySetup")
+			By("Cleanup the specific resource instance SkyProvider")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &SkySetupReconciler{
+			controllerReconciler := &SkyProviderReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

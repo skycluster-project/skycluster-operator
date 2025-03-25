@@ -93,7 +93,7 @@ rules:
   resources:
   - skyapps
   - skyk8s
-  - skysetups
+  - skyproviders
   verbs:
   - create
   - delete
@@ -107,7 +107,7 @@ rules:
   resources:
   - skyapps/finalizers
   - skyk8s/finalizers
-  - skysetups/finalizers
+  - skyproviders/finalizers
   verbs:
   - update
 - apiGroups:
@@ -115,7 +115,7 @@ rules:
   resources:
   - skyapps/status
   - skyk8s/status
-  - skysetups/status
+  - skyproviders/status
   verbs:
   - get
   - patch

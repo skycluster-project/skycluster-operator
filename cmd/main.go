@@ -312,17 +312,17 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
 		os.Exit(1)
 	}
-	if err = (&svccontroller.SkySetupReconciler{
+	if err = (&svccontroller.SkyProviderReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkySetup")
+		setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
 		os.Exit(1)
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhooksvcv1alpha1.SetupSkySetupWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "SkySetup")
+		if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
 			os.Exit(1)
 		}
 	}

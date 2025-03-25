@@ -1,5 +1,5 @@
 apiVersion: svc.skycluster.io/v1alpha1
-kind: SkySetup
+kind: SkyProvider
 metadata:
   name: skysetup-zone-1-test
   labels:
@@ -8,10 +8,14 @@ metadata:
     skycluster.io/ext-SubnetV2-networking-v1alpha1: ext-net
     skycluster.io/managed-by: skycluster
 spec: 
-  forProvider:
+  providerGateway:
     vpcCidr: 10.10.1.0/24
-    gateway:
-      flavor: 8vCPU-32GB
+    flavor: 8vCPU-32GB
+    # overlay:
+    #   host: 
+    #   port:
+    #   token:
+    # publicKey: ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDQz3
   monitoring:
     protocol: ssh
     checkCommand: |
@@ -19,7 +23,7 @@ spec:
       exit 0
     failureAction: recreate
     schedule:
-      retries: 5
+      retries: 10
       interval: 15
   providerRef:
     providerName: os

@@ -22,9 +22,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- svc_skysetup_admin_role.yaml
-- svc_skysetup_editor_role.yaml
-- svc_skysetup_viewer_role.yaml
+- svc_skyprovider_admin_role.yaml
+- svc_skyprovider_editor_role.yaml
+- svc_skyprovider_viewer_role.yaml
 - svc_skyapp_admin_role.yaml
 - svc_skyapp_editor_role.yaml
 - svc_skyapp_viewer_role.yaml

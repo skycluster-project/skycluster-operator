@@ -21,22 +21,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type GatewaySpec struct {
-	Flavor    string `json:"flavor,omitempty"`
-	PublicKey string `json:"publicKey,omitempty"`
-	PrivateIP string `json:"privateIP,omitempty"`
-	PublicIP  string `json:"publicIP,omitempty"`
-}
-
 type OverlaySpec struct {
 	Host  string `json:"host"`
 	Port  int    `json:"port"`
 	Token string `json:"token"`
 }
 
-type SkySetupParameters struct {
-	// Gateway is the gateway configuration for the provider
-	Gateway GatewaySpec `json:"gateway,omitempty"`
+type ProviderGatewaySpec struct {
+	Flavor    string `json:"flavor,omitempty"`
+	PublicKey string `json:"publicKey,omitempty"`
+	PrivateIP string `json:"privateIP,omitempty"`
+	PublicIP  string `json:"publicIP,omitempty"`
 	// Overlay is the overlay server configuration
 	Overlay OverlaySpec `json:"overlay,omitempty"`
 	// VpcCidr is the main CIDR block for the provider and its gateway
@@ -46,44 +41,41 @@ type SkySetupParameters struct {
 	VpcCidr string `json:"vpcCidr"`
 }
 
-// SkySetupSpec defines the desired state of SkySetup.
-type SkySetupSpec struct {
-	ForProvider SkySetupParameters `json:"forProvider"`
-	// ProviderRef is the reference to the provider that this VM should be deployed to
-	ProviderRef corev1alpha1.ProviderRefSpec `json:"providerRef"`
-	// Monitoring is the monitoring configuration for the provider
-	Monitoring MonitoringSpec `json:"monitoring,omitempty"`
+// SkyProviderSpec defines the desired state of SkyProvider.
+type SkyProviderSpec struct {
+	ProviderGateway ProviderGatewaySpec          `json:"providerGateway"`
+	ProviderRef     corev1alpha1.ProviderRefSpec `json:"providerRef"`
+	Monitoring      MonitoringSpec               `json:"monitoring,omitempty"`
 }
 
-// SkySetupStatus defines the observed state of SkySetup.
-type SkySetupStatus struct {
-	// Conditions is an array of current conditions
-	Conditions  []metav1.Condition `json:"conditions,omitempty"`
-	ForProvider SkySetupParameters `json:"forProvider,omitempty"`
-	Retries     int                `json:"retries,omitempty"`
+// SkyProviderStatus defines the observed state of SkyProvider.
+type SkyProviderStatus struct {
+	Conditions      []metav1.Condition  `json:"conditions,omitempty"`
+	ProviderGateway ProviderGatewaySpec `json:"providerGateway,omitempty"`
+	Retries         int                 `json:"retries,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// SkySetup is the Schema for the skysetups API.
-type SkySetup struct {
+// SkyProvider is the Schema for the skyproviders API.
+type SkyProvider struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   SkySetupSpec   `json:"spec,omitempty"`
-	Status SkySetupStatus `json:"status,omitempty"`
+	Spec   SkyProviderSpec   `json:"spec,omitempty"`
+	Status SkyProviderStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 
-// SkySetupList contains a list of SkySetup.
-type SkySetupList struct {
+// SkyProviderList contains a list of SkyProvider.
+type SkyProviderList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SkySetup `json:"items"`
+	Items           []SkyProvider `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SkySetup{}, &SkySetupList{})
+	SchemeBuilder.Register(&SkyProvider{}, &SkyProviderList{})
 }
