@@ -353,6 +353,16 @@ func CompareStringMap(objLabels map[string]string, labels map[string]string) boo
 	return true
 }
 
+// StringInSlice returns true if the given string is in the list
+func StringInSlice(s string, list []string) bool {
+	for _, item := range list {
+		if item == s {
+			return true
+		}
+	}
+	return false
+}
+
 // MergeStringMaps merges two maps and returns the result
 func MergeStringMaps(a, b map[string]string) map[string]string {
 	res := make(map[string]string)

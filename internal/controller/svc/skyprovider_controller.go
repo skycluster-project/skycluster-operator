@@ -41,7 +41,6 @@ package svc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -60,6 +59,10 @@ import (
 	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
 )
 
+// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders/finalizers,verbs=update
+
 // SkyProviderReconciler reconciles a SkyProvider object
 type SkyProviderReconciler struct {
 	client.Client
@@ -68,17 +71,13 @@ type SkyProviderReconciler struct {
 
 var (
 	// SyncPeriodDefault is the default time period (5m) for requeueing the object
-	SyncPeriodDefault = 5 * time.Minute
+	SyncPeriodDefault = 2 * time.Minute
 	// SyncPeriodHealthCheck is the default time period (10s) for requeueing the object
 	// when the object has been created and we are checking the health of the service
 	SyncPeriodHealthCheck = 10 * time.Second
 	// SyncPeriodRequeue is the default time period (1s) for requeueing the object
 	SyncPeriodRequeue = 1 * time.Second
 )
-
-// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders/finalizers,verbs=update
 
 func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -94,30 +93,19 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	dep := map[string]map[string]string{
+		"skysetup":   {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkySetup"},
+		"skygateway": {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkyGateway"},
+	}
+
 	// Create the SkyGateway object
 	stObj := &unstructured.Unstructured{}
 	stObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "SkySetup",
+		Group: dep["skysetup"]["group"], Version: dep["skysetup"]["version"], Kind: dep["skysetup"]["kind"],
 	})
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: instance.Name}, stObj); err != nil {
-		// if the SkySetup object does not exist, we create it
-		logger.Info(fmt.Sprintf("[%s]\t unable to fetch [SkySetup], creating a new one.", req.Name))
-		stObj.SetName(instance.Name)
-		stObj.SetNamespace(instance.Namespace)
-		stObj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
-		stObj.Object["spec"] = map[string]any{
-			"forProvider": map[string]string{
-				"vpcCidr": instance.Spec.ProviderGateway.VpcCidr,
-			},
-			"providerRef": instance.Spec.ProviderRef,
-		}
-		// set owner reference
-		if err := ctrl.SetControllerReference(instance, stObj, r.Scheme); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to set owner reference for [SkySetup]", req.Name))
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, stObj); client.IgnoreAlreadyExists(err) != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to create [SkySetup]", req.Name))
+		if err := r.createSkySetup(instance, stObj); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to create SkySetup", loggerName))
 			return ctrl.Result{}, err
 		}
 		logger.Info(fmt.Sprintf("[%s]\t [SkySetup] created, requeue the object.", req.Name))
@@ -127,20 +115,11 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// Fetch the SkyGateway instance
 	gwObj := &unstructured.Unstructured{}
 	gwObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "SkyGateway",
+		Group: dep["skygw"]["group"], Version: dep["skygw"]["version"], Kind: dep["skygw"]["kind"],
 	})
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: instance.Name}, gwObj); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t unable to fetch [SkyGateway], creating a new one", req.Name))
-		gwObj.SetName(instance.Name)
-		gwObj.SetNamespace(instance.Namespace)
-		gwObj.SetLabels(instance.Labels)
-		gwObj.Object["spec"] = generateProviderGwSpec(instance.Spec)
-		if err := ctrl.SetControllerReference(instance, gwObj, r.Scheme); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to set owner reference for [SkyGateway]", req.Name))
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, gwObj); client.IgnoreAlreadyExists(err) != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to create [SkyGateway]", req.Name))
+		if err := r.createSkyGateway(instance, gwObj); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to create SkyGateway", loggerName))
 			return ctrl.Result{}, err
 		}
 		logger.Info(fmt.Sprintf("[%s]\t [SkyGateway] created, requeue the object.", req.Name))
@@ -149,78 +128,29 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// At these stage we have both objects and we can check their status
 	// we update the status of the current object to whatever the status of the both objects are
-	// This step is not necessary, but it is good to provider the user with the status of the dependency objects
 	logger.Info(fmt.Sprintf("[%s]\t [SkySetup] and [SkyGateway] already exist, updating the status [%s]", loggerName, req.Name))
-	f1, stReadyCd, err1 := ctrlutils.GetUnstructuredConditionByType(stObj, "Ready")
-	f2, gwReadyCd, err2 := ctrlutils.GetUnstructuredConditionByType(gwObj, "Ready")
-	if err1 != nil || err2 != nil {
-		logger.Error(errors.Join(err1, err2), fmt.Sprintf("[%s]\t unable to get Ready condition", req.Name))
-		// There is a problem with either of these objects, we requeue the object hoping
-		// their status will be updated in the next iteration
-		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, errors.Join(err1, err2)
+	objCds1, err1 := updateCondition(instance, stObj, "Ready", "ReadySkySetup")
+	if err1 != nil {
+		logger.Error(err1, fmt.Sprintf("[%s]\t unable to update Ready condition of SkySetup", req.Name))
+		return ctrl.Result{}, err1
 	}
-	if !f1 {
-		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist for SkySetup", loggerName))
-		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkySetup", metav1.ConditionUnknown, "Unknown", "SkySetup services is not ready", metav1.Now())
+	instance.Status.Conditions = *objCds1
+	objCds2, err2 := updateCondition(instance, gwObj, "Ready", "ReadySkyGateway")
+	if err2 != nil {
+		logger.Error(err2, fmt.Sprintf("[%s]\t unable to update Ready condition of SkyGateway", req.Name))
+		return ctrl.Result{}, err2
 	}
-	if !f2 {
-		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist for SkyGateway", loggerName))
-		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkyGateway", metav1.ConditionUnknown, "Unknown", "SkyGateway services is not ready", metav1.Now())
-	}
-	if !f1 || !f2 {
-		// set the condition of the current object to Unknown and requeue
-		instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionUnknown, "Unknown", "Dependent services are not ready", metav1.Now())
-		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
+	instance.Status.Conditions = *objCds2
+	if err := r.Status().Update(ctx, instance); err != nil {
+		logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
+		return ctrl.Result{}, err
 	}
 
-	// We should only update the status if the status has changed
-	f1, objStReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "ReadySkySetup")
-	f2, objGwReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "ReadySkyGateway")
-	shouldUpdate := false
-	if !f1 || !f2 {
-		logger.Info(fmt.Sprintf("[%s]\t Ready condition does not exist, updating the status", loggerName))
-		shouldUpdate = true
-	}
-	// If both conditions exist, we check if the status has changed
-	if f1 && f2 {
-		if objStReadyCd.Status != ctrlutils.ParseConditionStatus(stReadyCd["status"]) ||
-			objGwReadyCd.Status != ctrlutils.ParseConditionStatus(gwReadyCd["status"]) {
-			shouldUpdate = true
-		}
-	}
-	if shouldUpdate {
-		logger.Info(fmt.Sprintf("[%s]\t Status of the objects has changed, updating the status", loggerName))
-		// Add the Ready condition of the SkySetup object
-		t := metav1.Time{}
-		if err := t.UnmarshalQueryParameter(stReadyCd["lastTransitionTime"].(string)); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
-			return ctrl.Result{}, err
-		} else {
-			status := ctrlutils.ParseConditionStatus(stReadyCd["status"])
-			message := ctrlutils.SafeString(stReadyCd["message"])
-			reason := ctrlutils.SafeString(stReadyCd["reason"])
-			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkySetup", status, reason, message, t)
-		}
-		// Add the Ready condition of the SkyGateway object
-		if err := t.UnmarshalQueryParameter(gwReadyCd["lastTransitionTime"].(string)); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to unmarshal lastTransitionTime", req.Name))
-			return ctrl.Result{}, err
-		} else {
-			status := ctrlutils.ParseConditionStatus(gwReadyCd["status"])
-			message := ctrlutils.SafeString(gwReadyCd["message"])
-			reason := ctrlutils.SafeString(gwReadyCd["reason"])
-			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "ReadySkyGateway", status, reason, message, t)
-		}
-		if err := r.Status().Update(ctx, instance); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
-			return ctrl.Result{}, err
-		}
-		logger.Info(fmt.Sprintf("[%s]\t Updated the conditions [ReadySkySetup] and [ReadySkyGateway].", loggerName))
-	}
-
-	// Check the status of SkySetup and SkyGateway objects
-	// If resources are not ready, we requeue the object
-	if ctrlutils.SafeString(stReadyCd["status"]) != "True" || ctrlutils.SafeString(gwReadyCd["status"]) != "True" {
+	// If both ReadySkySetup and ReadySkyGateway are ready, we proceed
+	cds := instance.Status.Conditions
+	condReadySkyS := ctrlutils.GetTypedConditionStatus(cds, "ReadySkySetup")
+	condReadySkyG := ctrlutils.GetTypedConditionStatus(cds, "ReadySkyGateway")
+	if *condReadySkyS != "True" || *condReadySkyG != "True" {
 		logger.Info(fmt.Sprintf("[%s]\t SkySetup or SkyGateway is not ready, requeue the object", loggerName))
 		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
 	}
@@ -232,43 +162,10 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// A provider config data should be created as part of SkyGateway object
 	// and the ProviderConfig data should be available through the status field
 	// Since the dependency services are ready, we expect providerConfigName to be available
-	pConfigName, err := getProviderCfgName(gwObj)
+	scObj, err := r.getCreateScriptObject(instance, gwObj, req.NamespacedName)
 	if err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t unable to get providerConfig name", req.Name))
+		logger.Error(err, fmt.Sprintf("[%s]\t unable to create Script object", req.Name))
 		return ctrl.Result{}, err
-	}
-	logger.Info(fmt.Sprintf("[%s]\t [Script] Script providerConfig name: [%s]", loggerName, pConfigName))
-	// Now we can create Script object using unstructured object
-	scObj := &unstructured.Unstructured{}
-	scObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "Script",
-	})
-	if err := r.Get(ctx, req.NamespacedName, scObj); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t unable to fetch [Script], creating one.", req.Name))
-		scObj.SetName(instance.Name)
-		scObj.SetNamespace(req.Namespace)
-		scObj.SetLabels(instance.Labels)
-		scObj.Object["spec"] = map[string]any{
-			"forProvider": map[string]any{
-				"statusCheckScript": instance.Spec.Monitoring.CheckCommand,
-				"sudoEnabled":       true,
-			},
-			"providerConfigRef": map[string]any{
-				"name": pConfigName,
-			},
-		}
-		// set owner reference
-		if err := ctrl.SetControllerReference(instance, scObj, r.Scheme); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to set owner reference for [Script]", req.Name))
-			return ctrl.Result{}, err
-		}
-		if err := r.Create(ctx, scObj); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t unable to create Script object", req.Name))
-			return ctrl.Result{}, err
-		}
-		// TODO: adjust the time
-		logger.Info(fmt.Sprintf("[%s]\t [Script] created, requeue the object in 15 seconds", loggerName))
-		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
 	}
 
 	// The Script object exists, we can now check the status of the object
@@ -276,12 +173,12 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	// we also need to check the Sync and Ready conditions of the object.
 	// The provider-ssh provider set both the conditions to False if the object
 	// is not ready, not accessible, or the script has not been executed for some reason
-	// We first check the Ready condition, we proceed to increase the retries counter
-	// if the script is not Ready. If the script is Ready, we check the statusCode
-	// and proceed with the retries counter incrementation.
+	// We first check the Ready condition and we increase the retries counter
+	// if the script is not Ready. If the script is Ready we reset retries counter,
+	// and we check the statusCode and proceed with the retries counter incrementation.
 
 	logger.Info(fmt.Sprintf("[%s]\t [Script] object already exists, checking the status", loggerName))
-	found, readyCd, err := ctrlutils.GetUnstructuredConditionByType(scObj, "Ready")
+	found, scReadyCd, err := ctrlutils.GetUnstructuredConditionByType(scObj, "Ready")
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t unable to get Ready condition of [Script]", loggerName))
 		return ctrl.Result{}, err
@@ -293,14 +190,20 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	// Now if the Ready condition exists, we should have it set to True, otherwise
+	// Now if the Ready condition of Script exists, we should have it set to True, otherwise
 	// the service may not be reachable or somehting is wrong with the object
 	// and as a result we cannot connect and execute the script
-	if readyCd["status"] != "True" {
-		logger.Info(fmt.Sprintf("[%s]\t [Script] is not ready, requeue the object", loggerName))
-		err := r.incrementRetriesAndDelete(instance, scObj, gwObj)
-		if err != nil {
-			return ctrl.Result{}, fmt.Errorf("[%s]\t unable to increment retries and delete the objects: %v", loggerName, err)
+	if scReadyCd["status"] != "True" {
+		// We should further check the Reason of the condition, some errors that causes "Ready" condition
+		// to be false, should not be considered as a reason for requeuing the object
+		reasons := []string{"Unreachable", "ExecuteError", "ExecuteUnknown"}
+		if ctrlutils.StringInSlice(ctrlutils.SafeString(scReadyCd["reason"]), reasons) {
+			logger.Info(fmt.Sprintf("[%s]\t [Script] is not ready, Retries: [%d]/[%d]", loggerName, instance.Status.Retries, instance.Spec.Monitoring.Schedule.Retries))
+			setConditionNotReady(instance, ctrlutils.SafeString(scReadyCd["reason"]), "Script is not ready")
+			err := r.incrementRetriesAndDelete(instance, scObj, gwObj)
+			if err != nil {
+				return ctrl.Result{}, fmt.Errorf("[%s]\t unable to increment retries and delete the objects: %v", loggerName, err)
+			}
 		}
 		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
 	}
@@ -310,84 +213,105 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	instance.Status.Retries = 0
 	// Initially the status code does not exist, we have to wait for the script to be executed
 	// Consequently the code will fail here
-	statusCode, err := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "statusCode")
+	statusCode, stdOut, stdErr, err := getScriptData(scObj)
 	if err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t unable to get statusCode of [Script]", req.Name))
-		// We have to return nil as error since returning error will requeue the object
-		// with exponential backoff.
-		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
+		logger.Info(fmt.Sprintf("[%s]\t unable to get status code of [Script]: %v", loggerName, err))
+		return ctrl.Result{}, err
 	}
-	logger.Info(fmt.Sprintf("[%s]\t [Script] statusCode: [%d]", loggerName, statusCode))
-
-	stdOut, err1 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stdout")
-	stdErr, err2 := ctrlutils.GetNestedValue(scObj.Object, "status", "atProvider", "stderr")
-	if err1 != nil || err2 != nil {
-		logger.Error(errors.Join(err1, err2), fmt.Sprintf("[%s]\t unable to get stdout or stderr of [Script]", req.Name))
-		return ctrl.Result{}, errors.Join(err1, err2)
-	}
-
-	shouldUpdate = r.determineShouldUpdate(instance, statusCode.(int64))
+	shouldUpdate := determineShouldUpdate(instance, statusCode)
 	if shouldUpdate {
 		logger.Info(fmt.Sprintf("[%s]\t [Script] Updating the status of SkyProvider", loggerName))
-		message := ctrlutils.SafeString(stdOut) + ctrlutils.SafeString(stdErr)
-		if statusCode.(int64) != 0 {
-			logger.Info(fmt.Sprintf("[%s]\t [Script] Script is not healthy. (StatusCode: [%d], Counter: [%d])", loggerName, statusCode.(int64), instance.Status.Retries))
-			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionFalse, "Unhealthy", message, metav1.Now())
-
+		message := stdOut + stdErr
+		if statusCode != 0 {
+			setConditionNotReady(instance, "Unhealthy", message)
 			// we let the script to remain in the system, hoping that it will reconcile
 			// we wait for "retries" times before we delete the object and create it again.
-
-			// If we reach the maximum number of retries we delete the SkyGateway object
-			// A new object will be created in the next iteration
+			// If we reach the maximum number of retries we delete the SkyGateway object a new object
+			// will be created in the next iteration.
 			// We should be very careful about this step, and only proceed if the dependency
 			// objects are reported to be Ready. Type of issues that may not reported by
 			// the objects itself, like memory failure is handled here. Deleting a SkyGateway
 			// for example is detected at the Manage Resource level and the object is
 			// recreated by provider's controller. So a careful composition design is required
+			logger.Info(fmt.Sprintf("[%s]\t Retries: [%d]/[%d]", loggerName, instance.Status.Retries, instance.Spec.Monitoring.Schedule.Retries))
 			if err := r.incrementRetriesAndDelete(instance, scObj, gwObj); err != nil {
-				return ctrl.Result{}, err
+				// Immediately requeuing the object will cause a new object to be created
+				// and often a conflict will occur between the object that is being deleted
+				// and the new object that is being created. We should wait for a while
+				return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, err
 			}
 		}
 		// The service is healthy, update the status of the object and reset the `retries`
-		if statusCode.(int64) == 0 {
-			instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionTrue, "Healthy", message, metav1.Now())
+		if statusCode == 0 {
+			setConditionReady(instance, "Healthy", message)
 			instance.Status.Retries = 0
-			if err := r.Status().Update(ctx, instance); err != nil {
-				logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
-				return ctrl.Result{}, err
-			}
 			logger.Info(fmt.Sprintf("[%s]\t [Script] Script is updated and healthy", loggerName))
-			return ctrl.Result{RequeueAfter: SyncPeriodDefault}, nil
 		}
-
+		if err := r.Status().Update(ctx, instance); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t unable to update status of SkySetup", req.Name))
+			return ctrl.Result{}, err
+		}
 	}
 
-	logger.Info(fmt.Sprintf("[%s]\t Object is updated. StatusCode: [%d].", loggerName, statusCode.(int64)))
+	logger.Info(fmt.Sprintf("[%s]\t Object is updated. StatusCode: [%d].", loggerName, statusCode))
 	return ctrl.Result{RequeueAfter: SyncPeriodDefault}, nil
 }
 
-// incrementRetriesAndDelete increments the retries counter and delete the list of objects
-// if the retries counter is greater than the maximum number of retries
-func (r *SkyProviderReconciler) incrementRetriesAndDelete(instance *svcv1alpha1.SkyProvider, objs ...*unstructured.Unstructured) error {
-	instance.Status.Retries++
-	if err := r.Status().Update(context.Background(), instance); err != nil {
-		return err
+// getScriptData gets the status code, stdout, and stderr of the Script object
+func getScriptData(obj *unstructured.Unstructured) (int64, string, string, error) {
+	statusCode, err := ctrlutils.GetNestedValue(obj.Object, "status", "atProvider", "statusCode")
+	if err != nil {
+		return -1, "", "", fmt.Errorf("unable to get statusCode of [Script]: %v", err)
 	}
-	if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
-		if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
-			// TODO: if any data should be reused, we should handle it here
-			// Delete the list of objects
-			for _, obj := range objs {
-				if err := r.Delete(context.Background(), obj); err != nil {
-					return err
-				}
-			}
-		}
+	statusCodeInt, ok := statusCode.(int64)
+	if !ok {
+		return -1, "", "", fmt.Errorf("statusCode is not int64: %v", statusCode)
 	}
-	return nil
+	stdOut, err := ctrlutils.GetNestedValue(obj.Object, "status", "atProvider", "stdout")
+	if err != nil {
+		return -1, "", "", fmt.Errorf("unable to get stdout of [Script]: %v", err)
+	}
+	stdErr, err := ctrlutils.GetNestedValue(obj.Object, "status", "atProvider-", "stderr")
+	if err != nil {
+		return -1, "", "", fmt.Errorf("unable to get stderr of [Script]: %v", err)
+	}
+	return statusCodeInt, ctrlutils.SafeString(stdOut), ctrlutils.SafeString(stdErr), nil
 }
 
-func (r *SkyProviderReconciler) determineShouldUpdate(instance *svcv1alpha1.SkyProvider, statusCode int64) bool {
+func setConditionReady(instance *svcv1alpha1.SkyProvider, conditionReason, conditionMessage string) {
+	instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionTrue, conditionReason, conditionMessage, metav1.Now())
+}
+
+func setConditionNotReady(instance *svcv1alpha1.SkyProvider, conditionReason, conditionMessage string) {
+	instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionFalse, conditionReason, conditionMessage, metav1.Now())
+}
+
+// updateCondition updates the condition `conditionTargetName` of the object
+// based on the condition `conditionName` of the given object `obj`
+func updateCondition(instance *svcv1alpha1.SkyProvider, obj *unstructured.Unstructured, conditionName, conditionTargetName string) (*[]metav1.Condition, error) {
+	f1, objCd, err := ctrlutils.GetUnstructuredConditionByType(obj, conditionName)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get Ready condition: %v", err)
+	}
+	if !f1 {
+		instance.Status.Conditions = ctrlutils.SetTypedCondition(
+			instance.Status.Conditions, conditionTargetName,
+			metav1.ConditionFalse,
+			svcv1alpha1.ReasonServiceNotReady,
+			"services is not ready",
+			metav1.Now())
+	} else {
+		instance.Status.Conditions = ctrlutils.SetTypedCondition(
+			instance.Status.Conditions, conditionTargetName,
+			ctrlutils.ParseConditionStatus(objCd["status"]),
+			ctrlutils.SafeString(objCd["reason"]),
+			ctrlutils.SafeString(objCd["message"]),
+			metav1.Now())
+	}
+	return &instance.Status.Conditions, nil
+}
+
+func determineShouldUpdate(instance *svcv1alpha1.SkyProvider, statusCode int64) bool {
 	f, objReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "Ready")
 	// If  we don't have the ready condition set to True
 	// or not updated according to the status code
@@ -403,6 +327,101 @@ func (r *SkyProviderReconciler) determineShouldUpdate(instance *svcv1alpha1.SkyP
 		}
 	}
 	return false
+}
+
+// incrementRetriesAndDelete increments the retries counter and delete the list of objects
+// if the retries counter is greater than the maximum number of retries
+func (r *SkyProviderReconciler) incrementRetriesAndDelete(instance *svcv1alpha1.SkyProvider, objs ...*unstructured.Unstructured) error {
+	instance.Status.Retries++
+	if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
+		if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
+			// if any data should be reused, we should handle it here
+			// Delete the list of objects
+			for _, obj := range objs {
+				if err := r.Delete(context.Background(), obj); err != nil {
+					return err
+				}
+			}
+		}
+		// Reset the retries counter
+		instance.Status.Retries = 0
+	}
+	if err := r.Status().Update(context.Background(), instance); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *SkyProviderReconciler) getCreateScriptObject(instance *svcv1alpha1.SkyProvider, obj *unstructured.Unstructured, reqNsN types.NamespacedName) (*unstructured.Unstructured, error) {
+	pConfigName, err := getProviderCfgName(obj)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get providerConfig name: %v", err)
+	}
+	// Now we can create Script object using unstructured object
+	scObj := &unstructured.Unstructured{}
+	scObj.SetGroupVersionKind(schema.GroupVersionKind{
+		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "Script",
+	})
+	if err := r.Get(context.Background(), reqNsN, scObj); err != nil {
+		scObj.SetName(instance.Name)
+		scObj.SetNamespace(instance.Namespace)
+		scObj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
+		scObj.Object["spec"] = map[string]any{
+			"forProvider": map[string]any{
+				"statusCheckScript": instance.Spec.Monitoring.CheckCommand,
+				"sudoEnabled":       true,
+			},
+			"providerConfigRef": map[string]any{
+				"name": pConfigName,
+			},
+		}
+		// set owner reference
+		if err := r.setOwnerandCreate(scObj, instance); err != nil {
+			return nil, fmt.Errorf("unable to create Script object: %v", err)
+		}
+		return scObj, nil
+	}
+	return scObj, nil
+}
+
+// setOwnerandCreate sets the owner reference and creates the object
+func (r *SkyProviderReconciler) setOwnerandCreate(obj *unstructured.Unstructured, instance *svcv1alpha1.SkyProvider) error {
+	// set owner reference
+	if err := ctrl.SetControllerReference(instance, obj, r.Scheme); err != nil {
+		return fmt.Errorf("unable to set owner reference for object: %v", err)
+	}
+	if err := r.Create(context.Background(), obj); client.IgnoreAlreadyExists(err) != nil {
+		return fmt.Errorf("unable to create object: %v", err)
+	}
+	return nil
+}
+
+// createSkySetup creates the SkySetup object
+func (r *SkyProviderReconciler) createSkySetup(instance *svcv1alpha1.SkyProvider, obj *unstructured.Unstructured) error {
+	obj.SetName(instance.Name)
+	obj.SetNamespace(instance.Namespace)
+	obj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
+	obj.Object["spec"] = map[string]any{
+		"forProvider": map[string]string{
+			"vpcCidr": instance.Spec.ProviderGateway.VpcCidr,
+		},
+		"providerRef": instance.Spec.ProviderRef,
+	}
+	if err := r.setOwnerandCreate(obj, instance); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *SkyProviderReconciler) createSkyGateway(instance *svcv1alpha1.SkyProvider, obj *unstructured.Unstructured) error {
+	obj.SetName(instance.Name)
+	obj.SetNamespace(instance.Namespace)
+	obj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
+	obj.Object["spec"] = generateProviderGwSpec(instance.Spec)
+	if err := r.setOwnerandCreate(obj, instance); err != nil {
+		return err
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
