@@ -94,8 +94,8 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	dep := map[string]map[string]string{
-		"skysetup":   {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkySetup"},
-		"skygateway": {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkyGateway"},
+		"skysetup": {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkySetup"},
+		"skygw":    {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkyGateway"},
 	}
 
 	// Create the SkyGateway object
@@ -170,24 +170,24 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	// The Script object exists, we can now check the status of the object
 	// In addition to statusCode which shows the result of status-check code execution,
-	// we also need to check the Sync and Ready conditions of the object.
-	// The provider-ssh provider set both the conditions to False if the object
-	// is not ready, not accessible, or the script has not been executed for some reason
-	// We first check the Ready condition and we increase the retries counter
-	// if the script is not Ready. If the script is Ready we reset retries counter,
-	// and we check the statusCode and proceed with the retries counter incrementation.
+	// we also need to check the special `ScriptExecuted` condition of the object.
+	// The provider-ssh provider sets this condition to True if the remote script
+	// is executed successfully and set the `statusCode` to the returned status code.
+	// We first check the `ScriptExecuted` condition and we increase the retries counter
+	// if the reason for this condition falls within the given set.
+	// If the condition is set to True we reset retries counter, and then
+	// and we check the statusCode.
 
 	logger.Info(fmt.Sprintf("[%s]\t [Script] object already exists, checking the status", loggerName))
-	found, scReadyCd, err := ctrlutils.GetUnstructuredConditionByType(scObj, "Ready")
+	found, scReadyCd, err := ctrlutils.GetUnstructuredConditionByType(scObj, "ScriptExecuted")
 	if err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t unable to get Ready condition of [Script]", loggerName))
+		logger.Info(fmt.Sprintf("[%s]\t unable to get (ScriptExecuted) condition of [Script]", loggerName))
 		return ctrl.Result{}, err
 	}
 	if !found {
 		// If ready condition is not found, something is wronge with the object and
 		// I don't expect it to be ready without human intervention, so we just return
-		err := fmt.Errorf("[%s]\t Ready condition does not exist for [Script]", loggerName)
-		return ctrl.Result{}, err
+		return ctrl.Result{}, fmt.Errorf("condition does not exist for [Script]")
 	}
 
 	// Now if the Ready condition of Script exists, we should have it set to True, otherwise
@@ -196,13 +196,13 @@ func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	if scReadyCd["status"] != "True" {
 		// We should further check the Reason of the condition, some errors that causes "Ready" condition
 		// to be false, should not be considered as a reason for requeuing the object
-		reasons := []string{"Unreachable", "ExecuteError", "ExecuteUnknown"}
+		reasons := svcv1alpha1.ReasonsForServices
 		if ctrlutils.StringInSlice(ctrlutils.SafeString(scReadyCd["reason"]), reasons) {
 			logger.Info(fmt.Sprintf("[%s]\t [Script] is not ready, Retries: [%d]/[%d]", loggerName, instance.Status.Retries, instance.Spec.Monitoring.Schedule.Retries))
 			setConditionNotReady(instance, ctrlutils.SafeString(scReadyCd["reason"]), "Script is not ready")
 			err := r.incrementRetriesAndDelete(instance, scObj, gwObj)
 			if err != nil {
-				return ctrl.Result{}, fmt.Errorf("[%s]\t unable to increment retries and delete the objects: %v", loggerName, err)
+				return ctrl.Result{}, fmt.Errorf("unable to increment retries and delete the objects: %v", err)
 			}
 		}
 		return ctrl.Result{RequeueAfter: SyncPeriodHealthCheck}, nil
@@ -271,7 +271,7 @@ func getScriptData(obj *unstructured.Unstructured) (int64, string, string, error
 	if err != nil {
 		return -1, "", "", fmt.Errorf("unable to get stdout of [Script]: %v", err)
 	}
-	stdErr, err := ctrlutils.GetNestedValue(obj.Object, "status", "atProvider-", "stderr")
+	stdErr, err := ctrlutils.GetNestedValue(obj.Object, "status", "atProvider", "stderr")
 	if err != nil {
 		return -1, "", "", fmt.Errorf("unable to get stderr of [Script]: %v", err)
 	}
@@ -337,11 +337,12 @@ func (r *SkyProviderReconciler) incrementRetriesAndDelete(instance *svcv1alpha1.
 		if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
 			// if any data should be reused, we should handle it here
 			// Delete the list of objects
-			for _, obj := range objs {
-				if err := r.Delete(context.Background(), obj); err != nil {
-					return err
-				}
-			}
+			// TODO: Uncomment the following code
+			// for _, obj := range objs {
+			// 	if err := r.Delete(context.Background(), obj); err != nil {
+			// 		return err
+			// 	}
+			// }
 		}
 		// Reset the retries counter
 		instance.Status.Retries = 0
@@ -380,6 +381,15 @@ func (r *SkyProviderReconciler) getCreateScriptObject(instance *svcv1alpha1.SkyP
 			return nil, fmt.Errorf("unable to create Script object: %v", err)
 		}
 		return scObj, nil
+	}
+	// if the pConfigName is not as same as the one set in scObj,
+	// we should update it
+	if u, err := ctrlutils.UpdateNestedValue(scObj.Object, pConfigName, "spec", "providerConfigRef", "name"); err != nil {
+		return nil, fmt.Errorf("unable to update providerConfigRef: %v", err)
+	} else if u {
+		if err := r.Update(context.Background(), scObj); err != nil {
+			return nil, fmt.Errorf("unable to update Script object: %v", err)
+		}
 	}
 	return scObj, nil
 }

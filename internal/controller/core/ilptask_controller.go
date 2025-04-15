@@ -87,6 +87,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 
+	instance.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+
 	// Waiting for pod to be completed
 	// If the pod is completed, then update the result
 
@@ -106,6 +108,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			logger.Info(fmt.Sprintf("[%s]\t Failed to get Pod status", loggerName))
 			return ctrl.Result{}, err
 		}
+
 		if podStatus == "Succeeded" {
 			// The optimization result may be Optimal or Infeasible
 			instance.Status.Optimization.Result = optResult
@@ -116,6 +119,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			instance.Status.Optimization.PodRef = corev1.LocalObjectReference{
 				Name: OPTMIZATION_POD_NAME,
 			}
+
 			// We set the deployPlan only if the result is Optimal
 			skyCluster := &corev1alpha1.SkyCluster{}
 			if optResult == "Optimal" {
@@ -129,17 +133,19 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				// If the optimization result is "Optimal" and status is "Succeeded",
 				// We have the deployment plan and we can update the SkyCluster object.
 				skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
+				instance.SetCondition("Ready", metav1.ConditionTrue, "ILPTaskCompleted", "ILPTask completed successfully.")
 				if err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Failed to get SkyCluster upon updating with ILPTask results.", loggerName))
 					return ctrl.Result{}, err
 				}
 			}
+
 			// We now update the ILPTask status
 			if err := r.Status().Update(ctx, instance); err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Failed to update ILPTask status", loggerName))
 				return ctrl.Result{}, err
 			}
-			logger.Info(fmt.Sprintf("[%s]\t ILPTask completed successfully.", loggerName))
+			logger.Info(fmt.Sprintf("[%s]\t ILPTask reconciliation completed successfully.", loggerName))
 
 			// We update the SkyCluster object only if the optimization result is "Optimal"
 			// Since I want the update to happen only after the ILPTask status is updated,
@@ -149,15 +155,18 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					return ctrl.Result{}, errors.Wrap(err, "failed to update SkyCluster with the result of ILPTask")
 				}
 			}
-
 			return ctrl.Result{}, nil
 		}
+
 		if podStatus == "Running" {
+			instance.SetCondition("Ready", metav1.ConditionFalse, "ILPTaskNotReady", "ILPTask not ready yet.")
 			logger.Info(fmt.Sprintf("[%s]\t Optimization pod not ready yet. Requeue...", loggerName))
 			return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 		}
+
 		// If the pod is not succeeded or running, then it is failed
 		instance.Status.Optimization.Status = podStatus
+		instance.SetCondition("Ready", metav1.ConditionFalse, "ILPTaskFailed", "ILPTask failed.")
 		if err := r.Status().Update(ctx, instance); err != nil {
 			logger.Info(fmt.Sprintf("[%s]\t Failed to update ILPTask status", loggerName))
 			return ctrl.Result{}, err
@@ -203,7 +212,11 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy not found.", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	taskLocations := getTasksLocationsFromDeployPolicy(dp)
+	taskLocations, err := getTasksLocationsFromDeployPolicy(dp)
+	if err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Failed to get task locations.", loggerName))
+		return ctrl.Result{}, err
+	}
 	// Creating tasks-edges.csv
 	df := &policyv1alpha1.DataflowPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
@@ -238,7 +251,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// First we retrive the confimap and then use it within the pod definition
 	// optimization-starter contains the scripts to run the optimization
 	// optimization-scripts contains the core optimizaiton scripts
-	var configMapList map[string]corev1.ConfigMap
+	// var configMapList map[string]corev1.ConfigMap
 	configMapList, err := getOptimizationConfigMaps(ctx, r)
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error listing ConfigMaps (optimization scripts).", loggerName))
@@ -311,39 +324,58 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 	return strings.Join(tasks, "\n")
 }
 
-func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) string {
+func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) (string, error) {
 	taskLocations := make([]string, 0)
 	taskLocations = append(taskLocations, "# header")
 	for _, dpItem := range dp.Spec.DeploymentPolicies {
-		locs_permitted := make([]string, 0)
-		locs_required := make([]string, 0)
-		for _, loc := range dpItem.LocationConstraint.Permitted {
-			locs_permitted = append(locs_permitted, fmt.Sprintf(
-				"%s|%s||%s|%s",
-				loc.Name,
-				loc.Type,
-				loc.Region,
-				loc.Zone,
-			))
+		permittedByte, err1 := json.Marshal(dpItem.LocationConstraint.Permitted)
+		requiredByte, err2 := json.Marshal(dpItem.LocationConstraint.Required)
+		if err1 != nil || err2 != nil {
+			return "", fmt.Errorf("failed to marshal location constraints: %v, %v", err1, err2)
 		}
-		for _, loc := range dpItem.LocationConstraint.Required {
-			locs_required = append(locs_required, fmt.Sprintf(
-				"%s|%s||%s|%s",
-				loc.Name,
-				loc.Type,
-				loc.Region,
-				loc.Zone,
-			))
+
+		// locs_permitted := make([]string, 0)
+		// locs_required := make([]string, 0)
+		// for _, loc := range dpItem.LocationConstraint.Permitted {
+		// 	locs_permitted = append(locs_permitted, fmt.Sprintf(
+		// 		"%s|%s||%s|%s",
+		// 		loc.Name,
+		// 		loc.Type,
+		// 		loc.Region,
+		// 		loc.Zone,
+		// 	))
+		// }
+		// for _, loc := range dpItem.LocationConstraint.Required {
+		// 	locs_required = append(locs_required, fmt.Sprintf(
+		// 		"%s|%s||%s|%s",
+		// 		loc.Name,
+		// 		loc.Type,
+		// 		loc.Region,
+		// 		loc.Zone,
+		// 	))
+		// }
+		newTask := map[string]string{
+			"nameType":    fmt.Sprintf("%s.%s", dpItem.ComponentRef.Name, strings.ToLower(dpItem.ComponentRef.Kind)),
+			"apiVersion":  dpItem.ComponentRef.APIVersion,
+			"kind":        dpItem.ComponentRef.Kind,
+			"permitted":   string(permittedByte),
+			"required":    string(requiredByte),
+			"maxReplicas": "-1",
 		}
-		taskLocations = append(taskLocations, fmt.Sprintf(
-			"%s.%s, %s, %s, %s, %s, -1",
-			dpItem.ComponentRef.Name,
-			strings.ToLower(dpItem.ComponentRef.Kind),
-			dpItem.ComponentRef.APIVersion,
-			dpItem.ComponentRef.Kind,
-			strings.Join(locs_required, "__"), strings.Join(locs_permitted, "__")))
+		newTaskByte, err := json.Marshal(newTask)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal task location: %v", err)
+		}
+		taskLocations = append(taskLocations, string(newTaskByte))
+		// taskLocations = append(taskLocations, fmt.Sprintf(
+		// 	"%s.%s, %s, %s, %s, %s, -1",
+		// 	dpItem.ComponentRef.Name,
+		// 	strings.ToLower(dpItem.ComponentRef.Kind),
+		// 	dpItem.ComponentRef.APIVersion,
+		// 	dpItem.ComponentRef.Kind,
+		// 	strings.Join(locs_required, "__"), strings.Join(locs_permitted, "__")))
 	}
-	return strings.Join(taskLocations, "\n")
+	return strings.Join(taskLocations, "\n"), nil
 }
 
 func getTasksEdgesFromDataflowPolicy(df *policyv1alpha1.DataflowPolicy) string {

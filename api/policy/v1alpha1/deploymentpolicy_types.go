@@ -17,26 +17,35 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type Location struct {
-	// Name is the name of the location e.g. aws, gcp, os (OpenStack)
-	Name string `json:"name,omitempty"`
-	// Type is the type of the location e.g. cloud, nte, edge
-	Type string `json:"type,omitempty"`
-	// Region is the region of the location
-	Region string `json:"region,omitempty"`
-	// Zone is the zone of the location
-	Zone string `json:"zone,omitempty"`
-}
+// type Location struct {
+// 	// Name is the name of the location e.g. aws, gcp, os (OpenStack)
+// 	Name string `json:"name,omitempty"`
+// 	// Type is the type of the location e.g. cloud, nte, edge
+// 	Type string `json:"type,omitempty"`
+// 	// Region is the region of the location
+// 	Region string `json:"region,omitempty"`
+// 	// Zone is the zone of the location
+// 	Zone string `json:"zone,omitempty"`
+// }
+
+// type LocationSet struct {
+// 	AllOf []B1 `json:"allOf,omitempty"`
+// }
+// type B1 struct {
+// 	AnyOf    []Location `json:"anyOf,omitempty"`
+// 	Location Location   `json:"providerRef,omitempty"`
+// }
 
 type LocationConstraint struct {
 	// Permitted is the list of locations that are permitted
-	Permitted []Location `json:"permitted,omitempty"`
+	Permitted corev1alpha1.LocationPermittedRuleSet `json:"permitted,omitempty"`
 	// Required is the list of locations that are required for deployment
-	Required []Location `json:"required,omitempty"`
+	Required corev1alpha1.LocationRequiredRuleSet `json:"required,omitempty"`
 }
 
 type CustomMetric struct {
@@ -67,6 +76,7 @@ type DeploymentPolicySpec struct {
 
 // DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
 type DeploymentPolicyStatus struct {
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -92,4 +102,40 @@ type DeploymentPolicyList struct {
 
 func init() {
 	SchemeBuilder.Register(&DeploymentPolicy{}, &DeploymentPolicyList{})
+}
+
+func (in *DeploymentPolicy) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	var c *metav1.Condition
+	for i := range in.Status.Conditions {
+		if in.Status.Conditions[i].Type == ctype {
+			c = &in.Status.Conditions[i]
+		}
+	}
+	if c == nil {
+		in.addCondition(ctype, status, reason, message)
+	} else {
+		// check message ?
+		if c.Status == status && c.Reason == reason && c.Message == message {
+			return
+		}
+		now := metav1.Now()
+		if c.Status != status {
+			c.LastTransitionTime = now
+		}
+		c.Status = status
+		c.Reason = reason
+		c.Message = message
+	}
+}
+
+func (in *DeploymentPolicy) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	now := metav1.Now()
+	c := metav1.Condition{
+		Type:               ctype,
+		LastTransitionTime: now,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+	}
+	in.Status.Conditions = append(in.Status.Conditions, c)
 }

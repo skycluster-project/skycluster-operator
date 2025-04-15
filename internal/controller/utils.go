@@ -272,6 +272,25 @@ func SetNestedField(obj map[string]any, value any, fields ...string) error {
 	return nil
 }
 
+// UpdateNestedValue updates the value of a nested field in a map[string]any
+// if the latest field is not string, it will return an error
+// It returns a boolean indicating if the value was updated and an error if any occurs
+func UpdateNestedValue(obj map[string]any, value string, fields ...string) (bool, error) {
+	m, err := GetNestedField(obj, fields[:len(fields)-1]...)
+	if err != nil {
+		return false, err
+	}
+	field := fields[len(fields)-1]
+	if _, ok := m[field].(string); !ok {
+		return false, errors.New(fmt.Sprintf("field %s not found in the object or its not a string", field))
+	}
+	if m[field] == value {
+		return false, nil
+	}
+	m[field] = value
+	return true, nil
+}
+
 // AppendToNestedList appends a value to the list in the nested field within a map[string]any.
 // If the field is nil, it initializes it with a list containing the value.
 func AppendToNestedList(obj map[string]any, value any, fields ...string) error {

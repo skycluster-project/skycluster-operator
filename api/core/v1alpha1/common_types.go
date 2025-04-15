@@ -31,8 +31,21 @@ var (
 )
 
 type LocationConstraint struct {
-	Required  []ProviderRefSpec `json:"required,omitempty"`
-	Permitted []ProviderRefSpec `json:"permitted,omitempty"`
+	Required  LocationRequiredRuleSet  `json:"required,omitempty"`
+	Permitted LocationPermittedRuleSet `json:"permitted,omitempty"`
+}
+
+type LocationPermittedRuleSet struct {
+	AllOf []ProviderRefSpec `json:"allOf,omitempty"`
+}
+
+type LocationRequiredRuleSet struct {
+	AllOf []LocationRule `json:"allOf,omitempty"`
+}
+
+type LocationRule struct {
+	AnyOf       []ProviderRefSpec `json:"anyOf,omitempty"`
+	ProviderRef *ProviderRefSpec  `json:"providerRef,omitempty"`
 }
 
 type VirtualService struct {

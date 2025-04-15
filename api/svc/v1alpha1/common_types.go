@@ -8,6 +8,10 @@ var (
 	ReasonServiceNotReady = "ServiceNotReady"
 )
 
+var (
+	ReasonsForServices = []string{"Unreachable", "ExecuteError", "ExecuteUnknown"}
+)
+
 type SkyScheduleSpec struct {
 	// Interval is the time interval in seconds to wait before the next check
 	Interval int `json:"interval,omitempty"`
