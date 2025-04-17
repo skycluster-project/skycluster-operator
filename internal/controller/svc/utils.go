@@ -26,6 +26,24 @@ func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 	)
 }
 
+// GetNestedField returns the nested field of a map[string]interface{} object
+// It returns the nested field if it exists, and an error if it doesn't
+// The fields are the keys to access the nested field
+func GetNestedField(obj map[string]any, fields ...string) (map[string]any, error) {
+	if len(fields) == 0 {
+		return nil, errors.New("no fields provided")
+	}
+	m := obj
+	for _, field := range fields {
+		if val, ok := m[field].(map[string]interface{}); ok {
+			m = val
+		} else {
+			return nil, fmt.Errorf("field %s not found in the object or its type is not map[string]interface{}", field)
+		}
+	}
+	return m, nil // the last field is not found in the object
+}
+
 // generateYAMLManifest generates a string YAML manifest from the given object
 func generateYAMLManifest(obj any) (string, error) {
 	var inInterface map[string]interface{}

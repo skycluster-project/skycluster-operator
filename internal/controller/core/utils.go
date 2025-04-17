@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"maps"
+
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
@@ -218,6 +220,14 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 // generateNewServiceFromService generates a new service from the given service
 // with the same selector and ports
 func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
+
+	// copy to avoid modifying the original
+	labels := make(map[string]string)
+	maps.Copy(labels, svc.Labels)
+
+	selector := make(map[string]string)
+	maps.Copy(selector, svc.Spec.Selector)
+
 	newSvc := corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: svc.APIVersion,
@@ -226,10 +236,10 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      svc.Name,
 			Namespace: svc.Namespace,
-			Labels:    svc.Labels,
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: svc.Spec.Selector,
+			Selector: selector,
 			Ports:    svc.Spec.Ports,
 		},
 	}

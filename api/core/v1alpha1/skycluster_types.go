@@ -71,6 +71,10 @@ func init() {
 	SchemeBuilder.Register(&SkyCluster{}, &SkyClusterList{})
 }
 
+func (in *SkyCluster) SetConditionReady() {
+	in.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+}
+
 func (in *SkyCluster) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
 	var c *metav1.Condition
 	for i := range in.Status.Conditions {

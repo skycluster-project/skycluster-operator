@@ -42,6 +42,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -92,10 +93,14 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	skyCluster.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+
 	// ########### ########### ########### ########### ###########
 	// Check if both DeploymentPolicy and DataflowPolicy are set
 	if skyCluster.Spec.DataflowPolicyRef.Name == "" || skyCluster.Spec.DeploymentPolciyRef.Name == "" {
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy or DataflowPolicy not set.", loggerName))
+		m := "DeploymentPolicy or DataflowPolicy not set."
+		r.setConditionUnreadyAndUpdate(skyCluster, m)
 		return ctrl.Result{}, nil
 	}
 
@@ -103,14 +108,18 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	sameNamePolicies := skyCluster.Spec.DataflowPolicyRef.Name == skyCluster.Spec.DeploymentPolciyRef.Name
 	sameName := skyCluster.Spec.DataflowPolicyRef.Name
 	if !sameNamePolicies {
-		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy and DataflowPolicy are not same name.", loggerName))
+		m := "DeploymentPolicy and DataflowPolicy are not same name"
+		logger.Info(fmt.Sprintf("[%s]\t[%s].", m, loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, m)
 		return ctrl.Result{}, nil
 	}
 
 	// Check if DeploymentPolicy and DataflowPolicy are same name with SkyCluster
 	sameNameAll := sameName == skyCluster.GetObjectMeta().GetName()
 	if !sameNameAll {
-		logger.Info(fmt.Sprintf("[%s]\t Different name with DeploymentPolicy and DataflowPolicy.", loggerName))
+		m := "DeploymentPolicy and DataflowPolicy are not same name with SkyCluster"
+		logger.Info(fmt.Sprintf("[%s]\t[%s].", m, loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, m)
 		return ctrl.Result{}, nil
 	}
 
@@ -124,11 +133,14 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		// We can now proceed with the deployment by creating SkyXRD object.
 		if skyCluster.Status.Optimization.Result == "Optimal" {
 			logger.Info(fmt.Sprintf("[%s]\t ILPTask is succeeded. Ready to create SkyXRD to initate the deployment.", loggerName))
+
 			manifests, appManifests, err := r.createXRDs(ctx, req, skyCluster.Status.Optimization.DeployMap)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error creating SkyXRD.", loggerName))
+				r.setConditionUnreadyAndUpdate(skyCluster, "Error creating SkyXRD.")
 				return ctrl.Result{}, err
 			}
+
 			// if the manifests are generated, we then create or update the SkyXRDs with the complete manifests
 			// and let it oversee the deployment process.
 			logger.Info(fmt.Sprintf("[%s]\t SkyXRDs manifests created successfully. Len: [%d]", loggerName, len(manifests)))
@@ -142,13 +154,16 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 				if err := ctrl.SetControllerReference(skyCluster, skyXRD, r.Scheme); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error setting owner reference (skyXRD).")
 					return ctrl.Result{}, err
 				}
 				if err := r.Create(ctx, skyXRD); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Error creating SkyXRD.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error creating SkyXRD.")
 					return ctrl.Result{}, err
 				}
 				logger.Info(fmt.Sprintf("[%s]\t SkyXRD created successfully.", loggerName))
+				skyCluster.SetConditionReady()
 			} else {
 				logger.Info(fmt.Sprintf("[%s]\t SkyXRD already exists. Updating an existing plan is not supported yet.", loggerName))
 			}
@@ -162,18 +177,30 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 				}
 				if err := ctrl.SetControllerReference(skyCluster, skyApp, r.Scheme); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Error setting owner reference.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error setting owner reference (skyApp).")
 					return ctrl.Result{}, err
 				}
 				if err := r.Create(ctx, skyApp); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Error creating SkyApp.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error creating SkyApp.")
 					return ctrl.Result{}, err
 				}
 				logger.Info(fmt.Sprintf("[%s]\t SkyApp created successfully.", loggerName))
+				skyCluster.SetConditionReady()
 			} else {
 				logger.Info(fmt.Sprintf("[%s]\t SkyApp already exists. Updating an existing plan is not supported yet.", loggerName))
 			}
 
+			if err := r.Status().Update(ctx, skyCluster); err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster status.", loggerName))
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{}, nil
+		}
+
+		if err := r.Status().Update(ctx, skyCluster); err != nil {
+			logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster status.", loggerName))
+			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
@@ -185,6 +212,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// So we wait here for user intervention.
 	if skyCluster.Status.Optimization.Status == "Pending" {
 		logger.Info(fmt.Sprintf("[%s]\t ILPTask is pending (or failed). Waiting for the results.", loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, "ILPTask is pending (or failed). Waiting for the results.")
 		return ctrl.Result{}, nil
 	}
 
@@ -193,6 +221,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if skyCluster.Status.Optimization.Status != "" {
 		logger.Info(fmt.Sprintf("[%s]\t ILPTask is not succeeded. Status is [%s]. Please check the status.",
 			loggerName, skyCluster.Status.Optimization.Status))
+		r.setConditionUnreadyAndUpdate(skyCluster, "ILPTask is not succeeded. Please check the status.")
 		return ctrl.Result{}, nil
 	}
 
@@ -206,6 +235,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	allConfigMap, err3 := r.getAllConfigMap(ctx)
 	if err2 != nil || err3 != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, "Error getting policies or configmaps.")
 		return ctrl.Result{}, errors2.Join(err2, err3)
 	}
 	// if err1 != nil || err2 != nil || err3 != nil {
@@ -225,6 +255,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		gv, err := schema.ParseGroupVersion(dp.ComponentRef.APIVersion)
 		if err != nil {
 			logger.Info(fmt.Sprintf("[%s]\t Error parsing APIVersion.", loggerName))
+			r.setConditionUnreadyAndUpdate(skyCluster, "Error parsing APIVersion.")
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
 		gk := schema.GroupVersionKind{
@@ -239,36 +270,20 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			Namespace: req.Namespace,
 			Name:      dp.ComponentRef.Name,
 		}, obj); err != nil {
-			logger.Info(fmt.Sprintf("[%s]\t Object not found: Name: [%s], Kind: [%s].",
-				loggerName, dp.ComponentRef.Name, dp.ComponentRef.Kind))
-			return ctrl.Result{}, client.IgnoreNotFound(err)
+			m := fmt.Sprintf("[%s]\t Object not found: Name: [%s], Kind: [%s]. Namespace: [%s]",
+				loggerName, dp.ComponentRef.Name, dp.ComponentRef.Kind, req.Namespace)
+			logger.Info(m)
+			r.setConditionUnreadyAndUpdate(skyCluster, m)
+			return ctrl.Result{RequeueAfter: 3 * time.Second}, client.IgnoreNotFound(err)
 		}
 		logger.Info(fmt.Sprintf("[%s]\t Object found.", loggerName))
-
-		locs_permitted := make([]corev1alpha1.ProviderRefSpec, 0)
-		locs_required := make([]corev1alpha1.ProviderRefSpec, 0)
-		for _, loc := range dp.LocationConstraint.Permitted {
-			locs_permitted = append(locs_permitted, corev1alpha1.ProviderRefSpec{
-				ProviderName:   loc.Name,
-				ProviderType:   loc.Type,
-				ProviderRegion: loc.Region,
-				ProviderZone:   loc.Zone,
-			})
-		}
-		for _, loc := range dp.LocationConstraint.Required {
-			locs_required = append(locs_required, corev1alpha1.ProviderRefSpec{
-				ProviderName:   loc.Name,
-				ProviderType:   loc.Type,
-				ProviderRegion: loc.Region,
-				ProviderZone:   loc.Zone,
-			})
-		}
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
 		if dp.ComponentRef.Kind == "Deployment" {
 			minCPU, minRAM, err := r.calculateDeploymentResources(ctx, req, dp.ComponentRef.Name)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
+				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting minimum flavor for pod.")
 				return ctrl.Result{}, err
 			}
 			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%F vCPU, %fGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
@@ -277,6 +292,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			okFlavors, err := getCompatibleFlavors(minCPU, minRAM, allFlavors)
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
+				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting proper flavors for pod.")
 				return ctrl.Result{}, client.IgnoreNotFound(err)
 			}
 			objVServices = append(objVServices, corev1alpha1.VirtualService{
@@ -285,6 +301,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			nestedObj, err := GetNestedField(obj.Object, "spec")
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
+				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting nested field.")
 				return ctrl.Result{}, err
 			}
 			for nestedField, nestedFieldValue := range nestedObj {
@@ -315,8 +332,8 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					Name:       obj.GetName(),
 				},
 				LocationConstraint: corev1alpha1.LocationConstraint{
-					Required:  locs_required,
-					Permitted: locs_permitted,
+					Required:  dp.LocationConstraint.Required,
+					Permitted: dp.LocationConstraint.Permitted,
 				},
 				VirtualServices: objVServices,
 			})
@@ -354,15 +371,32 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// Save the SkyCluster object status
 	if err := r.Status().Update(ctx, skyCluster); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error updating SkyCluster.", loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, "Error updating SkyCluster.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	if err := r.Create(ctx, ilpTask); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error creating ILPTask.", loggerName))
+		r.setConditionUnreadyAndUpdate(skyCluster, "Error creating ILPTask.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	r.setConditionUnreadyAndUpdate(skyCluster, "ILPTask is created. Waiting for the results.")
 	return ctrl.Result{}, nil
+}
+
+func (r *SkyClusterReconciler) setConditionReadyAndUpdate(s *corev1alpha1.SkyCluster) {
+	s.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
+}
+
+func (r *SkyClusterReconciler) setConditionUnreadyAndUpdate(s *corev1alpha1.SkyCluster, m string) {
+	s.SetCondition("Ready", metav1.ConditionFalse, "Unavailable", m)
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
 }
 
 func (r *SkyClusterReconciler) getDPPolicy(ctx context.Context, req ctrl.Request) (*policyv1alpha1.DeploymentPolicy, error) {
@@ -484,7 +518,7 @@ func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, re
 		// We need to create the SkyK8SCluster
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
-		obj.SetKind("SkyProvider")
+		obj.SetKind("Provider")
 		// Namespace should be in a same namespace as its owner
 		obj.SetNamespace(req.Namespace)
 		obj.SetName(strings.ReplaceAll(providerName, ".", "-"))
@@ -496,6 +530,10 @@ func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, re
 		spec := map[string]interface{}{
 			"forProvider": map[string]interface{}{
 				"vpcCidr": fmt.Sprintf("10.%d.3.0/24", idx),
+				"gateway": map[string]string{
+					// TODO: adjust the flavor more intelligently
+					"flavor": "2vCPU-4GB",
+				},
 			},
 			"providerRef": map[string]string{
 				"providerName":   strings.Split(providerName, ".")[0],
@@ -604,9 +642,10 @@ func (r *SkyClusterReconciler) generateSkyVMManifest(ctx context.Context, req ct
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = component.ProviderRef.ProviderName
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(component.ProviderRef.ProviderName, ".")[0]
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = component.ProviderRef.ProviderRegion
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL] = corev1alpha1.GetRegionAlias(component.ProviderRef.ProviderRegion)
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = component.ProviderRef.ProviderZone
 	objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = component.ComponentRef.Name
-	// // TODO: Remove the pause label before releasing
+	// TODO: Remove the pause label before releasing
 	// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
 	xrdObj.SetLabels(objLabels)
 
@@ -712,7 +751,7 @@ func (r *SkyClusterReconciler) generateSkyK8SCluster(ctx context.Context, req ct
 	// To create a SkyK8SCluster, we need to create a SkyK8SCluster only.
 	xrdObj := &unstructured.Unstructured{}
 	xrdObj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
-	xrdObj.SetKind("SkyK8SCluster")
+	xrdObj.SetKind("K8SCluster")
 	xrdObj.SetNamespace(req.Namespace)
 	xrdObj.SetName(req.Name)
 
@@ -783,7 +822,7 @@ func (r *SkyClusterReconciler) generateSkyK8SCluster(ctx context.Context, req ct
 			"privateRegistry": "registry.skycluster.io",
 			"ctrl": map[string]any{
 				"image":  "ubuntu-22.04",
-				"flavor": "8vCPU-32GB",
+				"flavor": "2vCPU-4GB",
 				"providerRef": map[string]string{
 					"providerName":   strings.Split(ctrlProvider.ProviderName, ".")[0],
 					"providerRegion": ctrlProvider.ProviderRegion,
@@ -840,24 +879,59 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			// Deep copy the deploy into a new object, we manually copy fields as
 			// the deployment object itself contains a lot of fields that we don't need
 			newDeploy := generateNewDeplyFromDeploy(deploy)
+
 			// We need to add the node selector to the deployment
 			// deployItem.Provider.ProviderName includes providerName.ProviderRegion.ProviderZone.ProviderType
-			// We need to extract the fisr three parts and replace "." with "-"
+			// We need to extract the first three parts and replace "." with "-"
+			pIdLabel := corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL
 			providerId := strings.Join(strings.Split(deployItem.ProviderRef.ProviderName, ".")[:3], "-")
+
+			mngByLabel := corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL
+			mngByLabelValue := corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+
+			pNameLabel := corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL
+			regLabel := corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL
+			regLabelAlias := corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL
+			zoneLabel := corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL
+
+			// spec.template.spec.nodeSelector
 			newDeploy.Spec.Template.Spec.NodeSelector = map[string]string{
 				corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL: providerId,
 			}
-			// Add the same label to the app metadata and selector
-			newDeploy.Spec.Template.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = providerId
-			newDeploy.Spec.Selector.MatchLabels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = providerId
+
+			// spec.template.metadata.labels
+			if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
+				newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)
+			}
+			newDeploy.Spec.Template.ObjectMeta.Labels[pIdLabel] = providerId
+			newDeploy.Spec.Template.ObjectMeta.Labels[pNameLabel] = strings.Split(deployItem.ProviderRef.ProviderName, ".")[0]
+			newDeploy.Spec.Template.ObjectMeta.Labels[regLabel] = deployItem.ProviderRef.ProviderRegion
+			newDeploy.Spec.Template.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deployItem.ProviderRef.ProviderRegion)
+			newDeploy.Spec.Template.ObjectMeta.Labels[zoneLabel] = deployItem.ProviderRef.ProviderZone
+
+			// spec.selector
+			if newDeploy.Spec.Selector == nil {
+				newDeploy.Spec.Selector = &metav1.LabelSelector{}
+			}
+			if newDeploy.Spec.Selector.MatchLabels == nil {
+				newDeploy.Spec.Selector.MatchLabels = make(map[string]string)
+			}
+			newDeploy.Spec.Selector.MatchLabels[pIdLabel] = providerId
+
 			// Update name to include providerId
 			newDeploy.Name = fmt.Sprintf("%s-%s", deployItem.ComponentRef.Name, deployItem.ProviderRef.ProviderName)
+
 			// Add general labels to the deployment
-			newDeploy.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
-			newDeploy.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = providerId
-			newDeploy.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(deployItem.ProviderRef.ProviderName, ".")[0]
-			newDeploy.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = deployItem.ProviderRef.ProviderRegion
-			newDeploy.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = deployItem.ProviderRef.ProviderZone
+			if newDeploy.ObjectMeta.Labels == nil {
+				newDeploy.ObjectMeta.Labels = make(map[string]string)
+			}
+			newDeploy.ObjectMeta.Labels[mngByLabel] = mngByLabelValue
+			newDeploy.ObjectMeta.Labels[pIdLabel] = providerId
+			newDeploy.ObjectMeta.Labels[pNameLabel] = strings.Split(deployItem.ProviderRef.ProviderName, ".")[0]
+			newDeploy.ObjectMeta.Labels[regLabel] = deployItem.ProviderRef.ProviderRegion
+			newDeploy.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deployItem.ProviderRef.ProviderRegion)
+			newDeploy.ObjectMeta.Labels[zoneLabel] = deployItem.ProviderRef.ProviderZone
+
 			// We need to add the deployment to the manifests
 			yamlObj, err := generateYAMLManifest(newDeploy)
 			if err != nil {
@@ -898,6 +972,11 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 		// For each provider, we need to create a new service with the same provider selector
 		// to control traffic distribution using istio
 		oneSvc := generateNewServiceFromService(&svc)
+		if oneSvc.GetLabels() == nil {
+			oneSvc.SetLabels(make(map[string]string))
+		}
+		oneSvc.GetLabels()[corev1alpha1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
+
 		yamlObj, err := generateYAMLManifest(oneSvc)
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating YAML manifest.")
@@ -921,7 +1000,17 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			providerId := deploy.Labels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL]
 			newSvc.Spec.Selector = deploy.Spec.Selector.MatchLabels
 			newSvc.ObjectMeta.Name = fmt.Sprintf("%s-%s", svc.Name, providerId)
-			newSvc.ObjectMeta.Labels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = providerId
+
+			pIdLabel := corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL
+			regLabel := corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL
+			regLabelAlias := corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL
+			zoneLabel := corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL
+
+			newSvc.ObjectMeta.Labels[pIdLabel] = providerId
+			newSvc.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deploy.Labels[pIdLabel])
+			newSvc.ObjectMeta.Labels[regLabel] = deploy.Labels[regLabel]
+			newSvc.ObjectMeta.Labels[zoneLabel] = deploy.Labels[zoneLabel]
+
 			yamlObj, err := generateYAMLManifest(newSvc)
 			if err != nil {
 				return nil, errors.Wrap(err, "Error generating YAML manifest.")
@@ -974,7 +1063,7 @@ func (r *SkyClusterReconciler) createXRDs(ctx context.Context, req ctrl.Request,
 		case "deployment":
 			// fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
 			allDeployments = append(allDeployments, deployItem)
-		case "skyvm":
+		case "vm":
 			skyObj, err := r.generateSkyVMManifest(ctx, req, deployItem)
 			if err != nil {
 				return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")

@@ -24,6 +24,7 @@ import (
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -55,10 +56,13 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	skyxrd.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+
 	for _, xrd := range skyxrd.Spec.Manifests {
 		var obj map[string]any
 		if err := yaml.Unmarshal([]byte(xrd.Manifest), &obj); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to unmarshal object", logName))
+			r.setConditionUnreadyAndUpdate(skyxrd, "unable to unmarshal object")
 			return ctrl.Result{}, err
 		}
 
@@ -71,16 +75,18 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		unstrObj.SetName(strings.Replace(xrd.ComponentRef.Name, ".", "-", -1))
 		if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to set controller reference", logName))
+			r.setConditionUnreadyAndUpdate(skyxrd, "unable to set controller reference")
 			return ctrl.Result{}, err
 		}
 
-		if err := r.Create(ctx, unstrObj); err != nil {
-			logger.Info(fmt.Sprintf("[%s]\tunable to create object, maybe it already exists?", logName))
-			return ctrl.Result{}, client.IgnoreAlreadyExists(err)
-		}
+		// if err := r.Create(ctx, unstrObj); err != nil {
+		// 	logger.Info(fmt.Sprintf("[%s]\tunable to create object, maybe it already exists?", logName))
+		// 	return ctrl.Result{}, client.IgnoreAlreadyExists(err)
+		// }
 		logger.Info(fmt.Sprintf("[%s]\tcreated object [%s]", logName, xrd.ComponentRef.Name))
 	}
 
+	r.setConditionReadyAndUpdate(skyxrd)
 	return ctrl.Result{}, nil
 }
 
@@ -93,4 +99,18 @@ func (r *SkyXRDReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			RateLimiter: newCustomRateLimiter(),
 		}).
 		Complete(r)
+}
+
+func (r *SkyXRDReconciler) setConditionReadyAndUpdate(s *corev1alpha1.SkyXRD) {
+	s.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
+}
+
+func (r *SkyXRDReconciler) setConditionUnreadyAndUpdate(s *corev1alpha1.SkyXRD, m string) {
+	s.SetCondition("Ready", metav1.ConditionFalse, "Unavailable", m)
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
 }

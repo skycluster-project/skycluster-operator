@@ -33,6 +33,7 @@ type SkyAppStatus struct {
 	// Based on the manifests in the spec
 	Objects           []corev1alpha1.SkyService `json:"objects,omitempty"`
 	ProviderConfigRef string                    `json:"providerConfigRef,omitempty"`
+	Conditions        []metav1.Condition        `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -58,4 +59,44 @@ type SkyAppList struct {
 
 func init() {
 	SchemeBuilder.Register(&SkyApp{}, &SkyAppList{})
+}
+
+func (in *SkyApp) SetConditionReady() {
+	in.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+}
+
+func (in *SkyApp) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	var c *metav1.Condition
+	for i := range in.Status.Conditions {
+		if in.Status.Conditions[i].Type == ctype {
+			c = &in.Status.Conditions[i]
+		}
+	}
+	if c == nil {
+		in.addCondition(ctype, status, reason, message)
+	} else {
+		// check message ?
+		if c.Status == status && c.Reason == reason && c.Message == message {
+			return
+		}
+		now := metav1.Now()
+		if c.Status != status {
+			c.LastTransitionTime = now
+		}
+		c.Status = status
+		c.Reason = reason
+		c.Message = message
+	}
+}
+
+func (in *SkyApp) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	now := metav1.Now()
+	c := metav1.Condition{
+		Type:               ctype,
+		LastTransitionTime: now,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+	}
+	in.Status.Conditions = append(in.Status.Conditions, c)
 }
