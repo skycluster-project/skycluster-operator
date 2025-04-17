@@ -70,3 +70,23 @@ webhooks:
     resources:
     - deploymentpolicies
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-svc-skycluster-io-v1alpha1-skyprovider
+  failurePolicy: Fail
+  name: vskyprovider-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - svc.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - skyproviders
+  sideEffects: None

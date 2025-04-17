@@ -1,0 +1,115 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echo
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: echo
+  template:
+    metadata:
+      labels:
+        app: echo
+    spec:
+      containers:
+      - name: echo
+        image: registry.skycluster.io/alpine-curl
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              CONTENT=$(ip route get 8.8.8.8 | awk '{printf "Hey, my ip is: %s,", $7; exit}')
+              HOSTNAME=$(hostname)
+              CONTENT="$CONTENT\tHostname: $HOSTNAME"
+              CONTENT_LENGTH=$(echo -n "$CONTENT" | wc -c)
+              echo -e "HTTP/1.1 200 OK\r\nContent-Length: $CONTENT_LENGTH\r\n\r\n$CONTENT" | nc -l -p 8080
+            done
+        ports:
+        - containerPort: 8080
+        resources:
+          limits:
+            cpu: 0.5
+            memory: 512Mi
+---
+apiVersion: svc.skycluster.io/v1alpha1
+kind: SkyVM
+metadata:
+  name: skyvm-client
+  labels:
+    skycluster.io/managed-by: skycluster
+spec: 
+  image: ubuntu-20.04
+  flavor: 2vCPU-4GB
+---
+# The service should have the managed-by label set to skycluster
+# so that it can be managed by the Skycluster 
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-svc
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: echo
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: echo-policies
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: svc.skycluster.io/v1alpha1
+        kind: SkyVM
+        name: skyvm-client
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: echo
+      latency: 50ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+---
+# All components should be referenced by their name, apiGroup and kind
+# within the DeploymentPolicy object, otherwise they will not be considered
+# Required locations should be a subset of permitted locations
+# Both DeploymentPolicy and DataflowPolicy objects should have the same name
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: echo-policies
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: echo
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - type: edge
+            region: scinet
+        required:
+          - region: scinet
+            zone: zone-26
+          - region: scinet
+            zone: zone-27
+    - componentRef:
+        name: skyvm-client
+        apiVersion: svc.skycluster.io/v1alpha1
+        kind: SkyVM
+      locationConstraint:
+        permitted: 
+          - type: nte
+            region: vaughan
+          - type: nte
+            region: scinet
+---

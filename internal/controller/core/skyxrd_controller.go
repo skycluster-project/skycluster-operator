@@ -24,10 +24,13 @@ import (
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 
 	"gopkg.in/yaml.v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -41,24 +44,25 @@ type SkyXRDReconciler struct {
 // +kubebuilder:rbac:groups=core,resources=skyxrds/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core,resources=skyxrds/finalizers,verbs=update
 
-// // +kubebuilder:rbac:groups=xrds.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete
-
 func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logName := "SkyXRD"
-	logger.Info(fmt.Sprintf("[%s]\tReconciler started for %s", logName, req.Name))
+	logger.Info(fmt.Sprintf("[%s]\t Reconciler started for %s", logName, req.Name))
 
 	// Fetch the object
 	skyxrd := &corev1alpha1.SkyXRD{}
 	if err := r.Get(ctx, req.NamespacedName, skyxrd); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\tunable to fetch object, maybe it is deleted?", logName))
-		return ctrl.Result{}, nil
+		logger.Info(fmt.Sprintf("[%s]\t SkyXRD not found.", logName))
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
+	skyxrd.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
 
 	for _, xrd := range skyxrd.Spec.Manifests {
 		var obj map[string]any
 		if err := yaml.Unmarshal([]byte(xrd.Manifest), &obj); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to unmarshal object", logName))
+			r.setConditionUnreadyAndUpdate(skyxrd, "unable to unmarshal object")
 			return ctrl.Result{}, err
 		}
 
@@ -69,86 +73,44 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		// We keep the orignial name as the Name field for SkyService object
 		// and replace "." with "-" for the object name when we need to work with XRDs
 		unstrObj.SetName(strings.Replace(xrd.ComponentRef.Name, ".", "-", -1))
-		// unstrObj.SetAnnotations(map[string]string{
-		// 	"skycluster.io/pause": "true",
-		// })
 		if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\tunable to set controller reference", logName))
+			r.setConditionUnreadyAndUpdate(skyxrd, "unable to set controller reference")
 			return ctrl.Result{}, err
 		}
 
 		// if err := r.Create(ctx, unstrObj); err != nil {
-		// 	logger.Error(err, fmt.Sprintf("[%s]\tunable to create object", logName))
-		// 	return ctrl.Result{}, err
+		// 	logger.Info(fmt.Sprintf("[%s]\tunable to create object, maybe it already exists?", logName))
+		// 	return ctrl.Result{}, client.IgnoreAlreadyExists(err)
 		// }
 		logger.Info(fmt.Sprintf("[%s]\tcreated object [%s]", logName, xrd.ComponentRef.Name))
-		break
 	}
 
-	// // unstrObj, err := r.GetUnstructuredResource(ctx, "SkyProvider", "xrds.skycluster.io", "v1alpha1", req.Name, req.Namespace)
-	// unstrObj := &unstructured.Unstructured{}
-	// unstrObj.SetNamespace(req.Namespace)
-	// unstrObj.SetName(req.Name)
-	// err := r.Get(ctx, req.NamespacedName, unstrObj)
-	// gvk := unstrObj.GroupVersionKind()
-	// logger.Info(fmt.Sprintf("[SkyXRD]\t%s %v", req.NamespacedName, gvk))
-	// if err != nil {
-	// 	logger.Info("[SkyXRD]\tunable to fetch object, maybe it is deleted?")
-	// 	return ctrl.Result{}, nil
-	// }
-	// // if SkyProviderObj != nil {
-	// // 	logger.Info(fmt.Sprintf("[SkyXRD]\t%s %s", SkyProviderObj.GetName(), SkyProviderObj.GetNamespace()))
-	// // }
-
+	r.setConditionReadyAndUpdate(skyxrd)
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SkyXRDReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// gvk := schema.GroupVersionKind{
-	// 	Group:   "xrds.skycluster.io",
-	// 	Version: "v1alpha1",
-	// 	Kind:    "SkyProvider",
-	// }
-	// unstructuredSkyProviderObj := &unstructured.Unstructured{}
-	// unstructuredSkyProviderObj.SetGroupVersionKind(gvk)
-
-	// return ctrl.NewControllerManagedBy(mgr).
-	// 	// For(&corev1alpha1.SkyXRD{}).
-	// 	Watches(
-	// 		unstructuredSkyProviderObj,
-	// 		&handler.EnqueueRequestForObject{}, builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
-	// 	).
-	// 	Named("core-skyxrd").
-	// 	Complete(r)
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1alpha1.SkyXRD{}).
 		Named("core-skyxrd").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
 }
 
-// func (r *SkyXRDReconciler) GetUnstructuredResource(ctx context.Context, kind, group, version, reqName, reqNamescpae string) (*unstructured.Unstructured, error) {
-// 	gvk := schema.GroupVersionKind{
-// 		Group:   group,
-// 		Version: version,
-// 		Kind:    kind,
-// 	}
+func (r *SkyXRDReconciler) setConditionReadyAndUpdate(s *corev1alpha1.SkyXRD) {
+	s.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
+}
 
-// 	// Create an unstructured object
-// 	unstructuredObj := &unstructured.Unstructured{}
-// 	unstructuredObj.SetGroupVersionKind(gvk)
-// 	newClientKey := client.ObjectKey{
-// 		Name:      reqName,
-// 		Namespace: reqNamescpae,
-// 	}
-
-// 	// Fetch the object using the client
-// 	if err := r.Get(ctx, newClientKey, unstructuredObj); err != nil {
-// 		// if !errors.IsNotFound(err) {
-// 		// 	// Handle the error if it's not a NotFound error
-// 		// 	return false, err
-// 		// }
-// 		return nil, err
-// 	}
-// 	return unstructuredObj, nil
-// }
+func (r *SkyXRDReconciler) setConditionUnreadyAndUpdate(s *corev1alpha1.SkyXRD, m string) {
+	s.SetCondition("Ready", metav1.ConditionFalse, "Unavailable", m)
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
+}

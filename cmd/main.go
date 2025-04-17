@@ -46,6 +46,7 @@ import (
 	svccontroller "github.com/etesami/skycluster-manager/internal/controller/svc"
 	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
 	webhookpolicyv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/policy/v1alpha1"
+	webhooksvcv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/svc/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -303,6 +304,27 @@ func main() {
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
 		os.Exit(1)
+	}
+	if err = (&svccontroller.SkyK8SReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
+		os.Exit(1)
+	}
+	if err = (&svccontroller.SkyProviderReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
+		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

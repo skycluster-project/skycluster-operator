@@ -55,7 +55,7 @@ func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 	logger := log.FromContext(ctx)
 
 	deployment, ok := obj.(*appsv1.Deployment)
-	exists := ctrlv1alpha1.ContainsLabelsAndValue(deployment.Labels, map[string]string{
+	exists := ctrlv1alpha1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
 		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
 	})
 	if !ok || !exists {

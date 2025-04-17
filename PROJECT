@@ -98,4 +98,21 @@ resources:
   kind: SkyApp
   path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
   version: v1alpha1
+- controller: true
+  domain: skycluster.io
+  group: svc
+  kind: SkyK8S
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: svc
+  kind: SkyProvider
+  path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
 version: "3"

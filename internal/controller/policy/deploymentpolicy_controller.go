@@ -52,6 +52,8 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	dpPolicy.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+
 	// Append the name of the DeploymentPolciy to the skycluster.core.skycluster.io/v1alpha1 object
 	// If the SkyCluster object does not exist, create it and then append the name
 
@@ -83,6 +85,12 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			// This may happen because DFPolicy controller may create the SkyCluster object at the same time
 			return ctrl.Result{Requeue: true}, client.IgnoreAlreadyExists(err)
 		}
+
+		dpPolicy.SetCondition("Ready", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+		if err := r.Status().Update(ctx, dpPolicy); err != nil {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DeploymentPolicy status.", loggerName))
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -94,6 +102,11 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update SkyCluster.", loggerName))
 			return ctrl.Result{}, err
 		}
+	}
+	dpPolicy.SetCondition("Ready", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+	if err := r.Status().Update(ctx, dpPolicy); err != nil {
+		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DeploymentPolicy status.", loggerName))
+		return ctrl.Result{}, err
 	}
 	logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy reconciled successfully.", loggerName))
 

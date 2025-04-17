@@ -37,7 +37,8 @@ type ILPTaskSpec struct {
 
 // ILPTaskStatus defines the observed state of ILPTask.
 type ILPTaskStatus struct {
-	Optimization OptimizationSpec `json:"optimization,omitempty"`
+	Optimization OptimizationSpec   `json:"optimization,omitempty"`
+	Conditions   []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -63,4 +64,40 @@ type ILPTaskList struct {
 
 func init() {
 	SchemeBuilder.Register(&ILPTask{}, &ILPTaskList{})
+}
+
+func (in *ILPTask) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	var c *metav1.Condition
+	for i := range in.Status.Conditions {
+		if in.Status.Conditions[i].Type == ctype {
+			c = &in.Status.Conditions[i]
+		}
+	}
+	if c == nil {
+		in.addCondition(ctype, status, reason, message)
+	} else {
+		// check message ?
+		if c.Status == status && c.Reason == reason && c.Message == message {
+			return
+		}
+		now := metav1.Now()
+		if c.Status != status {
+			c.LastTransitionTime = now
+		}
+		c.Status = status
+		c.Reason = reason
+		c.Message = message
+	}
+}
+
+func (in *ILPTask) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
+	now := metav1.Now()
+	c := metav1.Condition{
+		Type:               ctype,
+		LastTransitionTime: now,
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+	}
+	in.Status.Conditions = append(in.Status.Conditions, c)
 }

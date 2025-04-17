@@ -18,21 +18,22 @@ package svc
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
+
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
 	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
-	"github.com/pkg/errors"
 )
 
 // SkyAppReconciler reconciles a SkyApp object
@@ -56,8 +57,20 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if skyApp.Status.Objects != nil {
-		logger.Info(fmt.Sprintf("[%s]\t SkyApp already reconciled.", loggerName))
+	skyApp.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+
+	// if the providerConfigName is not set, we don't proceed
+	if skyApp.Status.ProviderConfigRef == "" {
+		skyApp.Status.ProviderConfigRef = "NotReady"
+		logger.Info(fmt.Sprintf("[%s]\t ProviderConfig is not set yet.", loggerName))
+		// TODO: Uncomment this line
+		// r.setConditionUnreadyAndUpdate(skyApp, "ProviderConfig is not set yet.")
+		// return ctrl.Result{}, nil
+	}
+
+	// if both objects and providerConfigName are set, we don't proceed
+	if len(skyApp.Status.Objects) > 0 {
+		logger.Info(fmt.Sprintf("[%s]\t Objects are already set.", loggerName))
 		return ctrl.Result{}, nil
 	}
 
@@ -69,17 +82,18 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Creating Kubernetes Provider Objects for deployments and services
 	// We need to watch for providerCfgName and when it is available,
 	// proceed with the creation of the deployment and services and etc.
-	providerCfgName := "providerCfgName"
+	providerCfgName := skyApp.Status.ProviderConfigRef
 	manifests := generateDeployObjectManifests(skyApp.Spec.Manifests, providerCfgName)
 
 	// Creating Istio configuration
-	manifestCfg := generateIstioConfig(skyApp.Spec.Manifests, providerCfgName)
+	// manifestCfg := generateIstioConfig(skyApp.Spec.Manifests, providerCfgName)
 
 	// Update the status with the objects that will be created
 	for _, obj := range manifests {
 		yamlObj, err := generateYAMLManifest(obj.Object)
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Error creating YAML manifest.", loggerName))
+			r.setConditionUnreadyAndUpdate(skyApp, "Error creating YAML manifest.")
 			return ctrl.Result{}, err
 		}
 		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
@@ -92,11 +106,14 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		})
 	}
 
+	// Istio configuration
+	manifests = generateIstioConfig(skyApp.Spec.Manifests, providerCfgName)
 	// Update the status with the objects that will be created
-	for _, obj := range manifestCfg {
+	for _, obj := range manifests {
 		yamlObj, err := generateYAMLManifest(obj.Object)
 		if err != nil {
 			logger.Error(err, fmt.Sprintf("[%s]\t Error creating YAML manifest.", loggerName))
+			r.setConditionUnreadyAndUpdate(skyApp, "Error creating YAML manifest.")
 			return ctrl.Result{}, err
 		}
 		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
@@ -111,74 +128,21 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// Update the status with the provider configuration name
 	logger.Info(fmt.Sprintf("[%s]\t Updating status with provider configuration name.", loggerName))
+	skyApp.SetConditionReady()
 	if err := r.Status().Update(ctx, skyApp); err != nil {
 		logger.Error(err, fmt.Sprintf("[%s]\t Error updating status.", loggerName))
 		return ctrl.Result{}, err
 	}
 
+	// if the status is updated, we create the objects
+	// for _, obj := range manifests {
+	// 	if err := r.Create(ctx, &obj); err != nil {
+	// 		logger.Error(err, fmt.Sprintf("[%s]\t Error creating object.", loggerName))
+	// 		return ctrl.Result{}, err
+	// 	}
+	// }
+
 	return ctrl.Result{}, nil
-}
-
-// generateYAMLManifest generates a string YAML manifest from the given object
-func generateYAMLManifest(obj any) (string, error) {
-	var inInterface map[string]interface{}
-	inrec, _ := json.Marshal(obj)
-	json.Unmarshal(inrec, &inInterface)
-	objYAML, err := yaml.Marshal(&inInterface)
-	if err != nil {
-		return "", errors.Wrap(err, "Error marshalling obj manifests.")
-	}
-	return string(objYAML), nil
-}
-
-// getUniqueProviders returns a list of unique providers from the given manifests
-func getUniqueProviders(manifests []corev1alpha1.SkyService) []corev1alpha1.ProviderRefSpec {
-	pExists := map[string]any{}
-	providers := []corev1alpha1.ProviderRefSpec{}
-	for _, manifest := range manifests {
-		// ProviderName uniquely identifies a provider
-		// Only deployments are considered as the services do not tie to a provider
-		if strings.ToLower(manifest.ComponentRef.Kind) != "deployment" {
-			continue
-		}
-		pID := manifest.ProviderRef.ProviderName
-		// TODO: Remove this check
-		if pID == "os" {
-			fmt.Println("ProviderName cannot be 'os' [SkyApp]")
-		}
-		if _, ok := pExists[pID]; !ok {
-			providers = append(providers, manifest.ProviderRef)
-			pExists[pID] = struct{}{}
-		}
-	}
-	return providers
-}
-
-// sameProviders returns true if the two providers are the same
-// based on the provider name, region and zone
-func sameProviders(p1, p2 corev1alpha1.ProviderRefSpec) bool {
-	return p1.ProviderName == p2.ProviderName &&
-		p1.ProviderRegion == p2.ProviderRegion &&
-		p1.ProviderZone == p2.ProviderZone
-}
-
-// getProviderId returns a unique identifier for the provider
-// based on the provider name, region, zone and type
-func getProviderId(p corev1alpha1.ProviderRefSpec) string {
-	var parts []string
-	if p.ProviderName != "" {
-		parts = append(parts, p.ProviderName)
-	}
-	if p.ProviderRegion != "" {
-		parts = append(parts, p.ProviderRegion)
-	}
-	if p.ProviderZone != "" {
-		parts = append(parts, p.ProviderZone)
-	}
-	if p.ProviderType != "" {
-		parts = append(parts, p.ProviderType)
-	}
-	return strings.Join(parts, "-")
 }
 
 func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
@@ -194,9 +158,17 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 			obj.SetLabels(map[string]string{
 				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
 			})
-			obj.Object["spec"] = map[string]interface{}{
-				"forProvider": map[string]interface{}{
-					"manifest": manifest.Manifest,
+			// "Object" type requires type <object> for manifest
+			// we marshal the manifest to map[string]interface{}
+			// and set it as the manifest
+			yamlManifest := map[string]any{}
+			err := yaml.Unmarshal([]byte(manifest.Manifest), &yamlManifest)
+			if err != nil {
+				fmt.Println("Error unmarshalling manifest yaml")
+			}
+			obj.Object["spec"] = map[string]any{
+				"forProvider": map[string]any{
+					"manifest": yamlManifest,
 				},
 				"providerConfigRef": map[string]string{
 					"name": providerCfgName,
@@ -209,31 +181,39 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 }
 
 func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
-	allProviders := getUniqueProviders(manifests)
+
 	objs := map[string]unstructured.Unstructured{}
 	// Generate Istio configuration
-	// For each service we should create a DestinationRule
-	// and set the localityLbSetting to enable
-	// Then we set the failover attributes to all other
-	// providers we are allowed to send traffic
+	// As a general rule, we create a DestinaRule ofject that enforces
+	// priorities for failover, and we prioritize the local provider.
+	// More specifically, we priotize a destination where it adopts
+	// as many labels as the client that send the request.
+	// These set of labels are introduced in the DestinationRule object
+	// and include provider region alias, region, and zone.
 	for _, manifest := range manifests {
 		if strings.ToLower(manifest.ComponentRef.Kind) == "service" {
+			yamlManifest := map[string]any{}
+			err := yaml.Unmarshal([]byte(manifest.Manifest), &yamlManifest)
+			if err != nil {
+				fmt.Println("Error unmarshalling manifest yaml")
+			}
 
-			failovers := []map[string]string{}
-			// In default settings, we allow traffic to all other providers,
-			for _, p1 := range allProviders {
-				for _, p2 := range allProviders {
-					if !sameProviders(p1, p2) {
-						failovers = append(failovers, map[string]string{
-							"from": getProviderId(p1),
-							"to":   getProviderId(p2),
-						})
-						failovers = append(failovers, map[string]string{
-							"to":   getProviderId(p1),
-							"from": getProviderId(p2),
-						})
-					}
-				}
+			svcTypeLabel := corev1alpha1.SKYCLUSTER_SVCTYPE_LABEL
+			labels, err := GetNestedField(yamlManifest, "metadata", "labels")
+			if err != nil {
+				// This service is not eligible for istio configuration
+				continue
+			}
+			// this label is added to the service indicating this is the main endpoint
+			// for the service and should be used for istio configuration
+			if v, ok := labels[svcTypeLabel]; !ok || v != "app-face" {
+				continue
+			}
+
+			failovers := []string{
+				corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL,
+				corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL,
+				corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL,
 			}
 
 			istioObj := map[string]interface{}{
@@ -246,11 +226,14 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 					"host": manifest.ComponentRef.Name,
 					"trafficPolicy": map[string]interface{}{
 						"loadBalancer": map[string]interface{}{
-							"simple": "LEAST_REQUEST",
-							"localityLbSetting": map[string]interface{}{
-								"enabled":  true,
-								"failover": failovers,
-							},
+							"simple":           "LEAST_REQUEST",
+							"failoverPriority": failovers,
+						},
+						"outlierDetection": map[string]interface{}{
+							"consecutiveErrors":  5,
+							"interval":           "5s",
+							"baseEjectionTime":   "30s",
+							"maxEjectionPercent": 100,
 						},
 					},
 				},
@@ -283,5 +266,22 @@ func (r *SkyAppReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&svcv1alpha1.SkyApp{}).
 		Named("svc-skyapp").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
 		Complete(r)
+}
+
+func (r *SkyAppReconciler) setConditionReadyAndUpdate(s *svcv1alpha1.SkyApp) {
+	s.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
+}
+
+func (r *SkyAppReconciler) setConditionUnreadyAndUpdate(s *svcv1alpha1.SkyApp, m string) {
+	s.SetCondition("Ready", metav1.ConditionFalse, "Unavailable", m)
+	if err := r.Status().Update(context.Background(), s); err != nil {
+		panic(fmt.Sprintf("failed to update SkyCluster status: %v", err))
+	}
 }
