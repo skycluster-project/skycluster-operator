@@ -103,7 +103,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if instance.Status.Optimization.Status != "" {
 		// check the pod status, if it is done running, then update the result
 		// if the pod is not done, then return requing the ILPTask
-		podStatus, optResult, optDeployPlan, err := getPodStatusAndResult(ctx, r)
+		podStatus, optResult, optDeployPlan, err := r.getPodStatusAndResult(ctx)
 		if err != nil {
 			logger.Info(fmt.Sprintf("[%s]\t Failed to get Pod status", loggerName))
 			return ctrl.Result{}, err
@@ -199,6 +199,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found.", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
 	// Creating tasks.csv
 	tasks := getTasksFromSkyCluster(skyCluster)
 	// Creating task-locations.csv
@@ -212,6 +213,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		logger.Info(fmt.Sprintf("[%s]\t DeploymentPolicy not found.", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+
 	taskLocations, err := getTasksLocationsFromDeployPolicy(dp)
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Failed to get task locations.", loggerName))
@@ -248,11 +250,18 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// a configmap is created to store the results with label
 	// skycluster.io/config-type: optimization-status
 
+	enabledProviders := r.getEnabledProviders()
+	providers, err := r.getProvidersJson(enabledProviders)
+	if err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t Failed to get providers.", loggerName))
+		return ctrl.Result{}, err
+	}
+
 	// First we retrive the confimap and then use it within the pod definition
 	// optimization-starter contains the scripts to run the optimization
 	// optimization-scripts contains the core optimizaiton scripts
 	// var configMapList map[string]corev1.ConfigMap
-	configMapList, err := getOptimizationConfigMaps(ctx, r)
+	configMapList, err := r.getOptimizationConfigMaps(ctx)
 	if err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error listing ConfigMaps (optimization scripts).", loggerName))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -261,7 +270,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Define Pod
 	// The instance name is as the SkyCluster name
 	// If they differ the name of SkyCluster should be passed
-	pod := defineOptimizationPod(configMapList, instance.Name, tasks, taskLocations, tasksEdges)
+	logger.Info(fmt.Sprintf("[%s]\t Creating optimization pod, providers: [%d]", loggerName, len(providers)))
+	pod := defineOptimizationPod(configMapList, instance.Name, tasks, taskLocations, tasksEdges, providers)
 	// The pod is in skycluster namespace
 	// The ilptask is in the default namespace, and cross namespace reference is not allowed
 	// The pod is removed when the ILPTask is not found (deleted).
@@ -278,22 +288,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	logger.Info(fmt.Sprintf("[%s]\t ILPTask scheduled. Pod Created. Requeue after 5 sec.", loggerName))
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
-}
-
-func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan corev1alpha1.DeployMap, result, status string) (*corev1alpha1.SkyCluster, error) {
-	skyCluster := &corev1alpha1.SkyCluster{}
-	// It has a same name as the ILPTask
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: req.Namespace,
-		Name:      req.Name,
-	}, skyCluster); err != nil {
-		return nil, err
-	}
-	// The deployment plan is a json string
-	skyCluster.Status.Optimization.DeployMap = deployPlan
-	skyCluster.Status.Optimization.Status = status
-	skyCluster.Status.Optimization.Result = result
-	return skyCluster, nil
 }
 
 func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
@@ -334,26 +328,6 @@ func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) (str
 			return "", fmt.Errorf("failed to marshal location constraints: %v, %v", err1, err2)
 		}
 
-		// locs_permitted := make([]string, 0)
-		// locs_required := make([]string, 0)
-		// for _, loc := range dpItem.LocationConstraint.Permitted {
-		// 	locs_permitted = append(locs_permitted, fmt.Sprintf(
-		// 		"%s|%s||%s|%s",
-		// 		loc.Name,
-		// 		loc.Type,
-		// 		loc.Region,
-		// 		loc.Zone,
-		// 	))
-		// }
-		// for _, loc := range dpItem.LocationConstraint.Required {
-		// 	locs_required = append(locs_required, fmt.Sprintf(
-		// 		"%s|%s||%s|%s",
-		// 		loc.Name,
-		// 		loc.Type,
-		// 		loc.Region,
-		// 		loc.Zone,
-		// 	))
-		// }
 		newTask := map[string]string{
 			"nameType":    fmt.Sprintf("%s.%s", dpItem.ComponentRef.Name, strings.ToLower(dpItem.ComponentRef.Kind)),
 			"apiVersion":  dpItem.ComponentRef.APIVersion,
@@ -367,13 +341,6 @@ func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) (str
 			return "", fmt.Errorf("failed to marshal task location: %v", err)
 		}
 		taskLocations = append(taskLocations, string(newTaskByte))
-		// taskLocations = append(taskLocations, fmt.Sprintf(
-		// 	"%s.%s, %s, %s, %s, %s, -1",
-		// 	dpItem.ComponentRef.Name,
-		// 	strings.ToLower(dpItem.ComponentRef.Kind),
-		// 	dpItem.ComponentRef.APIVersion,
-		// 	dpItem.ComponentRef.Kind,
-		// 	strings.Join(locs_required, "__"), strings.Join(locs_permitted, "__")))
 	}
 	return strings.Join(taskLocations, "\n"), nil
 }
@@ -392,7 +359,7 @@ func getTasksEdgesFromDataflowPolicy(df *policyv1alpha1.DataflowPolicy) string {
 	return strings.Join(taskEdges, "\n")
 }
 
-func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyClusterName, tasks, tasksLocations, tasksEdges string) *corev1.Pod {
+func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, scName, tasks, tLocations, tEdges, providers string) *corev1.Pod {
 	// "optimization-starter", "optimization-scripts"
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -412,8 +379,9 @@ func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyCluster
 					Image: "registry.skycluster.io/kubectl:latest",
 					Env: []corev1.EnvVar{
 						{Name: "TASKS", Value: tasks},
-						{Name: "TASKS_EDGES", Value: tasksEdges},
-						{Name: "TASKS_LOCATIONS", Value: tasksLocations},
+						{Name: "TASKS_EDGES", Value: tEdges},
+						{Name: "TASKS_LOCATIONS", Value: tLocations},
+						{Name: "PROVIDERS", Value: ""},
 					},
 					Command: []string{
 						"/bin/sh",
@@ -423,7 +391,7 @@ func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyCluster
 						strings.ReplaceAll(
 							configMapList["optimization-starter"].Data["init.sh"],
 							"__SKYCLUSTER__NAME__",
-							skyClusterName),
+							scName),
 					},
 					VolumeMounts: []corev1.VolumeMount{
 						{
@@ -443,8 +411,9 @@ func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyCluster
 					},
 					Env: []corev1.EnvVar{
 						{Name: "TASKS", Value: tasks},
-						{Name: "TASKS_EDGES", Value: tasksEdges},
-						{Name: "TASKS_LOCATIONS", Value: tasksLocations},
+						{Name: "TASKS_EDGES", Value: tEdges},
+						{Name: "TASKS_LOCATIONS", Value: tLocations},
+						{Name: "PROVIDERS", Value: ""},
 					},
 					Args: []string{
 						strings.ReplaceAll(
@@ -489,7 +458,7 @@ func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyCluster
 	return pod
 }
 
-func getOptimizationConfigMaps(ctx context.Context, r *ILPTaskReconciler) (map[string]corev1.ConfigMap, error) {
+func (r *ILPTaskReconciler) getOptimizationConfigMaps(ctx context.Context) (map[string]corev1.ConfigMap, error) {
 	configMapLabels := []string{"optimization-starter", "optimization-scripts"}
 	cfgMapList := make(map[string]corev1.ConfigMap)
 	for _, label := range configMapLabels {
@@ -517,7 +486,7 @@ func getOptimizationConfigMaps(ctx context.Context, r *ILPTaskReconciler) (map[s
 // - optimizationStatus: The status of the optimization process.
 // - deploymentPlan: The deployment plan details.
 // - error: An error object if an error occurred, otherwise nil.
-func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus string, optmizationStatus string, deployPlan string, err error) {
+func (r *ILPTaskReconciler) getPodStatusAndResult(ctx context.Context) (podStatus string, optmizationStatus string, deployPlan string, err error) {
 	pod := &corev1.Pod{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
@@ -540,6 +509,130 @@ func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus
 	// When the pod is not completed yet or not succeeded
 	// there is no result to return except the pod status
 	return string(pod.Status.Phase), "", "", nil
+}
+
+// getProvidersCSV returns the providers.csv file content given enabled providers
+func (r *ILPTaskReconciler) getProvidersJson(enabled map[string]struct{}) (string, error) {
+	providers := &corev1.ConfigMapList{}
+
+	pConfigMaps := &corev1.ConfigMapList{}
+	if err := r.List(context.Background(), pConfigMaps, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:       corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:      corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERENABLED_LABEL: "true",
+	}); err != nil {
+		return "", err
+	}
+
+	for _, cm := range pConfigMaps.Items {
+		pName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		pRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+		pZone := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL]
+
+		pId := pName + "_" + pRegion + "_" + pZone
+		if _, ok := enabled[pId]; ok {
+			// If the provider is enabled, we can add it to the list
+			providers.Items = append(providers.Items, cm)
+		}
+	}
+
+	// Marshal the providers to json
+	providerData, err := json.Marshal(providers)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert the json to string
+	return string(providerData), nil
+}
+
+// getEnabledProviders returns a map of enabled providers. The key is the
+// providerName_providerRegion_providerZone and the value is an empty struct.
+// If the provider is not enabled, it will not be in the map.
+func (r *ILPTaskReconciler) getEnabledProviders() map[string]struct{} {
+
+	// Using providerName_providerRegion as the key
+	// enabledRegions constains all regions that are enabled
+	enabledRegions := make(map[string]struct{}, 0)
+
+	// Using providerName_providerRegion_providerZone as the key
+	// enabledZones contains all zones that are enabled and
+	// has an associated enabled region
+	enabledZones := make(map[string]struct{}, 0)
+
+	// Get all configmaps with skycluster labels that represent regions
+	regionConfigMaps := &corev1.ConfigMapList{}
+	if err := r.List(context.Background(), regionConfigMaps, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:       corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:      corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL:    "global",
+		corev1alpha1.SKYCLUSTER_PROVIDERENABLED_LABEL: "true",
+	}); err != nil {
+		return nil
+	}
+
+	for _, cm := range regionConfigMaps.Items {
+		providerName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		providerRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+
+		pName := providerName + "_" + providerRegion
+		if providerName != "" {
+			enabledRegions[pName] = struct{}{}
+		}
+	}
+
+	// Get all configmaps with skycluster labels that represent zones
+	zoneConfigMaps := &corev1.ConfigMapList{}
+	if err := r.List(context.Background(), zoneConfigMaps, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:       corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:      corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERENABLED_LABEL: "true",
+	}); err != nil {
+		return nil
+	}
+
+	// compare zones with regions and set zones to disabled if their region is not enabled
+	for _, cm := range zoneConfigMaps.Items {
+		providerName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		providerRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+		providerType := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL]
+		providerZone := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL]
+
+		pRegionalId := providerName + "_" + providerRegion
+		pZoneId := providerName + "_" + providerRegion + "_" + providerZone
+
+		// we ignore regional (global) configs
+		if providerType == "global" {
+			continue
+		}
+
+		// Check if the region is enabled
+		if _, ok := enabledRegions[pRegionalId]; ok {
+			// If the region is enabled, we can enable the zone
+			enabledZones[pZoneId] = struct{}{}
+		} else {
+			// If the region is not enabled, we can disable the zone
+			delete(enabledZones, pZoneId)
+		}
+	}
+
+	return enabledZones
+}
+
+func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan corev1alpha1.DeployMap, result, status string) (*corev1alpha1.SkyCluster, error) {
+	skyCluster := &corev1alpha1.SkyCluster{}
+	// It has a same name as the ILPTask
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace,
+		Name:      req.Name,
+	}, skyCluster); err != nil {
+		return nil, err
+	}
+	// The deployment plan is a json string
+	skyCluster.Status.Optimization.DeployMap = deployPlan
+	skyCluster.Status.Optimization.Status = status
+	skyCluster.Status.Optimization.Result = result
+	return skyCluster, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

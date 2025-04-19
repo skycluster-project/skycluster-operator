@@ -230,18 +230,18 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// dfPolicy, err1 := getDFPolicy(r, ctx, req)
 	dpPolicy, err2 := r.getDPPolicy(ctx, req)
+
+	// Get all enabled providers as a map
+	enabledProviders := r.getEnabledProviders()
+
 	// Get all configmap with skycluster labels to store flavor sizes
 	// We will use flavors to specify requirements for each deployment
-	allConfigMap, err3 := r.getAllConfigMap(ctx)
+	allConfigMap, err3 := r.getAllConfigMap(ctx, enabledProviders)
 	if err2 != nil || err3 != nil {
 		logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
 		r.setConditionUnreadyAndUpdate(skyCluster, "Error getting policies or configmaps.")
 		return ctrl.Result{}, errors2.Join(err2, err3)
 	}
-	// if err1 != nil || err2 != nil || err3 != nil {
-	// 	logger.Info(fmt.Sprintf("[%s]\t Error getting policies or configmaps.", loggerName))
-	// 	return ctrl.Result{}, errors2.Join(err1, err2, err3)
-	// }
 
 	// Get all uniqe flavors from configmaps and store them
 	allFlavors := getUniqueFlavors(allConfigMap)
@@ -251,6 +251,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	// We list all deployments along with other Sky Services in one go,
 	// and include them in the optimization.
 	for _, dp := range dpPolicy.Spec.DeploymentPolicies {
+
 		// Get the object's performance and location constraints
 		gv, err := schema.ParseGroupVersion(dp.ComponentRef.APIVersion)
 		if err != nil {
@@ -263,6 +264,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			Version: gv.Version,
 			Kind:    dp.ComponentRef.Kind,
 		}
+
 		// Get the object
 		obj := &unstructured.Unstructured{}
 		obj.SetGroupVersionKind(gk)
@@ -279,6 +281,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		logger.Info(fmt.Sprintf("[%s]\t Object found.", loggerName))
 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
+
 		if dp.ComponentRef.Kind == "Deployment" {
 			minCPU, minRAM, err := r.calculateDeploymentResources(ctx, req, dp.ComponentRef.Name)
 			if err != nil {
@@ -297,7 +300,13 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			}
 			objVServices = append(objVServices, corev1alpha1.VirtualService{
 				Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"})
+
 		} else {
+			// deploymentPolicies.componentRef is not a deployment, this could be any Sky Services
+			// Currently, we only support SkyVM, and for that we check spec field
+			// and add whatever fields that is not empty to the virtual services
+			// like: skyvm_flavor_2vCPU-4GB. This means we need to check if vservice
+			// "skyvm_flavor_2vCPU-4GB" is in the "offerings" of a provider (configmap)
 			nestedObj, err := GetNestedField(obj.Object, "spec")
 			if err != nil {
 				logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
@@ -409,7 +418,7 @@ func (r *SkyClusterReconciler) getDPPolicy(ctx context.Context, req ctrl.Request
 	return dpPolicy, nil
 }
 
-func (r *SkyClusterReconciler) getAllConfigMap(ctx context.Context) (*corev1.ConfigMapList, error) {
+func (r *SkyClusterReconciler) getAllConfigMap(ctx context.Context, enabled map[string]struct{}) (*corev1.ConfigMapList, error) {
 	allConfigMap := &corev1.ConfigMapList{}
 	if err := r.List(ctx, allConfigMap, client.MatchingLabels{
 		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
@@ -417,7 +426,88 @@ func (r *SkyClusterReconciler) getAllConfigMap(ctx context.Context) (*corev1.Con
 	}); err != nil {
 		return nil, errors.Wrap(err, "Error listing ConfigMaps.")
 	}
+
+	// Filter the configmaps based on the enabled providers
+	for i := len(allConfigMap.Items) - 1; i >= 0; i-- {
+		cm := allConfigMap.Items[i]
+		providerName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		providerRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+		providerZone := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL]
+		pName := providerName + "_" + providerRegion + "_" + providerZone
+		if _, ok := enabled[pName]; !ok {
+			// Remove the configmap if it is not enabled
+			allConfigMap.Items = append(allConfigMap.Items[:i], allConfigMap.Items[i+1:]...)
+		}
+	}
+
 	return allConfigMap, nil
+}
+
+// getEnabledProviders returns a map of enabled providers. The key is the
+// providerName_providerRegion_providerZone and the value is an empty struct.
+// If the provider is not enabled, it will not be in the map.
+func (r *SkyClusterReconciler) getEnabledProviders() map[string]struct{} {
+
+	// Using providerName_providerRegion as the key
+	// enabledRegions constains all regions that are enabled
+	enabledRegions := make(map[string]struct{}, 0)
+
+	// Using providerName_providerRegion_providerZone as the key
+	// enabledZones contains all zones that are enabled and
+	// has an associated enabled region
+	enabledZones := make(map[string]struct{}, 0)
+
+	// Get all configmaps with skycluster labels that represent regions
+	regionConfigMaps := &corev1.ConfigMapList{}
+	if err := r.List(context.Background(), regionConfigMaps, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:       corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:      corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL:    "global",
+		corev1alpha1.SKYCLUSTER_PROVIDERENABLED_LABEL: "true",
+	}); err != nil {
+		return nil
+	}
+
+	for _, cm := range regionConfigMaps.Items {
+		providerName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		providerRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+
+		pName := providerName + "_" + providerRegion
+		if providerName != "" {
+			enabledRegions[pName] = struct{}{}
+		}
+	}
+
+	// Get all configmaps with skycluster labels that represent zones
+	zoneConfigMaps := &corev1.ConfigMapList{}
+	if err := r.List(context.Background(), zoneConfigMaps, client.MatchingLabels{
+		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:       corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL:      corev1alpha1.SKYCLUSTER_ProvdiderMappings_LABEL,
+		corev1alpha1.SKYCLUSTER_PROVIDERENABLED_LABEL: "true",
+	}); err != nil {
+		return nil
+	}
+
+	// compare zones with regions and set zones to disabled if their region is not enabled
+	for _, cm := range zoneConfigMaps.Items {
+		providerName := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL]
+		providerRegion := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL]
+		providerZone := cm.Labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL]
+
+		pRegionalId := providerName + "_" + providerRegion
+		pZoneId := providerName + "_" + providerRegion + "_" + providerZone
+
+		// Check if the region is enabled
+		if _, ok := enabledRegions[pRegionalId]; ok {
+			// If the region is enabled, we can enable the zone
+			enabledZones[pZoneId] = struct{}{}
+		} else {
+			// If the region is not enabled, we can disable the zone
+			delete(enabledZones, pZoneId)
+		}
+	}
+
+	return enabledZones
 }
 
 // getProviderConfigMap returns the ConfigMap for the given provider
@@ -822,7 +912,7 @@ func (r *SkyClusterReconciler) generateSkyK8SCluster(ctx context.Context, req ct
 			"privateRegistry": "registry.skycluster.io",
 			"ctrl": map[string]any{
 				"image":  "ubuntu-22.04",
-				"flavor": "2vCPU-4GB",
+				"flavor": "4vCPU-8GB",
 				"providerRef": map[string]string{
 					"providerName":   strings.Split(ctrlProvider.ProviderName, ".")[0],
 					"providerRegion": ctrlProvider.ProviderRegion,
@@ -886,6 +976,16 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			pIdLabel := corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL
 			providerId := strings.Join(strings.Split(deployItem.ProviderRef.ProviderName, ".")[:3], "-")
 
+			// We need to fetch the provider, so we can use the labels
+			// that are not part of deployPlan, such as provider-category
+			pName := strings.Split(deployItem.ProviderRef.ProviderName, ".")[0]
+			pRegion := deployItem.ProviderRef.ProviderRegion
+			pZone := deployItem.ProviderRef.ProviderZone
+			pCM, err := r.getProviderConfigMap(ctx, pName, pRegion, pZone)
+			if err != nil {
+				return nil, errors.Wrap(err, "Error getting ConfigMap when creating generateSkyAppManifests.")
+			}
+
 			mngByLabel := corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL
 			mngByLabelValue := corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
 
@@ -893,6 +993,7 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			regLabel := corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL
 			regLabelAlias := corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL
 			zoneLabel := corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL
+			ctgLabel := corev1alpha1.SKYCLUSTER_PROVIDERCATEGORY_LABEL
 
 			// spec.template.spec.nodeSelector
 			newDeploy.Spec.Template.Spec.NodeSelector = map[string]string{
@@ -908,6 +1009,15 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			newDeploy.Spec.Template.ObjectMeta.Labels[regLabel] = deployItem.ProviderRef.ProviderRegion
 			newDeploy.Spec.Template.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deployItem.ProviderRef.ProviderRegion)
 			newDeploy.Spec.Template.ObjectMeta.Labels[zoneLabel] = deployItem.ProviderRef.ProviderZone
+			newDeploy.Spec.Template.ObjectMeta.Labels[mngByLabel] = mngByLabelValue
+
+			// if provider-category is set, we need to add it to the labels
+			// otherwise we set it to the provider's region
+			if pCM.Labels[ctgLabel] != "" {
+				newDeploy.Spec.Template.ObjectMeta.Labels[ctgLabel] = pCM.Labels[ctgLabel]
+			} else {
+				newDeploy.Spec.Template.ObjectMeta.Labels[ctgLabel] = deployItem.ProviderRef.ProviderRegion
+			}
 
 			// spec.selector
 			if newDeploy.Spec.Selector == nil {
@@ -919,7 +1029,8 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			newDeploy.Spec.Selector.MatchLabels[pIdLabel] = providerId
 
 			// Update name to include providerId
-			newDeploy.Name = fmt.Sprintf("%s-%s", deployItem.ComponentRef.Name, deployItem.ProviderRef.ProviderName)
+			pNameWithHypen := strings.ReplaceAll(deployItem.ProviderRef.ProviderName, ".", "-")
+			newDeploy.Name = fmt.Sprintf("%s-%s", deployItem.ComponentRef.Name, pNameWithHypen)
 
 			// Add general labels to the deployment
 			if newDeploy.ObjectMeta.Labels == nil {
@@ -931,6 +1042,14 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			newDeploy.ObjectMeta.Labels[regLabel] = deployItem.ProviderRef.ProviderRegion
 			newDeploy.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deployItem.ProviderRef.ProviderRegion)
 			newDeploy.ObjectMeta.Labels[zoneLabel] = deployItem.ProviderRef.ProviderZone
+
+			// provider-category label is optional
+			// if provider-category is set, we need to add it to the labels
+			if pCM.Labels[ctgLabel] != "" {
+				newDeploy.ObjectMeta.Labels[ctgLabel] = pCM.Labels[ctgLabel]
+			} else {
+				newDeploy.ObjectMeta.Labels[ctgLabel] = deployItem.ProviderRef.ProviderRegion
+			}
 
 			// We need to add the deployment to the manifests
 			yamlObj, err := generateYAMLManifest(newDeploy)
@@ -1005,11 +1124,19 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			regLabel := corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL
 			regLabelAlias := corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL
 			zoneLabel := corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL
+			ctgLabel := corev1alpha1.SKYCLUSTER_PROVIDERCATEGORY_LABEL
 
 			newSvc.ObjectMeta.Labels[pIdLabel] = providerId
 			newSvc.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deploy.Labels[pIdLabel])
 			newSvc.ObjectMeta.Labels[regLabel] = deploy.Labels[regLabel]
 			newSvc.ObjectMeta.Labels[zoneLabel] = deploy.Labels[zoneLabel]
+
+			// provider-category label is optional
+			if deploy.Labels[ctgLabel] != "" {
+				newSvc.ObjectMeta.Labels[ctgLabel] = deploy.Labels[ctgLabel]
+			} else {
+				newSvc.ObjectMeta.Labels[ctgLabel] = deploy.Labels[regLabel]
+			}
 
 			yamlObj, err := generateYAMLManifest(newSvc)
 			if err != nil {

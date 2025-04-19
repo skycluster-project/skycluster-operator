@@ -211,10 +211,14 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 			}
 
 			failovers := []string{
+				corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL,
 				corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL,
 				corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL,
+				corev1alpha1.SKYCLUSTER_PROVIDERCATEGORY_LABEL,
 				corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL,
 			}
+
+			hostName := manifest.ComponentRef.Name + "." + manifest.ComponentRef.Namespace + ".svc.cluster.local"
 
 			istioObj := map[string]interface{}{
 				"apiVersion": "networking.istio.io/v1",
@@ -223,11 +227,13 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 					"name": manifest.ComponentRef.Name,
 				},
 				"spec": map[string]interface{}{
-					"host": manifest.ComponentRef.Name,
+					"host": hostName,
 					"trafficPolicy": map[string]interface{}{
 						"loadBalancer": map[string]interface{}{
-							"simple":           "LEAST_REQUEST",
-							"failoverPriority": failovers,
+							"simple": "LEAST_REQUEST",
+							"localityLbSetting": map[string]interface{}{
+								"failoverPriority": failovers,
+							},
 						},
 						"outlierDetection": map[string]interface{}{
 							"consecutiveErrors":  5,
