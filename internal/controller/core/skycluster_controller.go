@@ -283,25 +283,48 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		objVServices := make([]corev1alpha1.VirtualService, 0)
 
 		if dp.ComponentRef.Kind == "Deployment" {
-			minCPU, minRAM, err := r.calculateDeploymentResources(ctx, req, dp.ComponentRef.Name)
-			if err != nil {
-				logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
-				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting minimum flavor for pod.")
-				return ctrl.Result{}, err
-			}
-			logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%F vCPU, %fGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
+			// If dependency is not set, we need to calculate the minimum flavor
+			// if it is set, we just use the dependency as the flavor: e.g. "skyvm_flavor_2vCPU-4GB"
+			// or "skyvm_flavor_spot-2vCPU-4GB"
+			if len(dp.DependencyRef.AllOf) > 0 || len(dp.DependencyRef.AnyOf) > 0 {
+				logger.Info(fmt.Sprintf("[%s]\t Custom dependency is set.", loggerName))
+				allOf, anyOf := dp.DependencyRef.AllOf, dp.DependencyRef.AnyOf
+				for _, dep := range allOf {
+					objVServices = append(objVServices, corev1alpha1.VirtualService{
+						Name: fmt.Sprintf("%s|1", dep.Name), Type: dep.Kind})
+				}
+				if len(anyOf) == 0 {
+					names := make(map[string][]string, 0)
+					for _, dep := range anyOf {
+						names[dep.Kind] = append(names[dep.Kind], fmt.Sprintf("%s|1", dep.Name))
+					}
+					for k, v := range names {
+						objVServices = append(objVServices, corev1alpha1.VirtualService{
+							Name: strings.Join(v, "__"), Type: k})
+					}
+				}
+			} else {
+				minCPU, minRAM, err := r.calculateDeploymentResources(ctx, req, dp.ComponentRef.Name)
+				if err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error getting minimum flavor for pod.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error getting minimum flavor for pod.")
+					return ctrl.Result{}, err
+				}
+				logger.Info(fmt.Sprintf("[%s]\t Minimum Flavor for [%s] is [%F vCPU, %fGB].", loggerName, dp.ComponentRef.Name, minCPU, minRAM))
 
-			// Select all flavors that satisfy the requirements
-			okFlavors, err := getCompatibleFlavors(minCPU, minRAM, allFlavors)
-			if err != nil {
-				logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
-				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting proper flavors for pod.")
-				return ctrl.Result{}, client.IgnoreNotFound(err)
+				// Select all flavors that satisfy the requirements
+				okFlavors, err := getCompatibleFlavors(minCPU, minRAM, allFlavors)
+				if err != nil {
+					logger.Info(fmt.Sprintf("[%s]\t Error getting proper flavors for pod.", loggerName))
+					r.setConditionUnreadyAndUpdate(skyCluster, "Error getting proper flavors for pod.")
+					return ctrl.Result{}, client.IgnoreNotFound(err)
+				}
+				objVServices = append(objVServices, corev1alpha1.VirtualService{
+					Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"})
 			}
-			objVServices = append(objVServices, corev1alpha1.VirtualService{
-				Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"})
 
 		} else {
+			// TODO: Use the custom dependency reference if it is set.
 			// deploymentPolicies.componentRef is not a deployment, this could be any Sky Services
 			// Currently, we only support SkyVM, and for that we check spec field
 			// and add whatever fields that is not empty to the virtual services
@@ -1125,11 +1148,13 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 			regLabelAlias := corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL
 			zoneLabel := corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL
 			ctgLabel := corev1alpha1.SKYCLUSTER_PROVIDERCATEGORY_LABEL
+			svcType := corev1alpha1.SKYCLUSTER_SVCTYPE_LABEL
 
 			newSvc.ObjectMeta.Labels[pIdLabel] = providerId
 			newSvc.ObjectMeta.Labels[regLabelAlias] = corev1alpha1.GetRegionAlias(deploy.Labels[pIdLabel])
 			newSvc.ObjectMeta.Labels[regLabel] = deploy.Labels[regLabel]
 			newSvc.ObjectMeta.Labels[zoneLabel] = deploy.Labels[zoneLabel]
+			newSvc.ObjectMeta.Labels[svcType] = "metrics"
 
 			// provider-category label is optional
 			if deploy.Labels[ctgLabel] != "" {
@@ -1151,8 +1176,6 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 				},
 				Manifest: yamlObj,
 			})
-			// We break here as I expect only one service per deployment
-			break
 		}
 	}
 
