@@ -436,6 +436,10 @@ spec:
                           - componentRef
                           type: object
                         type: array
+                      cost:
+                        type: string
+                      deployCost:
+                        type: string
                       edges:
                         items:
                           properties:
@@ -690,6 +694,8 @@ spec:
                           - to
                           type: object
                         type: array
+                      transferCost:
+                        type: string
                     type: object
                   podRef:
                     description: |-

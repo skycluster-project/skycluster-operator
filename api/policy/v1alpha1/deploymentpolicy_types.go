@@ -22,25 +22,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// type Location struct {
-// 	// Name is the name of the location e.g. aws, gcp, os (OpenStack)
-// 	Name string `json:"name,omitempty"`
-// 	// Type is the type of the location e.g. cloud, nte, edge
-// 	Type string `json:"type,omitempty"`
-// 	// Region is the region of the location
-// 	Region string `json:"region,omitempty"`
-// 	// Zone is the zone of the location
-// 	Zone string `json:"zone,omitempty"`
-// }
-
-// type LocationSet struct {
-// 	AllOf []B1 `json:"allOf,omitempty"`
-// }
-// type B1 struct {
-// 	AnyOf    []Location `json:"anyOf,omitempty"`
-// 	Location Location   `json:"providerRef,omitempty"`
-// }
-
 type LocationConstraint struct {
 	// Permitted is the list of locations that are permitted
 	Permitted corev1alpha1.LocationPermittedRuleSet `json:"permitted,omitempty"`
@@ -60,9 +41,23 @@ type PerformanceConstraint struct {
 	CustomMetrics []CustomMetric `json:"customMetrics,omitempty"`
 }
 
+type ServiceDependency struct {
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+}
+
+type DepencenyReference struct {
+	AllOf []ServiceDependency `json:"allOf,omitempty"`
+	AnyOf []ServiceDependency `json:"anyOf,omitempty"`
+}
+
 type DeploymentPolicyItem struct {
 	// ComponentRef is the reference to the component
 	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	// DependencyRef is the reference to the service offered by the provider
+	// if omiitted, the operator decides what dependency to use based
+	// on the ComponentRef kind.
+	DependencyRef DepencenyReference `json:"dependencyRef,omitempty"`
 	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
 	// LocationConstraint is the location constraint for the component

@@ -85,6 +85,37 @@ spec:
                           type: string
                       type: object
                       x-kubernetes-map-type: atomic
+                    dependencyRef:
+                      description: |-
+                        DependencyRef is the reference to the service offered by the provider
+                        if omiitted, the operator decides what dependency to use based
+                        on the ComponentRef kind.
+                      properties:
+                        allOf:
+                          items:
+                            properties:
+                              kind:
+                                type: string
+                              name:
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          type: array
+                        anyOf:
+                          items:
+                            properties:
+                              kind:
+                                type: string
+                              name:
+                                type: string
+                            required:
+                            - kind
+                            - name
+                            type: object
+                          type: array
+                      type: object
                     locationConstraint:
                       description: LocationConstraint is the location constraint for
                         the component

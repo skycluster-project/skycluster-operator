@@ -44,7 +44,8 @@ spec:
                 items:
                   properties:
                     averageDataRate:
-                      description: AverageDataRate indicates the average data rate
+                      description: AverageDataRate indicates the average data rate,
+                        [not supported yet]
                       type: string
                     from:
                       description: From is the reference to the source component

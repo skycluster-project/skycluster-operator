@@ -33,7 +33,7 @@ type DataDapendency struct {
 	// TotalDataTransfer indicates the total data transferred
 	TotalDataTransfer string `json:"totalDataTransfer,omitempty"`
 
-	// AverageDataRate indicates the average data rate
+	// AverageDataRate indicates the average data rate, [not supported yet]
 	AverageDataRate string `json:"averageDataRate,omitempty"`
 }
 

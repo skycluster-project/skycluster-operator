@@ -68,8 +68,11 @@ type DeployMapEdge struct {
 }
 
 type DeployMap struct {
-	Component []SkyService    `json:"components,omitempty"`
-	Edges     []DeployMapEdge `json:"edges,omitempty"`
+	Component    []SkyService    `json:"components,omitempty"`
+	Edges        []DeployMapEdge `json:"edges,omitempty"`
+	Cost         string          `json:"cost,omitempty"`
+	DeployCost   string          `json:"deployCost,omitempty"`
+	TransferCost string          `json:"transferCost,omitempty"`
 }
 
 type SkyService struct {
