@@ -1,0 +1,688 @@
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-6.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-6
+    name: os-scinet-zone-6-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.6.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-6
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-18.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-18
+    name: os-scinet-zone-18-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.9.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-18
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-9.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-9
+    name: os-scinet-zone-9-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.16.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-9
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-1.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-1
+    name: os-scinet-zone-1-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.14.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-1
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-10.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-10
+    name: os-scinet-zone-10-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.18.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-10
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-15.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-15
+    name: os-scinet-zone-15-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.1.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-15
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-17.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-17
+    name: os-scinet-zone-17-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.2.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-17
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-4.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-4
+    name: os-scinet-zone-4-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.5.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-4
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-8.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-8
+    name: os-scinet-zone-8-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.7.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-8
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-16.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-16
+    name: os-scinet-zone-16-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.17.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-16
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-5.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-5
+    name: os-scinet-zone-5-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.20.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-5
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-3.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-3
+    name: os-scinet-zone-3-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.4.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-3
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-14.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-14
+    name: os-scinet-zone-14-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.8.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-14
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-12.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-12
+    name: os-scinet-zone-12-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.11.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-12
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-20.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-20
+    name: os-scinet-zone-20-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.13.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-20
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-2.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-2
+    name: os-scinet-zone-2-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.19.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-2
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-19.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-19
+    name: os-scinet-zone-19-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.3.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-19
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-11.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-11
+    name: os-scinet-zone-11-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.10.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-11
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-13.edge
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-13
+    name: os-scinet-zone-13-edge
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.12.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-13
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: Provider
+metadata:
+    labels:
+        skycluster.io/ext-ProjectV3-identity-v1alpha1: 1e1c724728544ec2a9058303ddc8f30b
+        skycluster.io/ext-RouterV2-networking-v1alpha1: 0033d21d-56e2-4cde-9755-de6153167017
+        skycluster.io/ext-os-public-subnet-name: ext-net
+        skycluster.io/managed-by: skycluster
+        skycluster.io/original-name: os.scinet.zone-7.cloud
+        skycluster.io/provider-name: os
+        skycluster.io/provider-region: scinet
+        skycluster.io/provider-zone: zone-7
+    name: os-scinet-zone-7-cloud
+    namespace: default
+spec:
+    forProvider:
+        gateway:
+            flavor: 2vCPU-4GB
+        vpcCidr: 10.15.3.0/24
+    providerRef:
+        providerName: os
+        providerRegion: scinet
+        providerZone: zone-7
+
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: K8SCluster
+metadata:
+    labels:
+        skycluster.io/managed-by: skycluster
+    name: air-quality-policies
+    namespace: default
+spec:
+    forProvider:
+        agents:
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-12
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-12
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-16
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-16
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-2
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-2
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-3
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-3
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-13
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-13
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-1
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-1
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-10
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-10
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-20
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-20
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-9
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-9
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-14
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-14
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-15
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-15
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-7
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-7
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-19
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-19
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-4
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-4
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-5
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-5
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-8
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-8
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-17
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-17
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-18
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-18
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-6
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: cloud
+                providerZone: zone-6
+            - flavor: 1vCPU-2GB
+              image: ubuntu-22.04
+              name: agent-1-scinet-zone-11
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-11
+            - flavor: 4vCPU-8GB
+              image: ubuntu-22.04
+              name: agent-monitoring-scinet-zone-11
+              providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerType: edge
+                providerZone: zone-11
+        ctrl:
+            flavor: 4vCPU-8GB
+            image: ubuntu-22.04
+            providerRef:
+                providerName: os
+                providerRegion: scinet
+                providerZone: zone-4
+        privateRegistry: registry.skycluster.io
+
+---

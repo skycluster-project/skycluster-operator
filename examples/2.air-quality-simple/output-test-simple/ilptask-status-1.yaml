@@ -1,0 +1,2509 @@
+configMapRef:
+  name: optimization-solver
+deployMap:
+  components:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-11.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-11
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-12.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-12
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-13.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-13
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-14.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-14
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-15.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-15
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-16.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-16
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-17.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-17
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-18.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-18
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-19.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-19
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      providerRef:
+        providerName: os.scinet.zone-20.edge
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: edge
+        providerZone: zone-20
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-1.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-10.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-10
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-2.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-2
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-3.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-3
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-4.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-4
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-5.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-5
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-6.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-6
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-7.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-7
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-8.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-8
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      providerRef:
+        providerName: os.scinet.zone-9.cloud
+        providerRegion: scinet
+        providerRegionAlias: scinet
+        providerType: cloud
+        providerZone: zone-9
+  edges:
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-11.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-11
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-12.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-12
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-13.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-13
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-14.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-14
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-15.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-15
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-16.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-16
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-17.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-17
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-18.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-18
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-19.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-19
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-1.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-10.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-10
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-2.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-2
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-3.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-3
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-4.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-4
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-5.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-5
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-6.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-6
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-7.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-7
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-8.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-8
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: collector
+        providerRef:
+          providerName: os.scinet.zone-20.edge
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: edge
+          providerZone: zone-20
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: ingestor
+        providerRef:
+          providerName: os.scinet.zone-9.cloud
+          providerRegion: scinet
+          providerRegionAlias: scinet
+          providerType: cloud
+          providerZone: zone-9
+podRef:
+  name: optimization-solver
+result: Optimal
+status: Succeeded

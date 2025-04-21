@@ -1,0 +1,1818 @@
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-15-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east5
+          skycluster.io/provider-identifier: os-scinet-zone-15
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-15
+        name: collector-os-scinet-zone-15-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-15
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east5
+              skycluster.io/provider-identifier: os-scinet-zone-15
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-15
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-15
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-16-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west1
+          skycluster.io/provider-identifier: os-scinet-zone-16
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-16
+        name: collector-os-scinet-zone-16-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-16
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west1
+              skycluster.io/provider-identifier: os-scinet-zone-16
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-16
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-16
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-4-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east4
+          skycluster.io/provider-identifier: os-scinet-zone-4
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-4
+        name: ingestor-os-scinet-zone-4-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-4
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east4
+              skycluster.io/provider-identifier: os-scinet-zone-4
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-4
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-4
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-8-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west3
+          skycluster.io/provider-identifier: os-scinet-zone-8
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-8
+        name: ingestor-os-scinet-zone-8-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-8
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west3
+              skycluster.io/provider-identifier: os-scinet-zone-8
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-8
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-8
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-ingestor
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: air-quality
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-ingestor
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50051
+          protocol: TCP
+          targetPort: 50051
+        selector:
+          app: ingestor
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-ingestor-os-scinet-zone-1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: air-quality
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east1
+          skycluster.io/provider-identifier: os-scinet-zone-1
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-1
+        name: svc-ingestor-os-scinet-zone-1
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50051
+          protocol: TCP
+          targetPort: 50051
+        selector:
+          app: ingestor
+          skycluster.io/provider-identifier: os-scinet-zone-1
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-12-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east2
+          skycluster.io/provider-identifier: os-scinet-zone-12
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-12
+        name: collector-os-scinet-zone-12-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-12
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east2
+              skycluster.io/provider-identifier: os-scinet-zone-12
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-12
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-12
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-17-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west2
+          skycluster.io/provider-identifier: os-scinet-zone-17
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-17
+        name: collector-os-scinet-zone-17-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-17
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west2
+              skycluster.io/provider-identifier: os-scinet-zone-17
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-17
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-17
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-18-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west3
+          skycluster.io/provider-identifier: os-scinet-zone-18
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-18
+        name: collector-os-scinet-zone-18-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-18
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west3
+              skycluster.io/provider-identifier: os-scinet-zone-18
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-18
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-18
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-19-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west4
+          skycluster.io/provider-identifier: os-scinet-zone-19
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-19
+        name: collector-os-scinet-zone-19-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-19
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west4
+              skycluster.io/provider-identifier: os-scinet-zone-19
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-19
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-19
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-3-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east3
+          skycluster.io/provider-identifier: os-scinet-zone-3
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-3
+        name: ingestor-os-scinet-zone-3-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-3
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east3
+              skycluster.io/provider-identifier: os-scinet-zone-3
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-3
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-3
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-5-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east5
+          skycluster.io/provider-identifier: os-scinet-zone-5
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-5
+        name: ingestor-os-scinet-zone-5-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-5
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east5
+              skycluster.io/provider-identifier: os-scinet-zone-5
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-5
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-5
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-6-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west1
+          skycluster.io/provider-identifier: os-scinet-zone-6
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-6
+        name: ingestor-os-scinet-zone-6-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-6
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west1
+              skycluster.io/provider-identifier: os-scinet-zone-6
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-6
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-6
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-9-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west4
+          skycluster.io/provider-identifier: os-scinet-zone-9
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-9
+        name: ingestor-os-scinet-zone-9-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-9
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west4
+              skycluster.io/provider-identifier: os-scinet-zone-9
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-9
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-9
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-11-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east1
+          skycluster.io/provider-identifier: os-scinet-zone-11
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-11
+        name: collector-os-scinet-zone-11-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-11
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east1
+              skycluster.io/provider-identifier: os-scinet-zone-11
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-11
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-11
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-1-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east1
+          skycluster.io/provider-identifier: os-scinet-zone-1
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-1
+        name: ingestor-os-scinet-zone-1-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-1
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east1
+              skycluster.io/provider-identifier: os-scinet-zone-1
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-1
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-1
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-7-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west2
+          skycluster.io/provider-identifier: os-scinet-zone-7
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-7
+        name: ingestor-os-scinet-zone-7-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-7
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west2
+              skycluster.io/provider-identifier: os-scinet-zone-7
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-7
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-7
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-collector
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: air-quality
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-collector
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: collector
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-collector-os-scinet-zone-11
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: air-quality
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east1
+          skycluster.io/provider-identifier: os-scinet-zone-11
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-11
+        name: svc-collector-os-scinet-zone-11
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: collector
+          skycluster.io/provider-identifier: os-scinet-zone-11
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-13-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east3
+          skycluster.io/provider-identifier: os-scinet-zone-13
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-13
+        name: collector-os-scinet-zone-13-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-13
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east3
+              skycluster.io/provider-identifier: os-scinet-zone-13
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-13
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-13
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-14-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east4
+          skycluster.io/provider-identifier: os-scinet-zone-14
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-14
+        name: collector-os-scinet-zone-14-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-14
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east4
+              skycluster.io/provider-identifier: os-scinet-zone-14
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-14
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-14
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: collector-os-scinet-zone-20-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west5
+          skycluster.io/provider-identifier: os-scinet-zone-20
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-20
+        name: collector-os-scinet-zone-20-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: collector
+            skycluster.io/provider-identifier: os-scinet-zone-20
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: collector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west5
+              skycluster.io/provider-identifier: os-scinet-zone-20
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-20
+          spec:
+            containers:
+            - env:
+              - name: TOKEN
+                value: e9df2b23ac644fb5684ca9b78bfaab0583168cee
+              - name: SVC_INGESTION_ADDR
+                value: svc-ingestor
+              - name: SVC_INGESTION_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "1"
+              image: registry.skycluster.io/svc-collector:0.0.7
+              imagePullPolicy: Always
+              name: collector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-20
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-10-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west5
+          skycluster.io/provider-identifier: os-scinet-zone-10
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-10
+        name: ingestor-os-scinet-zone-10-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-10
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west5
+              skycluster.io/provider-identifier: os-scinet-zone-10
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-10
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-10
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: ingestor-os-scinet-zone-2-cloud
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east2
+          skycluster.io/provider-identifier: os-scinet-zone-2
+          skycluster.io/provider-name: os
+          skycluster.io/provider-region: scinet
+          skycluster.io/provider-region-alias: scinet
+          skycluster.io/provider-zone: zone-2
+        name: ingestor-os-scinet-zone-2-cloud
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: ingestor
+            skycluster.io/provider-identifier: os-scinet-zone-2
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: ingestor
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east2
+              skycluster.io/provider-identifier: os-scinet-zone-2
+              skycluster.io/provider-name: os
+              skycluster.io/provider-region: scinet
+              skycluster.io/provider-region-alias: scinet
+              skycluster.io/provider-zone: zone-2
+          spec:
+            containers:
+            - env:
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50051"
+              - name: SVC_STRG_ADDR
+                value: svc-local-storage
+              - name: SVC_STRG_PORT
+                value: "50051"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: UPDATE_FREQUENCY
+                value: "30"
+              image: registry.skycluster.io/svc-ingestor:0.0.7
+              imagePullPolicy: Always
+              name: ingestor
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: os-scinet-zone-2
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-ingestor
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-ingestor
+      spec:
+        host: svc-ingestor.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-collector
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-collector
+      spec:
+        host: svc-collector.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---

@@ -1,0 +1,153 @@
+# Both DeploymentPolicy and DataflowPolicy objects should have the same name
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: air-quality-policies
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      latency: 300ms
+      totalDataTransfer: 1TB
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: air-quality-policies
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerRegion: scinet
+        required:
+          allOf:
+            - providerRef:
+                providerType: edge
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerRegion: scinet
+        required:
+          allOf:
+            - providerRef:
+                providerType: cloud
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+      - name: collector
+        image: registry.skycluster.io/svc-collector:0.1.1
+        imagePullPolicy: Always
+        env:
+          - name: TOKEN
+            value: "e9df2b23ac644fb5684ca9b78bfaab0583168cee"
+          - name: SVC_INGESTION_ADDR
+            value: "svc-ingestor"
+          - name: SVC_INGESTION_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "1"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingestor
+  template:
+    metadata:
+      labels:
+        app: ingestor
+    spec:
+      containers:
+      - name: ingestor
+        image: registry.skycluster.io/svc-ingestor:0.0.7
+        imagePullPolicy: Always
+        env:
+          - name: SVC_INGST_ADDR
+            value: "0.0.0.0"
+          - name: SVC_INGST_PORT
+            value: "50051"
+          - name: SVC_STRG_ADDR
+            value: "svc-local-storage"
+          - name: SVC_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "30"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-collector
+  labels:
+    skycluster.io/app-name: air-quality
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: collector
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-ingestor
+  labels:
+    skycluster.io/app-name: air-quality
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: ingestor
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 50051
+      targetPort: 50051
