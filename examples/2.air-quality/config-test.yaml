@@ -1,0 +1,554 @@
+# Both DeploymentPolicy and DataflowPolicy objects should have the same name
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: air-quality-policies
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      latency: 300ms
+      totalDataTransfer: 100GB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      latency: 300ms
+      totalDataTransfer: 50GB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      latency: 300ms
+      totalDataTransfer: 50GB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      latency: 300ms
+      totalDataTransfer: 10GB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: dashboard
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      latency: 300ms
+      totalDataTransfer: 1GB
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: air-quality-policies
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      locationConstraint:
+        permitted: 
+          allOf:
+            - providerName: aws
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            # - providerName: aws
+            #   providerRegion: us-east-1
+            #   providerType: cloud
+            # - providerRegion: us-east-1
+            # - providerRegion: us-west-2
+        required:
+          allOf:
+            - providerRef:
+                providerType: edge
+
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      locationConstraint:
+        permitted: 
+          allOf:
+            # - providerType: cloud
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            - providerName: aws
+              providerType: cloud
+            #   providerRegion: us-east-1
+        # required:
+        #   allOf:
+        #     - anyOf:
+        #       - providerRegion: us-east-1
+        #         providerType: nte
+        #       - providerRegion: us-east-1
+        #         providerType: edge
+        #     - anyOf:
+        #       - providerRegion: us-west-2
+        #         providerType: nte
+        #       - providerRegion: us-west-2
+        #         providerType: edge
+
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      locationConstraint:
+        permitted: 
+          allOf:
+            # - providerType: cloud
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            - providerName: aws
+              providerType: cloud
+            #   providerRegion: us-east-1
+        # required: 
+        #   allOf:
+        #     - anyOf:
+        #       - providerRegion: us-east-1
+        #         providerType: nte
+        #       - providerRegion: us-east-1
+        #         providerType: edge
+        #     - anyOf:
+        #       - providerRegion: us-west-2
+        #         providerType: nte
+        #       - providerRegion: us-west-2
+        #         providerType: edge
+
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      dependencyRef:
+        allOf:
+          - kind: skyvm_flavor
+            name: 2vCPU-2GB-spot
+      locationConstraint:
+        permitted: {} 
+          # allOf:
+            # - providerType: cloud
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            # - providerName: aws
+            #   providerType: cloud
+            #   providerRegion: us-east-1
+
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      locationConstraint:
+        permitted: {}
+          # allOf: 
+            # - providerType: cloud
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            # - providerName: aws
+            #   providerType: cloud
+            #   providerRegion: us-east-1
+
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: dashboard
+      dependencyRef:
+        allOf:
+          - kind: skyvm_flavor
+            name: 2vCPU-2GB-spot
+      locationConstraint:
+        permitted: {}
+          # allOf:
+            # - providerType: cloud
+            # - providerName: azure
+            #   providerRegion: northcentralus
+            #   providerType: cloud
+            # - providerName: gcp
+            #   providerRegion: us-east1
+            #   providerType: cloud
+            # - providerName: aws
+            #   providerType: cloud
+              # providerRegion: us-east-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: collector
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: collector
+        image: registry.skycluster.io/svc-collector:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: LNG1
+            value: "-122.500722"
+          - name: LAT1
+            value: "47.766099"
+          - name: LNG2
+            value: "-122.065675"
+          - name: LAT2
+            value: "47.450380" 
+          - name: TOKEN
+            value: "e9df2b23ac644fb5684ca9b78bfaab0583168cee"
+          - name: SVC_INGESTION_ADDR
+            value: "svc-ingestor"
+          - name: SVC_INGESTION_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "1"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingestor
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: ingestor
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: ingestor
+        image: registry.skycluster.io/svc-ingestor:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: SVC_INGST_ADDR
+            value: "0.0.0.0"
+          - name: SVC_INGST_PORT
+            value: "50051"
+          - name: SVC_STRG_ADDR
+            value: "svc-local-storage"
+          - name: SVC_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "30"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-storage
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: local-storage
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: local-storage
+        image: registry.skycluster.io/svc-local-storage:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: SVC_PROCESSOR_ADDR
+            value: "svc-processor"
+          - name: SVC_PROCESSOR_PORT
+            value: "50051"
+          - name: SVC_STRG_ADDR
+            value: "0.0.0.0"
+          - name: SVC_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "1"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: processor
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: processor
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: processor
+        image: registry.skycluster.io/svc-processor:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: SVC_PROCESSOR_ADDR
+            value: "0.0.0.0"
+          - name: SVC_PROCESSOR_PORT
+            value: "50051"
+          - name: SVC_AGGR_STRG_ADDR
+            value: "svc-central-storage"
+          - name: SVC_AGGR_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "15"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: central-storage
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: central-storage
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: central-storage
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: central-storage
+        image: registry.skycluster.io/svc-central-storage:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: SVC_AGGR_STRG_ADDR
+            value: "0.0.0.0"
+          - name: SVC_AGGR_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+      skycluster.io/provider-identifier: os-scinet-zone-1
+  template:
+    metadata:
+      labels:
+        app: dashboard
+        skycluster.io/provider-identifier: os-scinet-zone-1
+    spec:
+      containers:
+      - name: dashboard
+        image: registry.skycluster.io/svc-dashboard:0.1.0
+        imagePullPolicy: Always
+        env:
+          - name: SVC_AGGR_STRG_ADDR
+            value: "svc-central-storage"
+          - name: SVC_AGGR_STRG_PORT
+            value: "50051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "20"
+        ports:
+        - containerPort: 8001
+          name: metrics
+      nodeSelector:
+        skycluster.io/provider-identifier: os-scinet-zone-1
+---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-collector
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: collector
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-ingestor
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: ingestor
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+#     - name: app
+#       port: 50051
+#       targetPort: 50051
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-local-storage
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: local-storage
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+#     - name: app
+#       port: 50051
+#       targetPort: 50051
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-processor
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: processor
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+#     - name: app
+#       port: 50051
+#       targetPort: 50051
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-central-storage
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: central-storage
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+#     - name: app
+#       port: 50051
+#       targetPort: 50051
+# ---
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: svc-dashboard
+#   labels:
+#     skycluster.io/app-name: air-quality
+#     skycluster.io/managed-by: skycluster
+# spec:
+#   selector:
+#     app: dashboard
+#   ports:
+#     - name: metrics
+#       port: 8001
+#       targetPort: 8001
+# ---

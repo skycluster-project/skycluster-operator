@@ -305,20 +305,20 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
 		os.Exit(1)
 	}
-	if err = (&svccontroller.SkyK8SReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
-		os.Exit(1)
-	}
-	if err = (&svccontroller.SkyProviderReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
-		os.Exit(1)
-	}
+	// if err = (&svccontroller.SkyK8SReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
+	// 	os.Exit(1)
+	// }
+	// if err = (&svccontroller.SkyProviderReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
+	// 	os.Exit(1)
+	// }
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {

@@ -314,6 +314,8 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 			}(strings.Split(vs.Name, "__"), vs.Type, "__")
 			tasks = append(tasks, fmt.Sprintf("%s.%s, %s, %s, %s", cmpntName, strings.ToLower(cmpntKind), cmpntApiVersion, cmpntKind, vsNames))
 		}
+		// This implementation does not consider a case where a component has no virtual services
+		// and only has a task. In fact, this is not a valid case, since a component should have at least one
 	}
 	return strings.Join(tasks, "\n")
 }

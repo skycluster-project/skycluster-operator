@@ -1,0 +1,2514 @@
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-east-1-us-east-1-phl-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-phl-1a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-east-1-us-east-1-phl-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-east-1-us-east-1-iah-2a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-iah-2a
+        name: client-rtsp-aws-us-east-1-us-east-1-iah-2a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-iah-2a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-west-2-us-west-2-sea-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-sea-1a
+        name: client-rtsp-aws-us-west-2-us-west-2-sea-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-sea-1a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: aggregator-aws-us-west-2-us-west-2-lax-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+        name: aggregator-aws-us-west-2-us-west-2-lax-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: aggregator
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: aggregator
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-lax-1a
+          spec:
+            containers:
+            - env:
+              - name: REMOTE_DETECTION_HOST
+                value: svc-detector
+              - name: REMOTE_DETECTION_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: FRAME_RATE
+                value: "15"
+              - name: QUEUE_SIZE
+                value: "120"
+              - name: MAX_TOTRAL_FRAME
+                value: "-1"
+              - name: DETECTION_FREQUENCY
+                value: "20"
+              image: registry.skycluster.io/svc-aggregator:0.0.7
+              imagePullPolicy: Always
+              name: aggregator
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: tracker-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+        name: tracker-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: tracker
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: tracker
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          spec:
+            containers:
+            - env:
+              - name: SVC_TRACKER_HOST
+                value: 0.0.0.0
+              - name: SVC_TRACKER_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: SAVE_IMAGE
+                value: "false"
+              - name: SAVE_IMAGE_PATH
+                value: /tmp/videos/
+              - name: SAVE_IMAGE_FREQUENCY_TRACKING
+                value: "10"
+              - name: SAVE_IMAGE_FREQUENCY_DETECTION
+                value: "1"
+              image: registry.skycluster.io/svc-tracker:0.0.7
+              imagePullPolicy: Always
+              name: tracker
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-tracker
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-tracker
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: tracker
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-client-rtsp
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-east-1-us-east-1-dfw-2a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-dfw-2a
+        name: client-rtsp-aws-us-east-1-us-east-1-dfw-2a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-dfw-2a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-east-1-us-east-1-bos-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-bos-1a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-east-1-us-east-1-bos-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-east-1-us-east-1-dfw-2a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-dfw-2a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-east-1-us-east-1-dfw-2a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-dfw-2a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-aggregator
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator-aws-us-east-1-us-east-1-phl-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-phl-1a
+          skycluster.io/service-type: metrics
+        name: svc-aggregator-aws-us-east-1-us-east-1-phl-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: aggregator-aws-us-east-1-us-east-1-phl-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-phl-1a
+        name: aggregator-aws-us-east-1-us-east-1-phl-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: aggregator
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: aggregator
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-phl-1a
+          spec:
+            containers:
+            - env:
+              - name: REMOTE_DETECTION_HOST
+                value: svc-detector
+              - name: REMOTE_DETECTION_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: FRAME_RATE
+                value: "15"
+              - name: QUEUE_SIZE
+                value: "120"
+              - name: MAX_TOTRAL_FRAME
+                value: "-1"
+              - name: DETECTION_FREQUENCY
+                value: "20"
+              image: registry.skycluster.io/svc-aggregator:0.0.7
+              imagePullPolicy: Always
+              name: aggregator
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-east-1-us-east-1-iah-2a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-iah-2a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-east-1-us-east-1-iah-2a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-iah-2a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          skycluster.io/service-type: metrics
+        name: svc-aggregator-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-tracker-aws-us-west-2-us-west-2-lax-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+          skycluster.io/service-type: metrics
+        name: svc-tracker-aws-us-west-2-us-west-2-lax-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: tracker
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-tracker-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          skycluster.io/service-type: metrics
+        name: svc-tracker-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: tracker
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-west-2-us-west-2-sea-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-sea-1a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-west-2-us-west-2-sea-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-sea-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-detector-aws-us-west-2-us-west-2-lax-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+          skycluster.io/service-type: metrics
+        name: svc-detector-aws-us-west-2-us-west-2-lax-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: detector
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-east-1-us-east-1-phl-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-phl-1a
+        name: client-rtsp-aws-us-east-1-us-east-1-phl-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-phl-1a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-phl-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-west-2-us-west-2-lax-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+        name: client-rtsp-aws-us-west-2-us-west-2-lax-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-lax-1a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: detector-aws-us-west-2-us-west-2-lax-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+        name: detector-aws-us-west-2-us-west-2-lax-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: detector
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: detector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-lax-1a
+          spec:
+            containers:
+            - env:
+              - name: SVC_DETECTOR_HOST
+                value: 0.0.0.0
+              - name: SVC_DETECTOR_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: YOLO_MODEL
+                value: /root/yolov8n.onnx
+              - name: IMAGE_WIDTH
+                value: "640"
+              - name: IMAGE_HEIGHT
+                value: "640"
+              - name: SAVE_IMAGE
+                value: "false"
+              - name: SAVE_IMAGE_PATH
+                value: /tmp/videos/
+              - name: SAVE_IMAGE_FREQUENCY
+                value: "10"
+              image: registry.skycluster.io/svc-detector:0.0.7
+              imagePullPolicy: Always
+              name: detector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: detector-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+        name: detector-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: detector
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: detector
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          spec:
+            containers:
+            - env:
+              - name: SVC_DETECTOR_HOST
+                value: 0.0.0.0
+              - name: SVC_DETECTOR_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: YOLO_MODEL
+                value: /root/yolov8n.onnx
+              - name: IMAGE_WIDTH
+                value: "640"
+              - name: IMAGE_HEIGHT
+                value: "640"
+              - name: SAVE_IMAGE
+                value: "false"
+              - name: SAVE_IMAGE_PATH
+                value: /tmp/videos/
+              - name: SAVE_IMAGE_FREQUENCY
+                value: "10"
+              image: registry.skycluster.io/svc-detector:0.0.7
+              imagePullPolicy: Always
+              name: detector
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator-aws-us-east-1-us-east-1-bos-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-bos-1a
+          skycluster.io/service-type: metrics
+        name: svc-aggregator-aws-us-east-1-us-east-1-bos-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator-aws-us-west-2-us-west-2-lax-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+          skycluster.io/service-type: metrics
+        name: svc-aggregator-aws-us-west-2-us-west-2-lax-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: aggregator-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+        name: aggregator-aws-us-east-1-us-east-1-wl1-iah-wlz-1-nte
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: aggregator
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: aggregator
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          spec:
+            containers:
+            - env:
+              - name: REMOTE_DETECTION_HOST
+                value: svc-detector
+              - name: REMOTE_DETECTION_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: FRAME_RATE
+                value: "15"
+              - name: QUEUE_SIZE
+                value: "120"
+              - name: MAX_TOTRAL_FRAME
+                value: "-1"
+              - name: DETECTION_FREQUENCY
+                value: "20"
+              image: registry.skycluster.io/svc-aggregator:0.0.7
+              imagePullPolicy: Always
+              name: aggregator
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: aggregator-aws-us-west-2-us-west-2-wl1-sea-wlz-1-nte
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-wl1-sea-wlz-1
+        name: aggregator-aws-us-west-2-us-west-2-wl1-sea-wlz-1-nte
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: aggregator
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: aggregator
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-wl1-sea-wlz-1
+          spec:
+            containers:
+            - env:
+              - name: REMOTE_DETECTION_HOST
+                value: svc-detector
+              - name: REMOTE_DETECTION_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: FRAME_RATE
+                value: "15"
+              - name: QUEUE_SIZE
+                value: "120"
+              - name: MAX_TOTRAL_FRAME
+                value: "-1"
+              - name: DETECTION_FREQUENCY
+                value: "20"
+              image: registry.skycluster.io/svc-aggregator:0.0.7
+              imagePullPolicy: Always
+              name: aggregator
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: tracker-aws-us-west-2-us-west-2-lax-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+        name: tracker-aws-us-west-2-us-west-2-lax-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: tracker
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: tracker
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-lax-1a
+          spec:
+            containers:
+            - env:
+              - name: SVC_TRACKER_HOST
+                value: 0.0.0.0
+              - name: SVC_TRACKER_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: SAVE_IMAGE
+                value: "false"
+              - name: SAVE_IMAGE_PATH
+                value: /tmp/videos/
+              - name: SAVE_IMAGE_FREQUENCY_TRACKING
+                value: "10"
+              - name: SAVE_IMAGE_FREQUENCY_DETECTION
+                value: "1"
+              image: registry.skycluster.io/svc-tracker:0.0.7
+              imagePullPolicy: Always
+              name: tracker
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-west-2-us-west-2-pdx-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-pdx-1a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-west-2-us-west-2-pdx-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-detector-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-wl1-iah-wlz-1
+          skycluster.io/service-type: metrics
+        name: svc-detector-aws-us-east-1-us-east-1-wl1-iah-wlz-1
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: detector
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-wl1-iah-wlz-1
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator-aws-us-west-2-us-west-2-wl1-sea-wlz-1
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-wl1-sea-wlz-1
+          skycluster.io/service-type: metrics
+        name: svc-aggregator-aws-us-west-2-us-west-2-wl1-sea-wlz-1
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: aggregator
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-wl1-sea-wlz-1
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-east-1-us-east-1-bos-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-bos-1a
+        name: client-rtsp-aws-us-east-1-us-east-1-bos-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-bos-1a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: aggregator-aws-us-east-1-us-east-1-bos-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-east-1
+          skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-east-1
+          skycluster.io/provider-region-alias: us-east
+          skycluster.io/provider-zone: us-east-1-bos-1a
+        name: aggregator-aws-us-east-1-us-east-1-bos-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: aggregator
+            skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+        strategy: {}
+        template:
+          metadata:
+            creationTimestamp: null
+            labels:
+              app: aggregator
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-east-1
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-zone: us-east-1-bos-1a
+          spec:
+            containers:
+            - env:
+              - name: REMOTE_DETECTION_HOST
+                value: svc-detector
+              - name: REMOTE_DETECTION_PORT
+                value: "50052"
+              - name: REMOTE_TRACKER_HOST
+                value: svc-tracker
+              - name: REMOTE_TRACKER_PORT
+                value: "50052"
+              - name: SVC_INGST_ADDR
+                value: 0.0.0.0
+              - name: SVC_INGST_PORT
+                value: "50052"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: FRAME_RATE
+                value: "15"
+              - name: QUEUE_SIZE
+                value: "120"
+              - name: MAX_TOTRAL_FRAME
+                value: "-1"
+              - name: DETECTION_FREQUENCY
+                value: "20"
+              image: registry.skycluster.io/svc-aggregator:0.0.7
+              imagePullPolicy: Always
+              name: aggregator
+              ports:
+              - containerPort: 8001
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-east-1-us-east-1-bos-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp-aws-us-west-2-us-west-2-lax-1a
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-lax-1a
+          skycluster.io/service-type: metrics
+        name: svc-client-rtsp-aws-us-west-2-us-west-2-lax-1a
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        selector:
+          app: client-rtsp
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-lax-1a
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: client-rtsp-aws-us-west-2-us-west-2-pdx-1a-edge
+spec:
+  forProvider:
+    manifest:
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/provider-category: us-west-2
+          skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+          skycluster.io/provider-name: aws
+          skycluster.io/provider-region: us-west-2
+          skycluster.io/provider-region-alias: us-west
+          skycluster.io/provider-zone: us-west-2-pdx-1a
+        name: client-rtsp-aws-us-west-2-us-west-2-pdx-1a-edge
+        namespace: default
+      spec:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: client-rtsp
+            skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+        strategy: {}
+        template:
+          metadata:
+            annotations:
+              traffic.sidecar.istio.io/excludeInboundPorts: 50052,8000,8001,8002,8003
+            creationTimestamp: null
+            labels:
+              app: client-rtsp
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-category: us-west-2
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+              skycluster.io/provider-name: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-zone: us-west-2-pdx-1a
+          spec:
+            containers:
+            - env:
+              - name: UPDATE_FREQUENCY
+                value: "10"
+              - name: METRIC_ADDR
+                value: 0.0.0.0
+              - name: METRIC_PORT
+                value: "8001"
+              - name: RTSP_SERVER_EXT_IP
+                value: svc-rtsp-server
+              - name: RTSP_SERVER_HOST
+                value: 0.0.0.0
+              - name: RTSP_SERVER_PORT
+                value: "50052"
+              - name: USE_POD_IP_FOR_GRPC_CONNECTION
+                value: "true"
+              - name: REMOTE_SVC_HOST
+                value: svc-aggregator
+              - name: REMOTE_SVC_PORT
+                value: "50052"
+              - name: TS_FILE_LIST_ADDR
+                value: https://skycluster.io/datasets/file-names.txt
+              image: registry.skycluster.io/svc-rtsp-server:0.0.11
+              imagePullPolicy: Always
+              name: client-rtsp
+              ports:
+              - containerPort: 8000
+                name: rtp
+                protocol: UDP
+              - containerPort: 8001
+                name: rtcp
+                protocol: UDP
+              - containerPort: 8002
+                name: mutlicast-rtp
+                protocol: UDP
+              - containerPort: 8003
+                name: multicast-rtcp
+                protocol: UDP
+              - containerPort: 8008
+                name: metrics
+                protocol: TCP
+              - containerPort: 50052
+                name: app
+                protocol: TCP
+              resources: {}
+              terminationMessagePath: /dev/termination-log
+              terminationMessagePolicy: File
+            dnsPolicy: ClusterFirst
+            nodeSelector:
+              skycluster.io/provider-identifier: aws-us-west-2-us-west-2-pdx-1a
+            restartPolicy: Always
+            schedulerName: default-scheduler
+            securityContext: {}
+            terminationGracePeriodSeconds: 30
+      status: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-detector
+spec:
+  forProvider:
+    manifest:
+      apiVersion: v1
+      kind: Service
+      metadata:
+        creationTimestamp: null
+        labels:
+          skycluster.io/app-name: video-analysis
+          skycluster.io/managed-by: skycluster
+          skycluster.io/service-type: app-face
+        name: svc-detector
+        namespace: default
+      spec:
+        ports:
+        - name: metrics
+          port: 8001
+          protocol: TCP
+          targetPort: 8001
+        - name: app
+          port: 50052
+          protocol: TCP
+          targetPort: 50052
+        selector:
+          app: detector
+      status:
+        loadBalancer: {}
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-tracker
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-tracker
+      spec:
+        host: svc-tracker.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-client-rtsp
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-client-rtsp
+      spec:
+        host: svc-client-rtsp.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-detector
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-detector
+      spec:
+        host: svc-detector.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---
+apiVersion: kubernetes.crossplane.io/v1alpha2
+kind: Object
+metadata:
+  labels:
+    skycluster.io/managed-by: skycluster
+  name: svc-aggregator
+spec:
+  forProvider:
+    manifest:
+      apiVersion: networking.istio.io/v1
+      kind: DestinationRule
+      metadata:
+        name: svc-aggregator
+      spec:
+        host: svc-aggregator.default.svc.cluster.local
+        trafficPolicy:
+          loadBalancer:
+            localityLbSetting:
+              failoverPriority:
+              - skycluster.io/provider-name
+              - skycluster.io/provider-region-alias
+              - skycluster.io/provider-region
+              - skycluster.io/provider-category
+              - skycluster.io/provider-zone
+            simple: LEAST_REQUEST
+          outlierDetection:
+            baseEjectionTime: 30s
+            consecutiveErrors: 5
+            interval: 5s
+            maxEjectionPercent: 100
+  providerConfigRef:
+    name: NotReady
+
+---

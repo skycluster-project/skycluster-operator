@@ -323,6 +323,28 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 					Name: strings.Join(okFlavors, "__"), Type: "skyvm_flavor"})
 			}
 
+		} else if dp.ComponentRef.Kind == "xPubSub" || dp.ComponentRef.Kind == "PubSub" {
+			// For PubSub service, there is no specification to check. We only add the service name,
+			// i.e. "pubsub_free-tier" or "pubsub_premium-tier" to the virtual services to ensure
+			// optimization picks the right provider offering the PubSub service.
+			// Construct virtual service type (e.g. free-tier)
+			nestedObj, err := GetNestedField(obj.Object, "spec", "forProvider")
+			if err != nil {
+				logger.Info(fmt.Sprintf("[%s]\t Error getting nested field.", loggerName))
+				r.setConditionUnreadyAndUpdate(skyCluster, "Error getting nested field.")
+				return ctrl.Result{}, err
+			}
+			for nestedField, nestedFieldValue := range nestedObj {
+				if nestedField == "serviceType" {
+					objVservice := fmt.Sprintf(
+						"%s|1", nestedFieldValue.(string))
+					// We ommit the serviceType as the type of Virtual Service and only use the name
+					// i.e. "pubsub_free-tier" or "pubsub_premium-tier"
+					objVServices = append(objVServices, corev1alpha1.VirtualService{
+						Name: objVservice,
+						Type: fmt.Sprintf("%s", strings.ToLower(dp.ComponentRef.Kind))})
+				}
+			}
 		} else {
 			// TODO: Use the custom dependency reference if it is set.
 			// deploymentPolicies.componentRef is not a deployment, this could be any Sky Services
@@ -680,14 +702,14 @@ func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, re
 						objLabels[fmt.Sprintf("%s/%s", corev1alpha1.SKYCLUSTER_API, k)] = v
 					}
 				}
-				objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
-				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(providerName, ".")[0]
-				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = provider.ProviderRegion
-				objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = provider.ProviderZone
-				// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
-				objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = providerName
 			}
 		}
+		objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+		objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(providerName, ".")[0]
+		objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = provider.ProviderRegion
+		objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = provider.ProviderZone
+		// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+		objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = providerName
 		obj.SetLabels(objLabels)
 		// We use original name with "." as the key and also
 		// will use this as the SkyXRD.manifests.name value
@@ -713,6 +735,75 @@ func (r *SkyClusterReconciler) generateProviderManifests(ctx context.Context, re
 		}
 	}
 	return manifests, nil
+}
+
+func (r *SkyClusterReconciler) generateSkyPubSubManifest(ctx context.Context, req ctrl.Request, component corev1alpha1.SkyService) (*corev1alpha1.SkyService, error) {
+	cmpntName := component.ComponentRef.Name
+	xrdObj := &unstructured.Unstructured{}
+	xrdObj.SetAPIVersion("xrds.skycluster.io/v1alpha1")
+	xrdObj.SetKind(component.ComponentRef.Kind)
+	xrdObj.SetNamespace(req.Namespace)
+
+	xrdObj.SetName(component.ComponentRef.Name)
+
+	// Get the corresponding Sky object to extract fields and set them in the XRD object
+	skyObj := &unstructured.Unstructured{}
+	skyObj.SetAPIVersion(component.ComponentRef.APIVersion)
+	skyObj.SetKind(component.ComponentRef.Kind)
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: req.Namespace,
+		Name:      cmpntName,
+	}, skyObj); err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("error getting object [%s].", component.ComponentRef.Name))
+	}
+	spec, err := GetNestedField(skyObj.Object, "spec")
+	if err != nil {
+		return nil, errors.Wrap(err, fmt.Sprintf("error getting nested field for object [%s].", component.ComponentRef.Name))
+	}
+	xrdObj.Object["spec"] = map[string]interface{}{
+		"forProvider": spec,
+		"providerRef": map[string]string{
+			"providerName":   strings.Split(component.ProviderRef.ProviderName, ".")[0],
+			"providerRegion": component.ProviderRef.ProviderRegion,
+			"providerZone":   component.ProviderRef.ProviderZone,
+		},
+	}
+
+	objLabels := skyObj.GetLabels()
+	if objLabels == nil {
+		objLabels = make(map[string]string, 0)
+	}
+	objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = component.ProviderRef.ProviderName
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(component.ProviderRef.ProviderName, ".")[0]
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = component.ProviderRef.ProviderRegion
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL] = corev1alpha1.GetRegionAlias(component.ProviderRef.ProviderRegion)
+	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = component.ProviderRef.ProviderZone
+	objLabels[corev1alpha1.SKYCLUSTER_ORIGINAL_NAME_LABEL] = component.ComponentRef.Name
+	// TODO: Remove the pause label before releasing
+	// objLabels[corev1alpha1.SKYCLUSTER_PAUSE_LABEL] = "true"
+	xrdObj.SetLabels(objLabels)
+
+	yamlXrdObj, err := generateYAMLManifest(xrdObj)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error generating YAML manifest.")
+	}
+	// Set the return key name as name.kind to avoid conflicts
+	return &corev1alpha1.SkyService{
+		ComponentRef: corev1.ObjectReference{
+			APIVersion: xrdObj.GetAPIVersion(),
+			Kind:       xrdObj.GetKind(),
+			Namespace:  xrdObj.GetNamespace(),
+			// TODO: Is this name correct?
+			Name: xrdObj.GetName(),
+		},
+		Manifest: yamlXrdObj,
+		ProviderRef: corev1alpha1.ProviderRefSpec{
+			ProviderName:   component.ProviderRef.ProviderName,
+			ProviderRegion: component.ProviderRef.ProviderRegion,
+			ProviderZone:   component.ProviderRef.ProviderZone,
+		},
+	}, nil
 }
 
 func (r *SkyClusterReconciler) generateSkyVMManifest(ctx context.Context, req ctrl.Request, component corev1alpha1.SkyService) (*corev1alpha1.SkyService, error) {
@@ -751,6 +842,9 @@ func (r *SkyClusterReconciler) generateSkyVMManifest(ctx context.Context, req ct
 	}
 
 	objLabels := skyObj.GetLabels()
+	if objLabels == nil {
+		objLabels = make(map[string]string, 0)
+	}
 	objLabels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERID_LABEL] = component.ProviderRef.ProviderName
 	objLabels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = strings.Split(component.ProviderRef.ProviderName, ".")[0]
@@ -1115,7 +1209,7 @@ func (r *SkyClusterReconciler) generateSkyAppManifests(ctx context.Context, req 
 		// to control traffic distribution using istio
 		oneSvc := generateNewServiceFromService(&svc)
 		if oneSvc.GetLabels() == nil {
-			oneSvc.SetLabels(make(map[string]string))
+			oneSvc.SetLabels(make(map[string]string, 0))
 		}
 		oneSvc.GetLabels()[corev1alpha1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
 
@@ -1219,9 +1313,15 @@ func (r *SkyClusterReconciler) createXRDs(ctx context.Context, req ctrl.Request,
 				return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")
 			}
 			manifests = append(manifests, *skyObj)
+		case "pubsub", "xpubsub":
+			skyObj, err := r.generateSkyPubSubManifest(ctx, req, deployItem)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "Error generating SkyPubSub manifest.")
+			}
+			manifests = append(manifests, *skyObj)
 		default:
 			// We only support above services for now...
-			return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.ComponentRef.Kind))
+			return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]: %v\n", deployItem.ComponentRef.Kind, deployItem.ComponentRef))
 		}
 	}
 

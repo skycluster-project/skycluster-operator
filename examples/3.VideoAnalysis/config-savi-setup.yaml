@@ -1,0 +1,406 @@
+# Both DeploymentPolicy and DataflowPolicy objects should have the same name
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: video-analysis
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      latency: 300ms
+      totalDataTransfer: 1TB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: detector
+      latency: 300ms
+      totalDataTransfer: 1TB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: detector
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: tracker
+      latency: 300ms
+      totalDataTransfer: 1TB
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: tracker
+      to:
+        apiVersion: xrds.skycluster.io/v1alpha1
+        kind: PubSub
+        name: alert-push-notifier
+      latency: 300ms
+      totalDataTransfer: 1TB
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: video-analysis
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerType: edge
+              providerRegion: scinet
+              providerName: os
+            - providerRegion: scinet
+              providerName: os
+              providerType: edge
+        required:
+          allOf:
+            - providerRef:
+                providerType: edge
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerType: edge
+              providerName: os
+            - providerType: nte
+              providerName: os
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: detector
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerType: edge
+              providerName: os
+            - providerType: nte
+              providerName: os
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: tracker
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerType: edge
+              providerName: os
+            - providerType: nte
+              providerName: os
+    - componentRef:
+        apiVersion: xrds.skycluster.io/v1alpha1
+        kind: PubSub
+        name: alert-push-notifier
+      locationConstraint:
+        permitted:
+          allOf:
+            - providerType: cloud
+              providerName: os
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-rtsp
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: client-rtsp
+  template:
+    metadata:
+      labels:
+        app: client-rtsp
+      annotations:
+        traffic.sidecar.istio.io/excludeInboundPorts: "50052,8000,8001,8002,8003"
+    spec:
+      containers:
+      - name: client-rtsp
+        image: registry.skycluster.io/svc-rtsp-server:0.0.11
+        imagePullPolicy: Always
+        env:
+          - name: UPDATE_FREQUENCY
+            value: "10"
+          - name: METRIC_ADDR
+            value: 0.0.0.0
+          - name: METRIC_PORT
+            value: "8001"
+          - name: RTSP_SERVER_EXT_IP
+            value: svc-rtsp-server
+          - name: RTSP_SERVER_HOST
+            value: 0.0.0.0
+          - name: RTSP_SERVER_PORT
+            value: "50052"
+          - name: USE_POD_IP_FOR_GRPC_CONNECTION
+            value: "true"
+          - name: REMOTE_SVC_HOST
+            value: svc-aggregator
+          - name: REMOTE_SVC_PORT
+            value: "50052"
+          - name: TS_FILE_LIST_ADDR
+            value: https://skycluster.io/datasets/file-names.txt
+        ports:
+          - containerPort: 8000
+            name: rtp
+            protocol: UDP
+          - containerPort: 8001
+            name: rtcp
+            protocol: UDP
+          - containerPort: 8002
+            name: mutlicast-rtp
+            protocol: UDP
+          - containerPort: 8003
+            name: multicast-rtcp
+            protocol: UDP
+          - containerPort: 8008
+            name: metrics
+            protocol: TCP
+          - containerPort: 50052
+            name: app
+            protocol: TCP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aggregator
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aggregator
+  template:
+    metadata:
+      labels:
+        app: aggregator
+    spec:
+      containers:
+      - name: aggregator
+        image: registry.skycluster.io/svc-aggregator:0.0.7
+        imagePullPolicy: Always
+        env:
+          - name: REMOTE_DETECTION_HOST
+            value: "svc-detector"
+          - name: REMOTE_DETECTION_PORT
+            value: "50052"
+          - name: REMOTE_TRACKER_HOST
+            value: "svc-tracker"
+          - name: REMOTE_TRACKER_PORT
+            value: "50052"
+          - name: SVC_INGST_ADDR
+            value: "0.0.0.0"
+          - name: SVC_INGST_PORT
+            value: "50052"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: FRAME_RATE
+            value: "15"
+          - name: QUEUE_SIZE
+            value: "120"
+          - name: MAX_TOTRAL_FRAME
+            value: "-1"
+          - name: DETECTION_FREQUENCY
+            value: "20"
+        ports:
+        - containerPort: 8001
+          name: metrics
+        - containerPort: 50052
+          name: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detector
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: detector
+  template:
+    metadata:
+      labels:
+        app: detector
+    spec:
+      containers:
+      - name: detector
+        image: registry.skycluster.io/svc-detector:0.0.7
+        imagePullPolicy: Always
+        env:
+          - name: SVC_DETECTOR_HOST
+            value: 0.0.0.0
+          - name: SVC_DETECTOR_PORT
+            value: "50052"
+          - name: REMOTE_TRACKER_HOST
+            value: "svc-tracker"
+          - name: REMOTE_TRACKER_PORT
+            value: "50052"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: YOLO_MODEL
+            value: "/root/yolov8n.onnx"
+          - name: IMAGE_WIDTH
+            value: "640"
+          - name: IMAGE_HEIGHT
+            value: "640"
+          - name: SAVE_IMAGE
+            value: "false"
+          - name: SAVE_IMAGE_PATH
+            value: "/tmp/videos/"
+          - name: SAVE_IMAGE_FREQUENCY
+            value: "10"
+        ports:
+        - containerPort: 8001
+          name: metrics
+        - containerPort: 50052
+          name: app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tracker
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tracker
+  template:
+    metadata:
+      labels:
+        app: tracker
+    spec:
+      containers:
+      - name: tracker
+        image: registry.skycluster.io/svc-tracker:0.0.7
+        imagePullPolicy: Always
+        env:
+          - name: SVC_TRACKER_HOST
+            value: 0.0.0.0
+          - name: SVC_TRACKER_PORT
+            value: "50052"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: SAVE_IMAGE
+            value: "false"
+          - name: SAVE_IMAGE_PATH
+            value: "/tmp/videos/"
+          - name: SAVE_IMAGE_FREQUENCY_TRACKING
+            value: "10"
+          - name: SAVE_IMAGE_FREQUENCY_DETECTION
+            value: "1"
+        ports:
+        - containerPort: 8001
+          name: metrics
+        - containerPort: 50052
+          name: app
+---
+apiVersion: xrds.skycluster.io/v1alpha1
+kind: PubSub # should use the claim name rather than the name of the xrd kind: xPubSub
+metadata:
+  name: alert-push-notifier
+spec:
+  forProvider:
+    serviceType: free-tier
+    totalMessages: 1000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-client-rtsp
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: client-rtsp
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 50052
+      targetPort: 50052
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-aggregator
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: aggregator
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 50052
+      targetPort: 50052
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-detector
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: detector
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 50052
+      targetPort: 50052
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-tracker
+  labels:
+    skycluster.io/app-name: video-analysis
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app: tracker
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 50052
+      targetPort: 50052

@@ -1,0 +1,665 @@
+configMapRef:
+  name: optimization-solver
+deployMap:
+  components:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-bos-1a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-bos-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-dfw-2a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-dfw-2a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-iah-2a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-iah-2a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-phl-1a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-phl-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-lax-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-lax-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-pdx-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-pdx-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: client-rtsp
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-sea-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-sea-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-bos-1a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-bos-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-phl-1a.edge
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: edge
+        providerZone: us-east-1-phl-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-lax-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-lax-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: nte
+        providerZone: us-east-1-wl1-iah-wlz-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-wl1-sea-wlz-1.nte
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: nte
+        providerZone: us-west-2-wl1-sea-wlz-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: detector
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-lax-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-lax-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: detector
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: nte
+        providerZone: us-east-1-wl1-iah-wlz-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: tracker
+      providerRef:
+        providerName: aws.us-west-2.us-west-2-lax-1a.edge
+        providerRegion: us-west-2
+        providerRegionAlias: us-west
+        providerType: edge
+        providerZone: us-west-2-lax-1a
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: tracker
+      providerRef:
+        providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+        providerRegion: us-east-1
+        providerRegionAlias: us-east
+        providerType: nte
+        providerZone: us-east-1-wl1-iah-wlz-1
+    - componentRef:
+        apiVersion: xrds.skycluster.io/v1alpha1
+        kind: PubSub
+        name: alert-push-notifier
+      providerRef:
+        providerName: gcp.us-east1.b.cloud
+        providerRegion: us-east1
+        providerRegionAlias: us-east
+        providerType: cloud
+        providerZone: b
+  cost: "398.6656"
+  deployCost: "0.6656"
+  edges:
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-bos-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-bos-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-bos-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-bos-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-dfw-2a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-dfw-2a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-iah-2a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-iah-2a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-phl-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-phl-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-phl-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-phl-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-pdx-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-pdx-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-wl1-sea-wlz-1.nte
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: nte
+          providerZone: us-west-2-wl1-sea-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: client-rtsp
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-sea-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-sea-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-wl1-sea-wlz-1.nte
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: nte
+          providerZone: us-west-2-wl1-sea-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-bos-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-bos-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-phl-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-phl-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-wl1-sea-wlz-1.nte
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: nte
+          providerZone: us-west-2-wl1-sea-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-bos-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-bos-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-phl-1a.edge
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: edge
+          providerZone: us-east-1-phl-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: aggregator
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-wl1-sea-wlz-1.nte
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: nte
+          providerZone: us-west-2-wl1-sea-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: detector
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-west-2.us-west-2-lax-1a.edge
+          providerRegion: us-west-2
+          providerRegionAlias: us-west
+          providerType: edge
+          providerZone: us-west-2-lax-1a
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: xrds.skycluster.io/v1alpha1
+          kind: PubSub
+          name: alert-push-notifier
+        providerRef:
+          providerName: gcp.us-east1.b.cloud
+          providerRegion: us-east1
+          providerRegionAlias: us-east
+          providerType: cloud
+          providerZone: b
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: tracker
+        providerRef:
+          providerName: aws.us-east-1.us-east-1-wl1-iah-wlz-1.nte
+          providerRegion: us-east-1
+          providerRegionAlias: us-east
+          providerType: nte
+          providerZone: us-east-1-wl1-iah-wlz-1
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: xrds.skycluster.io/v1alpha1
+          kind: PubSub
+          name: alert-push-notifier
+        providerRef:
+          providerName: gcp.us-east1.b.cloud
+          providerRegion: us-east1
+          providerRegionAlias: us-east
+          providerType: cloud
+          providerZone: b
+  transferCost: "398.0"
+podRef:
+  name: optimization-solver
+result: Optimal
+status: Succeeded

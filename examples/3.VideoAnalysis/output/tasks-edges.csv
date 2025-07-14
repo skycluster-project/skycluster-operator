@@ -1,0 +1,6 @@
+# header
+client-rtsp.deployment, aggregator.deployment, 10ms, 1TB, -1
+aggregator.deployment, detector.deployment, 20ms, 1TB, -1
+aggregator.deployment, tracker.deployment, 20ms, 1TB, -1
+detector.deployment, tracker.deployment, 20ms, 1TB, -1
+tracker.deployment, alert-push-notifier.pubsub, 100ms, 1TB, -1

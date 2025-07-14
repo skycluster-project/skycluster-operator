@@ -1,0 +1,6 @@
+# header
+{"apiVersion":"apps/v1","kind":"Deployment","maxReplicas":"-1","nameType":"client-rtsp.deployment","permitted":"{\"allOf\":[{\"providerName\":\"aws\"},{\"providerName\":\"azure\"},{\"providerName\":\"os\",\"providerType\":\"edge\"}]}","required":"{\"allOf\":[{\"providerRef\":{\"providerType\":\"edge\"}}]}"}
+{"apiVersion":"apps/v1","kind":"Deployment","maxReplicas":"-1","nameType":"aggregator.deployment","permitted":"{\"allOf\":[{\"providerName\":\"aws\",\"providerType\":\"edge\"},{\"providerName\":\"aws\",\"providerType\":\"nte\"}]}","required":"{}"}
+{"apiVersion":"apps/v1","kind":"Deployment","maxReplicas":"-1","nameType":"detector.deployment","permitted":"{\"allOf\":[{\"providerName\":\"aws\",\"providerType\":\"edge\"},{\"providerName\":\"aws\",\"providerType\":\"nte\"}]}","required":"{}"}
+{"apiVersion":"apps/v1","kind":"Deployment","maxReplicas":"-1","nameType":"tracker.deployment","permitted":"{\"allOf\":[{\"providerName\":\"aws\",\"providerType\":\"edge\"},{\"providerName\":\"aws\",\"providerType\":\"nte\"}]}","required":"{}"}
+{"apiVersion":"xrds.skycluster.io/v1alpha1","kind":"PubSub","maxReplicas":"-1","nameType":"alert-push-notifier.pubsub","permitted":"{\"allOf\":[{\"providerName\":\"gcp\",\"providerType\":\"cloud\"}]}","required":"{}"}
