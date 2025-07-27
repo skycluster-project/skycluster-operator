@@ -6,6 +6,11 @@ import (
 
 	"go.uber.org/zap/zapcore"
 	zapCtrl "sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/yaml"
+)
+
+const (
+	SKYCLUSTER_NAMESPACE = "skycluster-system"
 )
 
 func customLoggerFormat() zapCtrl.EncoderConfigOption {
@@ -38,4 +43,12 @@ func CustomLogger(logDir ...string) zapCtrl.Opts {
 		DestWriter: file,
 	}
 	return zapCtrl.UseFlagOptions(&opts)
+}
+
+func EncodeObjectToYAML(obj interface{}) (string, error) {
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

@@ -19,7 +19,6 @@ import (
 
 // AWSKeysFromSecret retrieves AWS credentials from a Kubernetes Secret
 func FetchAWSKeysFromSecret(ctx context.Context, c client.Client) (string, string, error) {
-	namespace := "skycluster"
 	// labelSelector := "skycluster.io/managed-by=skycluster, skycluster.io/provider-platform=aws"
 
 	var secretList corev1.SecretList
@@ -30,7 +29,7 @@ func FetchAWSKeysFromSecret(ctx context.Context, c client.Client) (string, strin
 	})
 
 	if err := c.List(ctx, &secretList,
-		client.InNamespace(namespace),
+		client.InNamespace(SKYCLUSTER_NAMESPACE),
 		client.MatchingLabelsSelector{Selector: labelSelector},
 	); err != nil {
 		return "", "", err

@@ -87,6 +87,19 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		logger.Error(err, "failed to update DeviceNode status")
 		return ctrl.Result{}, err
 	}
+
+	// Add provider labels to the DeviceNode
+	if deviceNode.Labels == nil {
+		deviceNode.Labels = make(map[string]string)
+	}
+	deviceNode.Labels["skycluster.io/provider-platform"] = provider.Spec.Platform
+	deviceNode.Labels["skycluster.io/provider-region"] = provider.Spec.Region
+	// Update the DeviceNode with the new labels
+	if err := r.Update(ctx, deviceNode); err != nil {
+		logger.Error(err, "failed to update DeviceNode labels")
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("DeviceNode reconciled successfully", "name", deviceNode.Name)
 	return ctrl.Result{}, nil
 }

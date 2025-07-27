@@ -12,6 +12,7 @@ import (
 	ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/samber/lo"
+
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
 

@@ -18,8 +18,10 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,13 +31,14 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
+	lo "github.com/samber/lo"
 
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	"github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
 )
 
-// ImagesReconciler reconciles a Images object
-type ImagesReconciler struct {
+// ImageReconciler reconciles a Image object
+type ImageReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
@@ -44,16 +47,16 @@ type ImagesReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images/finalizers,verbs=update
 
-func (r *ImagesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := zap.New(helper.CustomLogger()).WithName("[Images]")
 	logger.Info("Reconciler started.", "name", req.Name)
 
 	const updateThreshold = time.Duration(corev1alpha1.DefaultRefreshHourImages) * time.Hour
 
 	// Fetch the Images resource
-	images := &corev1alpha1.Images{}
+	images := &corev1alpha1.Image{}
 	if err := r.Get(ctx, req.NamespacedName, images); err != nil {
-		logger.Info("unable to fetch Images")
+		logger.Info("unable to fetch Image")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -83,6 +86,26 @@ func (r *ImagesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err := r.Get(ctx, client.ObjectKey{Name: images.Spec.ProviderRef, Namespace: images.Namespace}, provider); err != nil {
 		logger.Info("unable to fetch Provider for image", "name", images.Spec.ProviderRef)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Based on provider platform, region and zone, fetch the configmap
+	// containing the data and update the InstanceType resource
+
+	defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
+		return zone.DefaultZone
+	})
+	if !ok {
+		logger.Info("no default zone found for provider", "name", provider.Name)
+		return ctrl.Result{}, nil
+	}
+	cmName := fmt.Sprintf("%s.%s.%s", provider.Spec.Platform, provider.Spec.Region, defaultZone.Name)
+	cm, cmFound := &corev1.ConfigMap{}, true
+	if err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: helper.SKYCLUSTER_NAMESPACE}, cm); err != nil {
+		cmFound = false
+		if client.IgnoreNotFound(err) != nil {
+			logger.Info("error fetching ConfigMap", "name", cmName)
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
 	}
 
 	// Fetch the AWS credentials
@@ -129,6 +152,32 @@ func (r *ImagesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		images.Spec.Zones[i].Name = aws.ToString(awsImages[0].ImageId)
 	}
 
+	p := provider.Spec.Platform
+	rg := provider.Spec.Region
+	z := defaultZone.Name
+	// Update the configMap with the new instance types
+	type imagesDataType struct {
+		Zones []corev1alpha1.ImageOffering `json:"zones"`
+	}
+	yamlData, err := helper.EncodeObjectToYAML(imagesDataType{
+		Zones: images.Spec.Zones,
+	})
+	if err != nil {
+		logger.Error(err, "failed to encode instance types to YAML")
+		return ctrl.Result{}, err
+	}
+	err = r.updateConfigMap(ctx, cm, yamlData, p, rg, z)
+	if err != nil {
+		logger.Error(err, "failed to update ConfigMap with images data")
+		return ctrl.Result{}, err
+	}
+	// If the ConfigMap does not exist, create it
+	err = r.updateOrCreate(ctx, cm, cmFound, cmName)
+	if err != nil {
+		logger.Error(err, "unable to update or create ConfigMap for images")
+		return ctrl.Result{}, err
+	}
+
 	// Update the Images status with the region and zones
 	images.Status.Region = provider.Spec.Region
 	images.Status.Zones = images.Spec.Zones
@@ -139,13 +188,57 @@ func (r *ImagesReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, err
 	}
 
+	// Add provider lables to the Images resource
+	if images.Labels == nil {
+		images.Labels = make(map[string]string)
+	}
+	images.Labels["skycluster.io/provider-platform"] = provider.Spec.Platform
+	images.Labels["skycluster.io/provider-region"] = provider.Spec.Region
+	images.Labels["skycluster.io/provider-zone"] = defaultZone.Name
+
+	// Update the Images resource with the new labels
+	if err := r.Update(ctx, images); err != nil {
+		logger.Error(err, "unable to update Images labels")
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ImagesReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.Images{}).
-		Named("core-images").
+		For(&corev1alpha1.Image{}).
+		Named("core-image").
 		Complete(r)
+}
+
+func (r *ImageReconciler) updateConfigMap(ctx context.Context, cm *corev1.ConfigMap, yamlData, p, rg, z string) error {
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+	cm.Data["images.yaml"] = yamlData
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	cm.Labels["skycluster.io/managed-by"] = "skycluster"
+	cm.Labels["skycluster.io/provider-platform"] = p
+	cm.Labels["skycluster.io/provider-region"] = rg
+	cm.Labels["skycluster.io/provider-zone"] = z
+	return nil
+}
+
+func (r *ImageReconciler) updateOrCreate(ctx context.Context, cm *corev1.ConfigMap, cmFound bool, cmName string) error {
+	if !cmFound {
+		cm.Name = cmName
+		cm.Namespace = helper.SKYCLUSTER_NAMESPACE
+		if err := r.Create(ctx, cm); err != nil {
+			return fmt.Errorf("unable to create ConfigMap: %w", err)
+		}
+	} else {
+		if err := r.Update(ctx, cm); err != nil {
+			return fmt.Errorf("unable to update ConfigMap: %w", err)
+		}
+	}
+	return nil
 }

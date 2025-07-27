@@ -20,54 +20,54 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ImagesSpec defines the desired state of Images
-type ImagesSpec struct {
+// ImageSpec defines the desired state of Image
+type ImageSpec struct {
 	ProviderRef string          `json:"providerRef"`
 	Zones       []ImageOffering `json:"zones"`
 }
 
-// ImagesStatus defines the observed state of Images.
-type ImagesStatus struct {
+// ImageStatus defines the observed state of Image.
+type ImageStatus struct {
 	Region string          `json:"region"`
 	Zones  []ImageOffering `json:"zones"`
 }
 
 type ImageOffering struct {
-	// +kubebuilder:validation:Enum=aws;ubuntu2004;ubuntu2204;ubuntu2404;eksoptimized
+	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;eks-optimized
 	NameLabel string `json:"nameLabel"`
-	ZoneName  string `json:"zoneName"`
 	Name      string `json:"name,omitempty"`
+	Zone      string `json:"zone"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Images is the Schema for the images API
-type Images struct {
+// Image is the Schema for the images API
+type Image struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
 
-	// spec defines the desired state of Images
+	// spec defines the desired state of Image
 	// +required
-	Spec ImagesSpec `json:"spec"`
+	Spec ImageSpec `json:"spec"`
 
-	// status defines the observed state of Images
+	// status defines the observed state of Image
 	// +optional
-	Status ImagesStatus `json:"status,omitempty,omitzero"`
+	Status ImageStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// ImagesList contains a list of Images
-type ImagesList struct {
+// ImageList contains a list of Image
+type ImageList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Images `json:"items"`
+	Items           []Image `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Images{}, &ImagesList{})
+	SchemeBuilder.Register(&Image{}, &ImageList{})
 }

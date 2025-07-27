@@ -27,23 +27,23 @@ type InstanceTypeSpec struct {
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region            string                 `json:"region"`
-	ZoneInstanceTypes []ZoneInstanceTypeSpec `json:"zoneInstanceTypes"`
+	Region string `json:"region"`
 }
 
 type ZoneInstanceTypeSpec struct {
-	ZoneName string             `json:"zoneName"`
+	ZoneName string             `json:"zone"`
 	Flavors  []InstanceOffering `json:"flavors"`
 }
 
 type InstanceOffering struct {
-	Name      string `json:"name"`
-	NameLabel string `json:"nameLabel"`
-	VCPUs     int    `json:"vcpus"`
-	RAM       string `json:"ram"`
-	Price     string `json:"price"`
-	GPU       GPU    `json:"gpu"`
-	Spot      Spot   `json:"spot"`
+	Name        string   `json:"name"`
+	NameLabel   string   `json:"nameLabel"`
+	VCPUs       int      `json:"vcpus"`
+	RAM         string   `json:"ram"`
+	Price       string   `json:"price,omitempty"`
+	GPU         GPU      `json:"gpu,omitempty"`
+	VolumeTypes []string `json:"volumeTypes,omitempty"`
+	Spot        Spot     `json:"spot,omitempty"`
 }
 
 type GPU struct {

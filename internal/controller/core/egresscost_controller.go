@@ -119,6 +119,12 @@ func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if !cmFound {
 		cm.Name = "provider-egress-costs"
 		cm.Namespace = "skycluster"
+		// Add skycluster labels
+		if cm.Labels == nil {
+			cm.Labels = make(map[string]string)
+		}
+		cm.Labels["skycuster.io/managed-by"] = "skycluster"
+		cm.Labels["skycuster.io/config-type"] = "egress-costs"
 		cm.Data = map[string]string{
 			"egress-costs": string(effectiveCostsJSON),
 		}

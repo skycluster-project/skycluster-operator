@@ -30,7 +30,7 @@ import (
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
 
-var _ = Describe("Images Controller", func() {
+var _ = Describe("Image Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -40,13 +40,13 @@ var _ = Describe("Images Controller", func() {
 			Name:      resourceName,
 			Namespace: "default", // TODO(user):Modify as needed
 		}
-		images := &corev1alpha1.Images{}
+		image := &corev1alpha1.Image{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind Images")
-			err := k8sClient.Get(ctx, typeNamespacedName, images)
+			By("creating the custom resource for the Kind Image")
+			err := k8sClient.Get(ctx, typeNamespacedName, image)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &corev1alpha1.Images{
+				resource := &corev1alpha1.Image{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
@@ -59,16 +59,16 @@ var _ = Describe("Images Controller", func() {
 
 		AfterEach(func() {
 			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &corev1alpha1.Images{}
+			resource := &corev1alpha1.Image{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance Images")
+			By("Cleanup the specific resource instance Image")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
-			controllerReconciler := &ImagesReconciler{
+			controllerReconciler := &ImageReconciler{
 				Client: k8sClient,
 				Scheme: k8sClient.Scheme(),
 			}

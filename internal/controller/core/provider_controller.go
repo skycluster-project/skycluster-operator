@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -56,8 +58,29 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Copy all values from spec to status
 	provider := &corev1alpha1.Provider{}
 	if err := r.Get(ctx, req.NamespacedName, provider); err != nil {
-		logger.Error(err, "unable to fetch Provider")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if client.IgnoreNotFound(err) != nil {
+			logger.Error(err, "unable to fetch Provider")
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+		logger.Info("Provider not found, maybe deleted", "name", req.Name)
+		if err := r.cleanUp(ctx, provider); err != nil {
+			logger.Error(err, "cleanup error", "name", req.Name)
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	// Add labels based on the provider spec
+	if provider.Labels == nil {
+		provider.Labels = make(map[string]string)
+	}
+	provider.Labels["skycluster.io/provider-platform"] = provider.Spec.Platform
+	provider.Labels["skycluster.io/provider-region"] = provider.Spec.Region
+
+	// Update the provider with the new labels
+	if err := r.Update(ctx, provider); err != nil {
+		logger.Error(err, "unable to update Provider labels")
+		return ctrl.Result{}, err
 	}
 
 	// Copy all spec values to status
@@ -78,4 +101,40 @@ func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&corev1alpha1.Provider{}).
 		Named("core-provider").
 		Complete(r)
+}
+
+func (r *ProviderReconciler) cleanUp(ctx context.Context, provider *corev1alpha1.Provider) error {
+
+	// Clean up ConfigMaps related to the provider
+	p := provider.Spec.Platform
+	rg := provider.Spec.Region
+	defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
+		return zone.DefaultZone
+	})
+	if !ok {
+		return fmt.Errorf("no default zone found for provider %s", provider.Name)
+	}
+	cm := &corev1.ConfigMapList{}
+	// List all ConfigMaps in the namespace with matching labels
+	if err := r.List(ctx, cm, &client.ListOptions{
+		Namespace: helper.SKYCLUSTER_NAMESPACE,
+		LabelSelector: labels.SelectorFromSet(labels.Set{
+			"skycluster.io/provider-platform": p,
+			"skycluster.io/provider-region":   rg,
+			"skycluster.io/provider-zone":     defaultZone.Name,
+		}),
+	}); err != nil {
+		return fmt.Errorf("unable to list ConfigMaps for cleanup: %w", err)
+	}
+	if len(cm.Items) > 1 {
+		return fmt.Errorf("multiple ConfigMaps found for provider %s, expected only one", provider.Name)
+	}
+	// Delete each ConfigMap found
+	for _, cmItem := range cm.Items {
+		if err := r.Delete(ctx, &cmItem); err != nil {
+			return fmt.Errorf("unable to delete ConfigMap %s during cleanup: %w", cmItem.Name, err)
+		}
+	}
+
+	return nil
 }

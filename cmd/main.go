@@ -262,11 +262,11 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "EgressCost")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ImagesReconciler{
+	if err := (&corecontroller.ImageReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Images")
+		setupLog.Error(err, "unable to create controller", "controller", "Image")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

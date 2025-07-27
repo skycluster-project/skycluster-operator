@@ -18,11 +18,12 @@ package core
 
 import (
 	"context"
+	"fmt"
+	"sort"
 	"time"
 
-	"sort"
-
 	lo "github.com/samber/lo"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -89,6 +90,26 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	// Based on provider platform, region and zone, fetch the configmap
+	// containing the data and update the InstanceType resource
+	// Find the primary zone
+	defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
+		return zone.DefaultZone
+	})
+	if !ok {
+		logger.Info("No default zone found for provider", "provider", provider.Name)
+		return ctrl.Result{}, nil
+	}
+	cmName := fmt.Sprintf("%s.%s.%s", provider.Spec.Platform, provider.Spec.Region, defaultZone.Name)
+	cm, cmFound := &corev1.ConfigMap{}, true
+	if err := r.Get(ctx, client.ObjectKey{Name: cmName, Namespace: helper.SKYCLUSTER_NAMESPACE}, cm); err != nil {
+		cmFound = false
+		if client.IgnoreNotFound(err) != nil {
+			logger.Info("error fetching ConfigMap", "name", cmName)
+			return ctrl.Result{}, client.IgnoreNotFound(err)
+		}
+	}
+
 	// Fetch the AWS credentials
 	accessKeyID, secretAccessKey, err := helper.FetchAWSKeysFromSecret(ctx, r.Client)
 	if err != nil {
@@ -130,16 +151,11 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 
 		// Iterate over the instance types and fetch their pricing and specs
-		flavors := []corev1alpha1.InstanceOffering{}
-		for _, it := range instanceTypes {
-			itDetails, err := helper.FetchAwsInstanceTypeDetials(ec2Client, pricingClient, string(it.InstanceType))
-			if err != nil {
-				logger.Info("Failed to fetch instance type details", "instanceType", it, "error", err)
-				continue
-			}
-			if itDetails != nil {
-				flavors = append(flavors, *itDetails)
-			}
+		// flavors := []corev1alpha1.InstanceOffering{}
+		flavors, err := helper.FetchAwsInstanceTypeDetials2(ec2Client, pricingClient, instanceTypes)
+		if err != nil {
+			logger.Info("Failed to fetch instance type details", "instanceType", it, "error", err)
+			continue
 		}
 
 		if len(flavors) == 0 {
@@ -197,13 +213,44 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// 	}
 	// }
 
-	it.Status.ZoneInstanceTypes = zoneInstanceTypes
+	// it.Status.ZoneInstanceTypes = zoneInstanceTypes
 	it.Status.Region = provider.Spec.Region
-	logger.Info("Updating InstanceType status", "name", it.Name)
-	if err := r.Status().Update(ctx, it); err != nil {
-		logger.Error(err, "failed to update InstanceType status")
+
+	p := provider.Spec.Platform
+	rg := provider.Spec.Region
+	z := defaultZone.Name
+	// Update the configMap with the new instance types
+	yamlData, err := helper.EncodeObjectToYAML(zoneInstanceTypes)
+	if err != nil {
+		logger.Error(err, "failed to encode instance types to YAML")
 		return ctrl.Result{}, err
 	}
+	err = r.updateConfigMap(ctx, cm, yamlData, p, rg, z)
+	if err != nil {
+		logger.Error(err, "failed to update ConfigMap with images data")
+		return ctrl.Result{}, err
+	}
+	// If the ConfigMap does not exist, create it
+	err = r.updateOrCreate(ctx, cm, cmFound, cmName)
+	if err != nil {
+		logger.Error(err, "unable to update or create ConfigMap for images")
+		return ctrl.Result{}, err
+	}
+
+	// Add provider labels to the InstanceType resource
+	if it.Labels == nil {
+		it.Labels = make(map[string]string)
+	}
+	it.Labels["skycluster.io/provider-platform"] = p
+	it.Labels["skycluster.io/provider-region"] = rg
+	it.Labels["skycluster.io/provider-zone"] = defaultZone.Name
+
+	// Update the InstanceType resource with the new labels
+	if err := r.Update(ctx, it); err != nil {
+		logger.Error(err, "unable to update InstanceType labels")
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("Reconciliation complete", "name", req.Name)
 	return ctrl.Result{}, nil
 }
@@ -214,4 +261,34 @@ func (r *InstanceTypeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&corev1alpha1.InstanceType{}).
 		Named("core-instancetype").
 		Complete(r)
+}
+
+func (r *InstanceTypeReconciler) updateConfigMap(ctx context.Context, cm *corev1.ConfigMap, yamlData, p, rg, z string) error {
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+	cm.Data["instance-types.yaml"] = yamlData
+	if cm.Labels == nil {
+		cm.Labels = make(map[string]string)
+	}
+	cm.Labels["skycluster.io/managed-by"] = "skycluster"
+	cm.Labels["skycluster.io/provider-platform"] = p
+	cm.Labels["skycluster.io/provider-region"] = rg
+	cm.Labels["skycluster.io/provider-zone"] = z
+	return nil
+}
+
+func (r *InstanceTypeReconciler) updateOrCreate(ctx context.Context, cm *corev1.ConfigMap, cmFound bool, cmName string) error {
+	if !cmFound {
+		cm.Name = cmName
+		cm.Namespace = helper.SKYCLUSTER_NAMESPACE
+		if err := r.Create(ctx, cm); err != nil {
+			return fmt.Errorf("unable to create ConfigMap: %w", err)
+		}
+	} else {
+		if err := r.Update(ctx, cm); err != nil {
+			return fmt.Errorf("unable to update ConfigMap: %w", err)
+		}
+	}
+	return nil
 }

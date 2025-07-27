@@ -42,28 +42,50 @@ func FetchAwsInstanceTypes(client *ec2.Client, zoneName string) ([]ec2Types.Inst
 }
 
 // fetchInstanceTypes returns EC2 instance types with vCPUs and RAM.
-func FetchAwsInstanceTypeDetials(client *ec2.Client, pricingClient *pricing.Client, instanceType string) (*corev1alpha1.InstanceOffering, error) {
+func FetchAwsInstanceTypeDetials2(client *ec2.Client, pricingClient *pricing.Client, instanceTypes []ec2Types.InstanceTypeOffering) ([]corev1alpha1.InstanceOffering, error) {
 	flavors := []corev1alpha1.InstanceOffering{}
-	itsOut, err := client.DescribeInstanceTypes(context.TODO(), &ec2.DescribeInstanceTypesInput{
-		Filters: []ec2Types.Filter{
-			{
-				Name:   aws.String("instance-type"),
-				Values: []string{instanceType},
-			},
-		},
+	requestedFlavors := lo.Map(instanceTypes, func(it ec2Types.InstanceTypeOffering, _ int) string {
+		return string(it.InstanceType)
 	})
+	var allInstanceTypes []ec2Types.InstanceTypeInfo
+	input := &ec2.DescribeInstanceTypesInput{}
 
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe instance types: %w", err)
+	for {
+		out, err := client.DescribeInstanceTypes(context.TODO(), input)
+		if err != nil {
+			return nil, fmt.Errorf("failed to describe instance types: %w", err)
+		}
+		allInstanceTypes = append(allInstanceTypes, out.InstanceTypes...)
+
+		if out.NextToken == nil {
+			break
+		}
+		input.NextToken = out.NextToken
 	}
-	if len(itsOut.InstanceTypes) == 0 {
+
+	if len(allInstanceTypes) == 0 {
 		return nil, nil
 	}
 
-	for _, it := range itsOut.InstanceTypes {
+	for _, it := range allInstanceTypes {
+		flavorName := string(it.InstanceType)
+		if !lo.Contains(requestedFlavors, flavorName) {
+			continue // Skip instance types not in the provided list
+		}
+
+		foundArch := false
+		for _, arch := range it.ProcessorInfo.SupportedArchitectures {
+			if arch == ec2Types.ArchitectureTypeX8664 {
+				foundArch = true
+				break
+			}
+		}
+		if !foundArch {
+			continue
+		}
+
 		vcpus := it.VCpuInfo.DefaultVCpus
 		ramMb := it.MemoryInfo.SizeInMiB
-		flavorName := string(it.InstanceType)
 		ramGB := float64(*ramMb) / 1024.0
 		flavorLabel := fmt.Sprintf("%dvCPU-%dGB", int(aws.ToInt32(vcpus)), int(ramGB))
 
@@ -77,6 +99,12 @@ func FetchAwsInstanceTypeDetials(client *ec2.Client, pricingClient *pricing.Clie
 			gpuModel = aws.ToString(gpu.Name)
 			gpuMemory = aws.ToInt32(gpu.MemoryInfo.SizeInMiB)
 		}
+
+		var volumeTypes []string
+		// No public API to get volume types, so we use common types
+		// This is a workaround, ideally we should fetch available volume types from AWS
+		volumeTypes = append(volumeTypes, "gp2", "gp3")
+
 		// we expect one instance type per call, so we can directly append
 		// Pricing API only works with region us-east-1 for now
 		// We use the price from us-east-1 as a reference for all other regions
@@ -98,12 +126,12 @@ func FetchAwsInstanceTypeDetials(client *ec2.Client, pricingClient *pricing.Clie
 				Model:        gpuModel,
 				Memory:       fmt.Sprintf("%dGB", gpuCount*int32(gpuMemory/1024)),
 			},
+			VolumeTypes: volumeTypes,
 		})
-		break // We only need one instance type per call
 	}
 
 	// We expect one instance type per call, so we can directly append
-	return &flavors[0], nil
+	return flavors, nil
 }
 
 func FetchAwsSpotInstanceTypes(client *ec2.Client, instanceTypes []string, zoneName string) (map[string]string, error) {
