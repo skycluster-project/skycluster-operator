@@ -79,7 +79,7 @@ func FetchAwsImages(ec2Client *ec2.Client, name, owner string) ([]ec2Types.Image
 		},
 		{
 			Name:   aws.String("architecture"),
-			Values: []string{"x86_64", "arm64"},
+			Values: []string{"x86_64"},
 		},
 	}
 
