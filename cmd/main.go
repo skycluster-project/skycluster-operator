@@ -234,13 +234,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&corecontroller.ProviderReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Provider")
-		os.Exit(1)
-	}
 	if err := (&corecontroller.InstanceTypeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -267,6 +260,13 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Image")
+		os.Exit(1)
+	}
+	if err := (&corecontroller.ProviderProfileReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

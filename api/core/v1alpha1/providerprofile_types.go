@@ -20,8 +20,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ProviderSpec struct {
-	// +kubebuilder:validation:Enum=aws;azure;gpc;openstack
+// ProviderProfileSpec defines the desired state of ProviderProfile
+type ProviderProfileSpec struct {
 	Platform    string      `json:"platform"`
 	Region      string      `json:"region"`
 	RegionAlias string      `json:"regionAlias"`
@@ -44,7 +44,8 @@ type ZoneSpec struct {
 	Type         string `json:"type"`
 }
 
-type ProviderStatus struct {
+// ProviderProfileStatus defines the observed state of ProviderProfile.
+type ProviderProfileStatus struct {
 	Enabled bool       `json:"enabled,omitempty"`
 	Zones   []ZoneSpec `json:"zones,omitempty"`
 }
@@ -52,32 +53,32 @@ type ProviderStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// Provider is the Schema for the providers API
-type Provider struct {
+// ProviderProfile is the Schema for the providerprofiles API
+type ProviderProfile struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
 
-	// spec defines the desired state of Provider
+	// spec defines the desired state of ProviderProfile
 	// +required
-	Spec ProviderSpec `json:"spec"`
+	Spec ProviderProfileSpec `json:"spec"`
 
-	// status defines the observed state of Provider
+	// status defines the observed state of ProviderProfile
 	// +optional
-	Status ProviderStatus `json:"status,omitempty,omitzero"`
+	Status ProviderProfileStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
 
-// ProviderList contains a list of Provider
-type ProviderList struct {
+// ProviderProfileList contains a list of ProviderProfile
+type ProviderProfileList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Provider `json:"items"`
+	Items           []ProviderProfile `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Provider{}, &ProviderList{})
+	SchemeBuilder.Register(&ProviderProfile{}, &ProviderProfileList{})
 }

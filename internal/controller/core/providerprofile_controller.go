@@ -40,30 +40,29 @@ import (
 	helper "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
 )
 
-// ProviderReconciler reconciles a Provider object
-type ProviderReconciler struct {
+// ProviderProfileReconciler reconciles a ProviderProfile object
+type ProviderProfileReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
 
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=providers,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=providers/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=providers/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/finalizers,verbs=update
 
-func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	// logger := log.FromContext(ctx)
-	logger := zap.New(helper.CustomLogger()).WithName("[Provider]")
+func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	logger := zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
 	logger.Info(fmt.Sprintf("Reconciler started for %s", req.Name))
 
 	// Copy all values from spec to status
-	provider := &corev1alpha1.Provider{}
-	if err := r.Get(ctx, req.NamespacedName, provider); err != nil {
+	pf := &corev1alpha1.ProviderProfile{}
+	if err := r.Get(ctx, req.NamespacedName, pf); err != nil {
 		if client.IgnoreNotFound(err) != nil {
-			logger.Error(err, "unable to fetch Provider")
+			logger.Error(err, "unable to fetch ProviderProfile")
 			return ctrl.Result{}, client.IgnoreNotFound(err)
 		}
-		logger.Info("Provider not found, maybe deleted", "name", req.Name)
-		if err := r.cleanUp(ctx, provider); err != nil {
+		logger.Info("ProviderProfile not found, maybe deleted", "name", req.Name)
+		if err := r.cleanUp(ctx, pf); err != nil {
 			logger.Error(err, "cleanup error", "name", req.Name)
 			return ctrl.Result{}, err
 		}
@@ -71,24 +70,24 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	// Add labels based on the provider spec
-	if provider.Labels == nil {
-		provider.Labels = make(map[string]string)
+	if pf.Labels == nil {
+		pf.Labels = make(map[string]string)
 	}
-	provider.Labels["skycluster.io/provider-platform"] = provider.Spec.Platform
-	provider.Labels["skycluster.io/provider-region"] = provider.Spec.Region
+	pf.Labels["skycluster.io/provider-platform"] = pf.Spec.Platform
+	pf.Labels["skycluster.io/provider-region"] = pf.Spec.Region
 
 	// Update the provider with the new labels
-	if err := r.Update(ctx, provider); err != nil {
-		logger.Error(err, "unable to update Provider labels")
+	if err := r.Update(ctx, pf); err != nil {
+		logger.Error(err, "unable to update ProviderProfile labels")
 		return ctrl.Result{}, err
 	}
 
 	// Copy all spec values to status
-	provider.Status.Enabled = provider.Spec.Enabled
-	provider.Status.Zones = make([]corev1alpha1.ZoneSpec, len(provider.Spec.Zones))
-	provider.Status.Zones = lo.Filter(provider.Spec.Zones, func(zone corev1alpha1.ZoneSpec, _ int) bool { return true })
-	if err := r.Status().Update(ctx, provider); err != nil {
-		logger.Error(err, "unable to update Provider status")
+	pf.Status.Enabled = pf.Spec.Enabled
+	pf.Status.Zones = make([]corev1alpha1.ZoneSpec, len(pf.Spec.Zones))
+	pf.Status.Zones = lo.Filter(pf.Spec.Zones, func(zone corev1alpha1.ZoneSpec, _ int) bool { return true })
+	if err := r.Status().Update(ctx, pf); err != nil {
+		logger.Error(err, "unable to update ProviderProfile status")
 		return ctrl.Result{}, err
 	}
 
@@ -96,23 +95,23 @@ func (r *ProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *ProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.Provider{}).
-		Named("core-provider").
+		For(&corev1alpha1.ProviderProfile{}).
+		Named("core-providerprofile").
 		Complete(r)
 }
 
-func (r *ProviderReconciler) cleanUp(ctx context.Context, provider *corev1alpha1.Provider) error {
+func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *corev1alpha1.ProviderProfile) error {
 
-	// Clean up ConfigMaps related to the provider
-	p := provider.Spec.Platform
-	rg := provider.Spec.Region
-	defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
+	// Clean up ConfigMaps related to the provider profile
+	p := pf.Spec.Platform
+	rg := pf.Spec.Region
+	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
 		return zone.DefaultZone
 	})
 	if !ok {
-		return fmt.Errorf("no default zone found for provider %s", provider.Name)
+		return fmt.Errorf("no default zone found for provider profile %s", pf.Name)
 	}
 	cm := &corev1.ConfigMapList{}
 	// List all ConfigMaps in the namespace with matching labels
@@ -127,7 +126,7 @@ func (r *ProviderReconciler) cleanUp(ctx context.Context, provider *corev1alpha1
 		return fmt.Errorf("unable to list ConfigMaps for cleanup: %w", err)
 	}
 	if len(cm.Items) > 1 {
-		return fmt.Errorf("multiple ConfigMaps found for provider %s, expected only one", provider.Name)
+		return fmt.Errorf("multiple ConfigMaps found for provider profile %s, expected only one", pf.Name)
 	}
 	// Delete each ConfigMap found
 	for _, cmItem := range cm.Items {
