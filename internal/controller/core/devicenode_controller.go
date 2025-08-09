@@ -50,9 +50,9 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Based on providerRef, fetch the provider details
-	provider := &corev1alpha1.Provider{}
+	provider := &corev1alpha1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: deviceNode.Spec.ProviderRef, Namespace: deviceNode.Namespace}, provider); err != nil {
-		logger.Error(err, "failed to fetch Provider", "providerRef", deviceNode.Spec.ProviderRef)
+		logger.Error(err, "failed to fetch ProviderProfile", "providerRef", deviceNode.Spec.ProviderRef)
 		return ctrl.Result{}, err
 	}
 
@@ -104,7 +104,7 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func checkZone(zoneName string, provider *corev1alpha1.Provider) bool {
+func checkZone(zoneName string, provider *corev1alpha1.ProviderProfile) bool {
 	// iterate over the zones in the provider and check if the zone exists
 	for _, zone := range provider.Spec.Zones {
 		if zone.Name == zoneName {

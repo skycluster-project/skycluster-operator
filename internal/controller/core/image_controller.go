@@ -82,9 +82,9 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	// Find the provider by name and if it does not exist, return an error
-	provider := &corev1alpha1.Provider{}
+	provider := &corev1alpha1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: images.Spec.ProviderRef, Namespace: images.Namespace}, provider); err != nil {
-		logger.Info("unable to fetch Provider for image", "name", images.Spec.ProviderRef)
+		logger.Info("unable to fetch ProviderProfile for image", "name", images.Spec.ProviderRef)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 

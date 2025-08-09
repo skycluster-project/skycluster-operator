@@ -80,9 +80,9 @@ func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Fetch all providers to calculate costs
-	providerList := &corev1alpha1.ProviderList{}
+	providerList := &corev1alpha1.ProviderProfileList{}
 	if err := r.List(ctx, providerList); err != nil {
-		logger.Error(err, "failed to list Providers")
+		logger.Error(err, "failed to list ProviderProfiles")
 		return ctrl.Result{}, err
 	}
 

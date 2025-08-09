@@ -27,7 +27,8 @@ type InstanceTypeSpec struct {
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region string `json:"region"`
+	Region string                 `json:"region"`
+	Zones  []ZoneInstanceTypeSpec `json:"zones"`
 }
 
 type ZoneInstanceTypeSpec struct {
@@ -42,6 +43,7 @@ type InstanceOffering struct {
 	RAM         string   `json:"ram"`
 	Price       string   `json:"price,omitempty"`
 	GPU         GPU      `json:"gpu,omitempty"`
+	Generation  string   `json:"generation,omitempty"`
 	VolumeTypes []string `json:"volumeTypes,omitempty"`
 	Spot        Spot     `json:"spot,omitempty"`
 }

@@ -34,9 +34,10 @@ type ImageStatus struct {
 
 type ImageOffering struct {
 	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;eks-optimized
-	NameLabel string `json:"nameLabel"`
-	Name      string `json:"name,omitempty"`
-	Zone      string `json:"zone"`
+	NameLabel  string `json:"nameLabel"`
+	Name       string `json:"name,omitempty"`
+	Generation string `json:"generation,omitempty"`
+	Zone       string `json:"zone"`
 }
 
 // +kubebuilder:object:root=true

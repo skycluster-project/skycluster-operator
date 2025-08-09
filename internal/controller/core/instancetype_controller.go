@@ -84,9 +84,9 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 	// Reconciliation starts here
 	// Find the provider by name and if it does not exist, return an error
-	provider := &corev1alpha1.Provider{}
+	provider := &corev1alpha1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, provider); err != nil {
-		logger.Info("unable to fetch Provider for instance type", "name", it.Spec.ProviderRef)
+		logger.Info("unable to fetch ProviderProfile for instance type", "name", it.Spec.ProviderRef)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
