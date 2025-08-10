@@ -43,8 +43,6 @@ const (
 	requeueAfter = 2 * time.Second
 )
 
-var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
-
 // ProviderProfileReconciler reconciles a ProviderProfile object
 type ProviderProfileReconciler struct {
 	client.Client
@@ -60,7 +58,7 @@ type ProviderProfileReconciler struct {
 // 2. If it's being created or updated, copy spec to status and create a ConfigMap if it doesn't exist.
 
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
+	var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
 	logger.Info(fmt.Sprintf("Reconciler started for %s", req.Name))
 
 	// Copy all values from spec to status
@@ -147,6 +145,7 @@ func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (r *ProviderProfileReconciler) createConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, name string) (*corev1.ConfigMap, error) {
+	var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
 	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
 		return zone.DefaultZone
 	})

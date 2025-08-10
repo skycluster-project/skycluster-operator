@@ -50,8 +50,6 @@ const (
 	requeuePoll     = 10 * time.Second
 )
 
-var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
-
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images/finalizers,verbs=update
@@ -65,7 +63,7 @@ var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
 //    then immediately launch a fresh Pod for the new spec.
 
 func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-
+	var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
 	imgLogger.Info("Reconciler started.", "name", req.Name)
 
 	// Fetch the Images resource
@@ -129,13 +127,13 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// create the Pod for the current spec
 		jsonData, err := r.generateJSON(img.Spec.Zones)
 		if err != nil {
-			logger.Error(err, "failed to generate input JSON for image-finder Pod")
+			imgLogger.Error(err, "failed to generate input JSON for image-finder Pod")
 			return ctrl.Result{}, err
 		}
 		imgLogger.Info("Generated JSON for image-finder Pod", "jsonData", jsonData)
 		pod, err := r.buildRunnerPod(img, pp, jsonData)
 		if err != nil {
-			logger.Error(err, "failed to build runner Pod for image-finder")
+			imgLogger.Error(err, "failed to build runner Pod for image-finder")
 			return ctrl.Result{}, err
 		}
 		if err := ctrl.SetControllerReference(img, pod, r.Scheme); err != nil {
@@ -143,16 +141,14 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 
 		// Check if the pod already exists
-		existingPod := &corev1.Pod{}
-		err = r.Get(ctx, client.ObjectKey{Namespace: pod.Namespace, Name: pod.Name}, existingPod)
-		if err == nil {
+		existingPods := &corev1.PodList{}
+		err = r.List(ctx, existingPods,
+			client.InNamespace(img.Namespace), client.MatchingLabels(defaultPodLabels(pp.Spec.Platform, pp.Spec.Region)))
+		if err == nil && len(existingPods.Items) > 0 {
 			// Pod already exists, no need to create a new one
+			existingPod := &existingPods.Items[0]
 			imgLogger.Info("Runner Pod already exists", "podName", existingPod.Name, "namespace", existingPod.Namespace)
 			st.RunnerPodName = existingPod.Name
-		} else if !apierrors.IsNotFound(err) {
-			// Some other error occurred while checking for the Pod
-			logger.Error(err, "Failed to get existing Pod", "podName", pod.Name, "namespace", pod.Namespace)
-			return ctrl.Result{}, err
 		} else {
 			// Pod does not exist, create a new one
 			if err := r.Create(ctx, pod); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -221,7 +217,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if pod.Status.Phase == corev1.PodSucceeded && st.LastRunReason == "Completed" {
 			zones, err := r.DecodeJSONToImageOffering(st.LastRunMessage)
 			if err != nil {
-				logger.Error(err, "failed to decode image offerings from JSON")
+				imgLogger.Error(err, "failed to decode image offerings from JSON")
 				return ctrl.Result{}, err
 			}
 			img.Status.Zones = zones
@@ -229,14 +225,14 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			// Update or create the ConfigMap with the image offerings
 			yamlData, err := r.generateYAML(img.Status.Zones)
 			if err != nil {
-				logger.Error(err, "failed to generate input YAML for ConfigMap")
+				imgLogger.Error(err, "failed to generate input YAML for ConfigMap")
 				return ctrl.Result{}, err
 			}
 
 			imgLogger.Info("Generated YAML for ConfigMap", "yamlData", yamlData)
 
 			if err := r.handleConfigMap(ctx, pp, yamlData); err != nil {
-				logger.Error(err, "failed to update/create ConfigMap for image offerings")
+				imgLogger.Error(err, "failed to update/create ConfigMap for image offerings")
 				return ctrl.Result{}, err
 			}
 		}
@@ -284,17 +280,14 @@ func (r *ImageReconciler) buildRunnerPod(img *cv1a1.Image, pp *cv1a1.ProviderPro
 		})
 	}
 
+	var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
 	imgLogger.Info("Building image-finder Pod", "namespace", img.Namespace, "name", img.Name, "envVars", mapVars)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    img.Namespace,
 			GenerateName: img.Name + "-image-finder",
-			Labels: map[string]string{
-				"skycluster.io/managed-by":        "skycluster",
-				"skycluster.io/provider-platform": pp.Spec.Platform,
-				"skycluster.io/provider-region":   pp.Spec.Region,
-			},
+			Labels:       defaultPodLabels(pp.Spec.Platform, pp.Spec.Region),
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -305,6 +298,15 @@ func (r *ImageReconciler) buildRunnerPod(img *cv1a1.Image, pp *cv1a1.ProviderPro
 			}},
 		},
 	}, nil
+}
+
+func defaultPodLabels(platform, region string) map[string]string {
+	return map[string]string{
+		"skycluster.io/managed-by":        "skycluster",
+		"skycluster.io/provider-platform": platform,
+		"skycluster.io/provider-region":   region,
+		"skycluster.io/pod-type":          "image-finder",
+	}
 }
 
 func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a1.ProviderProfile) (map[string]string, error) {
@@ -333,6 +335,9 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 		return nil, fmt.Errorf("credentials secret is empty")
 	}
 
+	// Convert the secret data to a map
+	cred := make(map[string]string)
+
 	switch pp.Spec.Platform {
 	case "aws":
 		// AWS credentials are expected to be in the secret
@@ -342,30 +347,38 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 		if _, ok := secret.Data["aws_secret_access_key"]; !ok {
 			return nil, fmt.Errorf("AWS credentials secret does not contain 'aws_secret_access_key'")
 		}
+		for k, v := range secret.Data {
+			cred[strings.ToUpper(k)] = string(v)
+		}
 	case "azure":
 		// Azure credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
 			return nil, fmt.Errorf("Azure credentials secret does not contain 'configs'")
 		}
+		cred["AZ_CONFIG_JSON"] = string(secret.Data["configs"])
 	case "gcp":
 		// GCP credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
 			return nil, fmt.Errorf("GCP credentials secret does not contain 'configs'")
 		}
+		cred["SERVICE_ACCOUNT_JSON"] = string(secret.Data["configs"])
+		cred["GOOGLE_CLOUD_PROJECT"] = "dummy" // GCP requires a project, but we don't use it in the image-finder Pod
 	default:
 		return nil, fmt.Errorf("unsupported platform %s for credentials secret", pp.Spec.Platform)
 	}
 
-	// Convert the secret data to a map
-	cred := make(map[string]string)
-	for k, v := range secret.Data {
-		cred[strings.ToLower(k)] = string(v)
-	}
 	return cred, nil
 }
 
 func (r *ImageReconciler) generateJSON(zones []cv1a1.ImageOffering) (string, error) {
-	jsonDataByte, err := json.Marshal(zones)
+	type payload struct {
+		Zones []cv1a1.ImageOffering `json:"zones"`
+	}
+	// Wrap zones in a payload struct
+	wrapped := payload{Zones: zones}
+	// Use the wrapped struct to ensure the correct JSON structure
+	// with "zones" as the top-level key
+	jsonDataByte, err := json.Marshal(wrapped)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal input JSON: %w", err)
 	}
@@ -398,15 +411,10 @@ func (r *ImageReconciler) handleConfigMap(ctx context.Context, pf *cv1a1.Provide
 	}
 	cm := cmList.Items[0]
 
-	yamlData, err := helper.EncodeJSONStringToYAML(yamlDataStr)
-	if err != nil {
-		return fmt.Errorf("failed to encode instance types to YAML: %w", err)
-	}
-
 	if cm.Data == nil {
 		cm.Data = make(map[string]string)
 	}
-	cm.Data["images.yaml"] = yamlData
+	cm.Data["images.yaml"] = yamlDataStr
 
 	if err := r.Update(ctx, &cm); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for images: %w", err)
