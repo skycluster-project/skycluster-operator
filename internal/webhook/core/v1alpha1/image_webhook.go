@@ -34,7 +34,7 @@ import (
 
 // nolint:unused
 // log is for logging in this package.
-var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images Defaulting]")
+var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images Webhook]")
 
 // SetupImageWebhookWithManager registers the webhook for Image in the manager.
 func SetupImageWebhookWithManager(mgr ctrl.Manager) error {

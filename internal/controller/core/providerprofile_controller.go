@@ -150,7 +150,7 @@ func (r *ProviderProfileReconciler) createConfigMap(ctx context.Context, pf *cv1
 	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
 		return zone.DefaultZone
 	})
-	ll := defaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
 	logger.Info("Creating ConfigMap for ProviderProfile", "name", name, "labels", ll)
 	// Create a new ConfigMap for the ProviderProfile
 	cm := &corev1.ConfigMap{
@@ -174,7 +174,7 @@ func (r *ProviderProfileReconciler) getConfigMap(ctx context.Context, pf *cv1a1.
 	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
 		return zone.DefaultZone
 	})
-	ll := defaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
 
 	// Get the ConfigMap associated with the provider profile
 	cms := &corev1.ConfigMapList{}
@@ -199,18 +199,4 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, cms *corev1.Con
 	}
 
 	return nil
-}
-
-func defaultLabels(p, r, z string) map[string]string {
-	l := map[string]string{
-		"skycluster.io/managed-by":  "skycluster",
-		"skycluster.io/config-type": "provider-profile",
-	}
-	l = lo.Assign(l, lo.Ternary(p != "",
-		map[string]string{"skycluster.io/provider-platform": p}, nil))
-	l = lo.Assign(l, lo.Ternary(r != "",
-		map[string]string{"skycluster.io/provider-region": r}, nil))
-	l = lo.Assign(l, lo.Ternary(z != "",
-		map[string]string{"skycluster.io/provider-zone": z}, nil))
-	return l
 }

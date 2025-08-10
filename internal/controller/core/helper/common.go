@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/samber/lo"
 	"go.uber.org/zap/zapcore"
 	corev1 "k8s.io/api/core/v1"
 	zapCtrl "sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -86,4 +87,18 @@ func ContainerTerminatedMessage(pod *corev1.Pod) string {
 		}
 	}
 	return ""
+}
+
+func DefaultLabels(p, r, z string) map[string]string {
+	l := map[string]string{
+		"skycluster.io/managed-by":  "skycluster",
+		"skycluster.io/config-type": "provider-profile",
+	}
+	l = lo.Assign(l, lo.Ternary(p != "",
+		map[string]string{"skycluster.io/provider-platform": p}, nil))
+	l = lo.Assign(l, lo.Ternary(r != "",
+		map[string]string{"skycluster.io/provider-region": r}, nil))
+	l = lo.Assign(l, lo.Ternary(z != "",
+		map[string]string{"skycluster.io/provider-zone": z}, nil))
+	return l
 }

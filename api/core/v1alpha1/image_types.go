@@ -31,7 +31,7 @@ type ImageSpec struct {
 // ImageStatus defines the observed state of Image.
 type ImageStatus struct {
 	Region         string             `json:"region"`
-	Zones          []ImageOffering    `json:"zones"`
+	Zones          []ImageOffering    `json:"zones,omitempty"`
 	Generation     int64              `json:"generation,omitempty"`
 	RunnerPodName  string             `json:"runnerPodName,omitempty"`
 	NeedsRerun     bool               `json:"needsRerun,omitempty"`
@@ -47,7 +47,7 @@ type ImageOffering struct {
 	NameLabel  string `json:"nameLabel"`
 	Name       string `json:"name,omitempty"`
 	Generation string `json:"generation,omitempty"`
-	Zone       string `json:"zone"`
+	Zone       string `json:"zone,omitempty"`
 }
 
 // +kubebuilder:object:root=true
