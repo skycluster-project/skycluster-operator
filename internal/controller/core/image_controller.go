@@ -235,6 +235,13 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 				imgLogger.Error(err, "failed to update/create ConfigMap for image offerings")
 				return ctrl.Result{}, err
 			}
+
+			// Delete the Pod after processing
+			imgLogger.Info("Deleting runner Pod after successful processing", "podName", pod.Name)
+			if err := r.Delete(ctx, &pod); err != nil {
+				imgLogger.Error(err, "failed to delete runner Pod after processing", "podName", pod.Name)
+				// continue processing even if deletion fails
+			}
 		}
 
 		// no more work
@@ -406,8 +413,8 @@ func (r *ImageReconciler) handleConfigMap(ctx context.Context, pf *cv1a1.Provide
 	if err := r.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(helper.SKYCLUSTER_NAMESPACE)); err != nil {
 		return fmt.Errorf("unable to list ConfigMaps for images: %w", err)
 	}
-	if len(cmList.Items) > 1 {
-		return fmt.Errorf("multiple ConfigMaps found for images, expected only one")
+	if len(cmList.Items) != 1 {
+		return fmt.Errorf("error listing ConfigMaps for images: expected 1, got %d", len(cmList.Items))
 	}
 	cm := cmList.Items[0]
 
