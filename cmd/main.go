@@ -39,6 +39,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/samber/lo"
+
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
@@ -278,6 +279,13 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err := webhookcorev1alpha1.SetupImageWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcorev1alpha1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
 			os.Exit(1)
 		}
 	}

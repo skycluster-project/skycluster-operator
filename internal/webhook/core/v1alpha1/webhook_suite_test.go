@@ -112,6 +112,9 @@ var _ = BeforeSuite(func() {
 	err = SetupImageWebhookWithManager(mgr)
 	Expect(err).NotTo(HaveOccurred())
 
+	err = SetupProviderProfileWebhookWithManager(mgr)
+	Expect(err).NotTo(HaveOccurred())
+
 	// +kubebuilder:scaffold:webhook
 
 	go func() {

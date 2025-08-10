@@ -19,26 +19,31 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/samber/lo"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	// "github.com/aws/aws-sdk-go-v2/aws"
-	// "github.com/aws/aws-sdk-go-v2/config"
-	// "github.com/aws/aws-sdk-go-v2/credentials"
-	// ec2 "github.com/aws/aws-sdk-go-v2/service/ec2"
-	// ec2Types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
-	// pricing "github.com/aws/aws-sdk-go-v2/service/pricing"
-
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	helper "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
 )
+
+const (
+	cmFinalizer  = "skycluster.io/configmap"
+	requeueAfter = 2 * time.Second
+)
+
+var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
 
 // ProviderProfileReconciler reconciles a ProviderProfile object
 type ProviderProfileReconciler struct {
@@ -50,43 +55,82 @@ type ProviderProfileReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/finalizers,verbs=update
 
+// Reconcile behavior:
+// 1. If it's being deleted, clean up config maps and remove finalizer.
+// 2. If it's being created or updated, copy spec to status and create a ConfigMap if it doesn't exist.
+
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
+
 	logger.Info(fmt.Sprintf("Reconciler started for %s", req.Name))
 
 	// Copy all values from spec to status
-	pf := &corev1alpha1.ProviderProfile{}
-	if err := r.Get(ctx, req.NamespacedName, pf); err != nil {
-		if client.IgnoreNotFound(err) != nil {
-			logger.Error(err, "unable to fetch ProviderProfile")
-			return ctrl.Result{}, client.IgnoreNotFound(err)
-		}
-		logger.Info("ProviderProfile not found, maybe deleted", "name", req.Name)
-		if err := r.cleanUp(ctx, pf); err != nil {
-			logger.Error(err, "cleanup error", "name", req.Name)
-			return ctrl.Result{}, err
+	pp := &cv1a1.ProviderProfile{}
+	if err := r.Get(ctx, req.NamespacedName, pp); err != nil {
+		logger.Info("unable to fetch ProviderProfile, may be deleted", "name", req.Name)
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// If object is being deleted
+	if !pp.DeletionTimestamp.IsZero() {
+		logger.Info("ProviderProfile is being deleted", "name", req.Name)
+		if controllerutil.ContainsFinalizer(pp, cmFinalizer) {
+			logger.Info("ProviderProfile has finalizer, cleaning up ConfigMaps", "name", req.Name)
+			if cms, err := r.getConfigMap(ctx, pp); err == nil {
+				// if no error, then there is a ConfigMap to clean up
+				if err := r.cleanUp(ctx, cms); err != nil {
+					return ctrl.Result{}, fmt.Errorf("failed to clean up ConfigMaps: %w", err)
+				}
+				// Requeue to ensure finalizer is removed
+				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			}
+
+			// There is no ConfigMap, Remove finalizer once cleanup is done
+			controllerutil.RemoveFinalizer(pp, cmFinalizer)
+			logger.Info("Removing finalizer from ProviderProfile", "name", req.Name)
+			if err := r.Update(ctx, pp); err != nil {
+				logger.Error(err, "unable to remove finalizer from ProviderProfile")
+				return ctrl.Result{}, err
+			}
 		}
 		return ctrl.Result{}, nil
 	}
 
-	// Add labels based on the provider spec
-	if pf.Labels == nil {
-		pf.Labels = make(map[string]string)
+	// Create a ConfigMap if it doesn't exist
+	cms, err := r.getConfigMap(ctx, pp)
+	if err != nil && !controllerutil.ContainsFinalizer(pp, cmFinalizer) {
+		logger.Info("Creating ConfigMap for ProviderProfile, no finalizer present", "name", req.Name)
+		cm, err := r.createConfigMap(ctx, pp, req.Name)
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			logger.Error(err, "unable to create ConfigMap for ProviderProfile")
+			return ctrl.Result{}, err
+		}
+		logger.Info("ConfigMap created for ProviderProfile", "name", cm.Name)
+		logger.Info("Adding finalizer to ProviderProfile", "name", req.Name)
+		controllerutil.AddFinalizer(pp, cmFinalizer)
+		logger.Info("Updating ProviderProfile with finalizer", "name", req.Name)
+		if err := r.Update(ctx, pp); err != nil {
+			logger.Error(err, "unable to add finalizer to ProviderProfile")
+			return ctrl.Result{}, err
+		}
 	}
-	pf.Labels["skycluster.io/provider-platform"] = pf.Spec.Platform
-	pf.Labels["skycluster.io/provider-region"] = pf.Spec.Region
 
-	// Update the provider with the new labels
-	if err := r.Update(ctx, pf); err != nil {
-		logger.Error(err, "unable to update ProviderProfile labels")
-		return ctrl.Result{}, err
-	}
-
+	logger.Info("Setting ProviderProfile status", "name", req.Name)
 	// Copy all spec values to status
-	pf.Status.Enabled = pf.Spec.Enabled
-	pf.Status.Zones = make([]corev1alpha1.ZoneSpec, len(pf.Spec.Zones))
-	pf.Status.Zones = lo.Filter(pf.Spec.Zones, func(zone corev1alpha1.ZoneSpec, _ int) bool { return true })
-	if err := r.Status().Update(ctx, pf); err != nil {
+	if cms != nil {
+		pp.Status.ConfigMapRef = strings.Join(
+			lo.Map(cms.Items, func(n corev1.ConfigMap, _ int) string { return n.Name }), ",")
+	}
+	pp.Status.Enabled = pp.Spec.Enabled
+	pp.Status.Zones = make([]cv1a1.ZoneSpec, len(pp.Spec.Zones))
+	pp.Status.Zones = lo.Filter(pp.Spec.Zones, func(zone cv1a1.ZoneSpec, _ int) bool { return true })
+
+	// Update the status with the current spec
+	logger.Info("Updating ProviderProfile status", "name", req.Name)
+	if err := r.Status().Update(ctx, pp); err != nil {
+		if apierrors.IsConflict(err) {
+			logger.Info("Conflict while updating ProviderProfile status, requeuing", "name", req.Name)
+			return ctrl.Result{RequeueAfter: requeueAfter}, nil
+		}
 		logger.Error(err, "unable to update ProviderProfile status")
 		return ctrl.Result{}, err
 	}
@@ -97,44 +141,76 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 // SetupWithManager sets up the controller with the Manager.
 func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.ProviderProfile{}).
+		For(&cv1a1.ProviderProfile{}).
 		Named("core-providerprofile").
 		Complete(r)
 }
 
-func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *corev1alpha1.ProviderProfile) error {
-
-	// Clean up ConfigMaps related to the provider profile
-	p := pf.Spec.Platform
-	rg := pf.Spec.Region
-	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone corev1alpha1.ZoneSpec) bool {
+func (r *ProviderProfileReconciler) createConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, name string) (*corev1.ConfigMap, error) {
+	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
 		return zone.DefaultZone
 	})
-	if !ok {
-		return fmt.Errorf("no default zone found for provider profile %s", pf.Name)
+	ll := defaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	logger.Info("Creating ConfigMap for ProviderProfile", "name", name, "labels", ll)
+	// Create a new ConfigMap for the ProviderProfile
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Namespace: helper.SKYCLUSTER_NAMESPACE,
+			Name:      fmt.Sprintf("profile-%s", name),
+			Labels:    labels.Set(ll),
+		},
 	}
-	cm := &corev1.ConfigMapList{}
-	// List all ConfigMaps in the namespace with matching labels
-	if err := r.List(ctx, cm, &client.ListOptions{
-		Namespace: helper.SKYCLUSTER_NAMESPACE,
-		LabelSelector: labels.SelectorFromSet(labels.Set{
-			"skycluster.io/provider-platform": p,
-			"skycluster.io/provider-region":   rg,
-			"skycluster.io/provider-zone":     defaultZone.Name,
-			"skycluster.io/config-type":       "provider-profile",
-		}),
+
+	// Create the ConfigMap
+	if err := r.Create(ctx, cm); err != nil && !apierrors.IsAlreadyExists(err) {
+		return nil, fmt.Errorf("unable to create ConfigMap: %w", err)
+	}
+
+	return cm, nil
+}
+
+func (r *ProviderProfileReconciler) getConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile) (*corev1.ConfigMapList, error) {
+
+	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+		return zone.DefaultZone
+	})
+	ll := defaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+
+	// Get the ConfigMap associated with the provider profile
+	cms := &corev1.ConfigMapList{}
+	if err := r.List(ctx, cms, &client.ListOptions{
+		Namespace:     helper.SKYCLUSTER_NAMESPACE,
+		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
-		return fmt.Errorf("unable to list ConfigMaps for cleanup: %w", err)
+		return nil, fmt.Errorf("unable to fetch ConfigMap for ProviderProfile %s: %w", pf.Name, err)
 	}
-	if len(cm.Items) > 1 {
-		return fmt.Errorf("multiple ConfigMaps found for provider profile %s, expected only one", pf.Name)
+	if len(cms.Items) == 0 {
+		return nil, fmt.Errorf("no ConfigMap found for ProviderProfile %s", pf.Name)
 	}
-	// Delete each ConfigMap found
-	for _, cmItem := range cm.Items {
+	return cms, nil
+}
+
+func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, cms *corev1.ConfigMapList) error {
+	// Clean up ConfigMaps related to the provider profile
+	for _, cmItem := range cms.Items {
 		if err := r.Delete(ctx, &cmItem); err != nil {
 			return fmt.Errorf("unable to delete ConfigMap %s during cleanup: %w", cmItem.Name, err)
 		}
 	}
 
 	return nil
+}
+
+func defaultLabels(p, r, z string) map[string]string {
+	l := map[string]string{
+		"skycluster.io/managed-by":  "skycluster",
+		"skycluster.io/config-type": "provider-profile",
+	}
+	l = lo.Assign(l, lo.Ternary(p != "",
+		map[string]string{"skycluster.io/provider-platform": p}, nil))
+	l = lo.Assign(l, lo.Ternary(r != "",
+		map[string]string{"skycluster.io/provider-region": r}, nil))
+	l = lo.Assign(l, lo.Ternary(z != "",
+		map[string]string{"skycluster.io/provider-zone": z}, nil))
+	return l
 }

@@ -46,8 +46,9 @@ type ZoneSpec struct {
 
 // ProviderProfileStatus defines the observed state of ProviderProfile.
 type ProviderProfileStatus struct {
-	Enabled bool       `json:"enabled,omitempty"`
-	Zones   []ZoneSpec `json:"zones,omitempty"`
+	Enabled      bool       `json:"enabled,omitempty"`
+	Zones        []ZoneSpec `json:"zones,omitempty"`
+	ConfigMapRef string     `json:"configMapRef,omitempty"`
 }
 
 // +kubebuilder:object:root=true
