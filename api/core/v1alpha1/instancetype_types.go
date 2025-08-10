@@ -27,8 +27,16 @@ type InstanceTypeSpec struct {
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region string                 `json:"region"`
-	Zones  []ZoneInstanceTypeSpec `json:"zones"`
+	Region         string                 `json:"region"`
+	Zones          []ZoneInstanceTypeSpec `json:"zones"`
+	Generation     int64                  `json:"generation,omitempty"`
+	RunnerPodName  string                 `json:"runnerPodName,omitempty"`
+	NeedsRerun     bool                   `json:"needsRerun,omitempty"`
+	LastUpdateTime metav1.Time            `json:"lastUpdateTime,omitempty"`
+	LastRunPhase   string                 `json:"lastRunPhase,omitempty"`
+	LastRunReason  string                 `json:"lastRunReason,omitempty"`
+	LastRunMessage string                 `json:"lastRunMessage,omitempty"`
+	Conditions     []metav1.Condition     `json:"conditions,omitempty"`
 }
 
 type ZoneInstanceTypeSpec struct {

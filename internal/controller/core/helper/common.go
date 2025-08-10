@@ -1,10 +1,12 @@
 package helper
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 
 	"go.uber.org/zap/zapcore"
+	corev1 "k8s.io/api/core/v1"
 	zapCtrl "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
 )
@@ -45,10 +47,43 @@ func CustomLogger(logDir ...string) zapCtrl.Opts {
 	return zapCtrl.UseFlagOptions(&opts)
 }
 
+func EncodeJSONStringToYAML(jsonString string) (string, error) {
+	var obj interface{}
+	if err := json.Unmarshal([]byte(jsonString), &obj); err != nil {
+		return "", err
+	}
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
 func EncodeObjectToYAML(obj interface{}) (string, error) {
 	data, err := yaml.Marshal(obj)
 	if err != nil {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func ContainerTerminatedReason(pod *corev1.Pod) string {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Terminated != nil &&
+			cs.State.Terminated.Reason != "" {
+			return cs.State.Terminated.Reason
+		}
+	}
+	return ""
+}
+
+func ContainerTerminatedMessage(pod *corev1.Pod) string {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.State.Terminated != nil &&
+			cs.State.Terminated.Reason == "Completed" &&
+			cs.State.Terminated.Message != "" {
+			return cs.State.Terminated.Message
+		}
+	}
+	return ""
 }

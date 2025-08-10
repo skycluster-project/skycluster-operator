@@ -121,6 +121,7 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *corev1alpha
 			"skycluster.io/provider-platform": p,
 			"skycluster.io/provider-region":   rg,
 			"skycluster.io/provider-zone":     defaultZone.Name,
+			"skycluster.io/config-type":       "provider-profile",
 		}),
 	}); err != nil {
 		return fmt.Errorf("unable to list ConfigMaps for cleanup: %w", err)
