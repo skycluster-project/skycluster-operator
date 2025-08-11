@@ -24,12 +24,92 @@ webhooks:
     resources:
     - deployments
   sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-core-skycluster-io-v1alpha1-image
+  failurePolicy: Fail
+  name: mimage-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-core-skycluster-io-v1alpha1-providerprofile
+  failurePolicy: Fail
+  name: mproviderprofile-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - providerprofiles
+  sideEffects: None
 ---
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
   name: validating-webhook-configuration
 webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-core-skycluster-io-v1alpha1-image
+  failurePolicy: Fail
+  name: vimage-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-core-skycluster-io-v1alpha1-providerprofile
+  failurePolicy: Fail
+  name: vproviderprofile-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - providerprofiles
+  sideEffects: None
 - admissionReviewVersions:
   - v1
   clientConfig:

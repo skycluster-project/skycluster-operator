@@ -33,7 +33,12 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - devicenodes
+  - egresscosts
   - ilptasks
+  - images
+  - instancetypes
+  - providerprofiles
   - skyclusters
   verbs:
   - create
@@ -46,14 +51,24 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - devicenodes/finalizers
+  - egresscosts/finalizers
   - ilptasks/finalizers
+  - images/finalizers
+  - instancetypes/finalizers
+  - providerprofiles/finalizers
   - skyclusters/finalizers
   verbs:
   - update
 - apiGroups:
   - core.skycluster.io
   resources:
+  - devicenodes/status
+  - egresscosts/status
   - ilptasks/status
+  - images/status
+  - instancetypes/status
+  - providerprofiles/status
   - skyclusters/status
   verbs:
   - get
