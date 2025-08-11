@@ -130,7 +130,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			logger.Error(err, "failed to generate input JSON for runner Pod")
 			return ctrl.Result{}, err
 		}
-		logger.Info("Generated JSON for runner Pod", "jsonData", jsonData, "Families", strings.Join(it.Spec.ProviderFamilies, ","))
+		logger.Info("Generated JSON for runner Pod", "jsonData", jsonData, "Families", strings.Join(it.Spec.TypeFamilies, ","))
 		pod, err := r.buildRunnerPod(it, pp, jsonData)
 		if err != nil {
 			logger.Error(err, "failed to build runner Pod for runner")
@@ -142,8 +142,10 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// Check if the pod already exists
 		existingPods := &corev1.PodList{}
+		podLabels := h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)
+		podLabels["skycluster.io/pod-type"] = "instance-finder"
 		err = r.List(ctx, existingPods,
-			client.InNamespace(it.Namespace), client.MatchingLabels(h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)))
+			client.InNamespace(it.Namespace), client.MatchingLabels(podLabels))
 		if err == nil && len(existingPods.Items) > 0 {
 			// Pod already exists, no need to create a new one
 			existingPod := &existingPods.Items[0]
@@ -271,7 +273,7 @@ func (r *InstanceTypeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// buildRunnerPod creates a image-finder Pod that finds images based on the spec.
+// buildRunnerPod creates a runner Pod that finds images based on the spec.
 // Keep it idempotent; use GenerateName + ownerRef.
 func (r *InstanceTypeReconciler) buildRunnerPod(it *cv1a1.InstanceType, pp *cv1a1.ProviderProfile, jsonData string) (*corev1.Pod, error) {
 	// fetch provider credentials from the secret
@@ -284,7 +286,7 @@ func (r *InstanceTypeReconciler) buildRunnerPod(it *cv1a1.InstanceType, pp *cv1a
 	mapVars := lo.Assign(cred, map[string]string{
 		"PROVIDER":    pp.Spec.Platform,
 		"REGION":      pp.Spec.Region,
-		"FAMILY":      strings.Join(it.Spec.ProviderFamilies, ","),
+		"FAMILY":      strings.Join(it.Spec.TypeFamilies, ","),
 		"INPUT_JSON":  jsonData,
 		"OUTPUT_PATH": outputPath,
 	})
@@ -299,11 +301,14 @@ func (r *InstanceTypeReconciler) buildRunnerPod(it *cv1a1.InstanceType, pp *cv1a
 	var logger = zap.New(h.CustomLogger()).WithName("[Images]")
 	logger.Info("Building runner Pod", "namespace", it.Namespace, "name", it.Name, "envVars", mapVars)
 
+	podLabels := h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)
+	podLabels["skycluster.io/pod-type"] = "instance-finder"
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    it.Namespace,
 			GenerateName: it.Name + "-it-finder",
-			Labels:       h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region),
+			Labels:       podLabels,
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -413,7 +418,7 @@ func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, p
 			return nil, fmt.Errorf("GCP credentials secret does not contain 'configs'")
 		}
 		cred["GCP_SA_JSON"] = string(secret.Data["configs"])
-		cred["GOOGLE_CLOUD_PROJECT"] = "dummy" // GCP requires a project, but we don't use it in the image-finder Pod
+		cred["GOOGLE_CLOUD_PROJECT"] = "dummy" // GCP requires a project, but we don't use it in the runner Pod
 	default:
 		return nil, fmt.Errorf("unsupported platform %s for credentials secret", pp.Spec.Platform)
 	}

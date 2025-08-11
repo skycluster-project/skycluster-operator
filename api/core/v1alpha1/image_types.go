@@ -24,30 +24,30 @@ import (
 
 // ImageSpec defines the desired state of Image
 type ImageSpec struct {
-	ProviderRef string          `json:"providerRef"`
-	Zones       []ImageOffering `json:"zones"`
+	ProviderRef string   `json:"providerRef"`
+	ImageLabels []string `json:"imageLabels,omitempty" yaml:"imageLabels,omitempty"`
 }
 
 // ImageStatus defines the observed state of Image.
 type ImageStatus struct {
-	Region         string             `json:"region"`
-	Zones          []ImageOffering    `json:"zones,omitempty"`
-	Generation     int64              `json:"generation,omitempty"`
-	RunnerPodName  string             `json:"runnerPodName,omitempty"`
-	NeedsRerun     bool               `json:"needsRerun,omitempty"`
-	LastUpdateTime metav1.Time        `json:"lastUpdateTime,omitempty"`
-	LastRunPhase   string             `json:"lastRunPhase,omitempty"`
-	LastRunReason  string             `json:"lastRunReason,omitempty"`
-	LastRunMessage string             `json:"lastRunMessage,omitempty"`
-	Conditions     []metav1.Condition `json:"conditions,omitempty"`
+	Region         string             `json:"region" yaml:"region"`
+	Zones          []ImageOffering    `json:"zones,omitempty" yaml:"zones,omitempty"`
+	Generation     int64              `json:"generation,omitempty" yaml:"generation,omitempty"`
+	RunnerPodName  string             `json:"runnerPodName,omitempty" yaml:"runnerPodName,omitempty"`
+	NeedsRerun     bool               `json:"needsRerun,omitempty" yaml:"needsRerun,omitempty"`
+	LastUpdateTime metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
+	LastRunPhase   string             `json:"lastRunPhase,omitempty" yaml:"lastRunPhase,omitempty"`
+	LastRunReason  string             `json:"lastRunReason,omitempty" yaml:"lastRunReason,omitempty"`
+	LastRunMessage string             `json:"lastRunMessage,omitempty" yaml:"lastRunMessage,omitempty"`
+	Conditions     []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 }
 
 type ImageOffering struct {
 	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;eks-optimized
-	NameLabel  string `json:"nameLabel"`
-	Name       string `json:"name,omitempty"`
-	Generation string `json:"generation,omitempty"`
-	Zone       string `json:"zone,omitempty"`
+	NameLabel  string `json:"nameLabel" yaml:"nameLabel"`
+	Name       string `json:"name,omitempty" yaml:"name,omitempty"`
+	Generation string `json:"generation,omitempty" yaml:"generation,omitempty"`
+	Zone       string `json:"zone,omitempty" yaml:"zone,omitempty"`
 }
 
 // +kubebuilder:object:root=true

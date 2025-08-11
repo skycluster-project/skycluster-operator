@@ -24,8 +24,8 @@ import (
 
 // InstanceTypeSpec defines the desired state of InstanceType
 type InstanceTypeSpec struct {
-	ProviderRef      string   `json:"providerRef"`
-	ProviderFamilies []string `json:"providerFamilies,omitempty"`
+	ProviderRef  string   `json:"providerRef"`
+	TypeFamilies []string `json:"typeFamilies,omitempty"`
 }
 
 // InstanceTypeStatus defines the observed state of InstanceType.
@@ -43,33 +43,33 @@ type InstanceTypeStatus struct {
 }
 
 type ZoneInstanceTypeSpec struct {
-	ZoneName string             `json:"zone"`
-	Flavors  []InstanceOffering `json:"flavors"`
+	ZoneName string             `json:"zone" yaml:"zone"`
+	Flavors  []InstanceOffering `json:"flavors" yaml:"flavors"`
 }
 
 type InstanceOffering struct {
-	Name        string   `json:"name"`
-	NameLabel   string   `json:"nameLabel"`
-	VCPUs       int      `json:"vcpus"`
-	RAM         string   `json:"ram"`
-	Price       string   `json:"price,omitempty"`
-	GPU         GPU      `json:"gpu,omitempty"`
-	Generation  string   `json:"generation,omitempty"`
-	VolumeTypes []string `json:"volumeTypes,omitempty"`
-	Spot        Spot     `json:"spot,omitempty"`
+	Name        string   `json:"name" yaml:"name"`
+	NameLabel   string   `json:"nameLabel" yaml:"nameLabel"`
+	VCPUs       int      `json:"vcpus" yaml:"vcpus"`
+	RAM         string   `json:"ram" yaml:"ram"`
+	Price       string   `json:"price,omitempty" yaml:"price,omitempty"`
+	GPU         GPU      `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Generation  string   `json:"generation,omitempty" yaml:"generation,omitempty"`
+	VolumeTypes []string `json:"volumeTypes,omitempty" yaml:"volumeTypes,omitempty"`
+	Spot        Spot     `json:"spot,omitempty" yaml:"spot,omitempty"`
 }
 
 type GPU struct {
-	Enabled      bool   `json:"enabled"`
-	Manufacturer string `json:"manufacturer"`
-	Count        int    `json:"count"`
-	Model        string `json:"model"`
-	Memory       string `json:"memory"`
+	Enabled      bool   `json:"enabled" yaml:"enabled"`
+	Manufacturer string `json:"manufacturer" yaml:"manufacturer"`
+	Count        int    `json:"count" yaml:"count"`
+	Model        string `json:"model" yaml:"model"`
+	Memory       string `json:"memory" yaml:"memory"`
 }
 
 type Spot struct {
-	Price   string `json:"price"`
-	Enabled bool   `json:"enabled"`
+	Price   string `json:"price" yaml:"price"`
+	Enabled bool   `json:"enabled" yaml:"enabled"`
 }
 
 // +kubebuilder:object:root=true

@@ -75,11 +75,17 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			logger.Info("ProviderProfile has finalizer, cleaning up ConfigMaps", "name", req.Name)
 			if cms, err := r.getConfigMap(ctx, pp); err == nil {
 				// if no error, then there is a ConfigMap to clean up
+				logger.Info("Found ConfigMap for ProviderProfile, cleaning up", "name", req.Name, "Found ConfigMaps", len(cms.Items))
 				if err := r.cleanUp(ctx, cms); err != nil {
+					logger.Error(err, "failed to clean up ConfigMaps for ProviderProfile", "name", req.Name)
 					return ctrl.Result{}, fmt.Errorf("failed to clean up ConfigMaps: %w", err)
 				}
+				logger.Info("ConfigMaps cleaned up for ProviderProfile", "name", req.Name)
 				// Requeue to ensure finalizer is removed
 				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+			} else {
+				// If no ConfigMap exists, we can proceed to remove the finalizer
+				logger.Info("No ConfigMap found for ProviderProfile", "name", req.Name, "error", err)
 			}
 
 			// There is no ConfigMap, Remove finalizer once cleanup is done
@@ -146,10 +152,10 @@ func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *ProviderProfileReconciler) createConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, name string) (*corev1.ConfigMap, error) {
 	var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
-	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-		return zone.DefaultZone
-	})
-	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	// defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+	// 	return zone.DefaultZone
+	// })
+	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	logger.Info("Creating ConfigMap for ProviderProfile", "name", name, "labels", ll)
 	// Create a new ConfigMap for the ProviderProfile
 	cm := &corev1.ConfigMap{
@@ -170,10 +176,10 @@ func (r *ProviderProfileReconciler) createConfigMap(ctx context.Context, pf *cv1
 
 func (r *ProviderProfileReconciler) getConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile) (*corev1.ConfigMapList, error) {
 
-	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-		return zone.DefaultZone
-	})
-	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	// defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+	// 	return zone.DefaultZone
+	// })
+	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 
 	// Get the ConfigMap associated with the provider profile
 	cms := &corev1.ConfigMapList{}
@@ -184,7 +190,7 @@ func (r *ProviderProfileReconciler) getConfigMap(ctx context.Context, pf *cv1a1.
 		return nil, fmt.Errorf("unable to fetch ConfigMap for ProviderProfile %s: %w", pf.Name, err)
 	}
 	if len(cms.Items) == 0 {
-		return nil, fmt.Errorf("no ConfigMap found for ProviderProfile %s", pf.Name)
+		return nil, fmt.Errorf("no ConfigMap found for ProviderProfile %s, labels: %v", pf.Name, ll)
 	}
 	return cms, nil
 }

@@ -120,7 +120,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if st.RunnerPodName == "" {
 		imgLogger.Info("No RunnerPodName is set, checking if we need to create a new Pod")
 		// create the Pod for the current spec
-		jsonData, err := r.generateJSON(img.Spec.Zones)
+		jsonData, err := r.generateJSON(pp.Spec.Zones, img.Spec.ImageLabels)
 		if err != nil {
 			imgLogger.Error(err, "failed to generate input JSON for image-finder Pod")
 			return ctrl.Result{}, err
@@ -137,8 +137,10 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 		// Check if the pod already exists
 		existingPods := &corev1.PodList{}
+		podLabels := h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)
+		podLabels["skycluster.io/pod-type"] = "image-finder"
 		err = r.List(ctx, existingPods,
-			client.InNamespace(img.Namespace), client.MatchingLabels(h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)))
+			client.InNamespace(img.Namespace), client.MatchingLabels(podLabels))
 		if err == nil && len(existingPods.Items) > 0 {
 			// Pod already exists, no need to create a new one
 			existingPod := &existingPods.Items[0]
@@ -285,11 +287,14 @@ func (r *ImageReconciler) buildRunnerPod(img *cv1a1.Image, pp *cv1a1.ProviderPro
 	var imgLogger = zap.New(h.CustomLogger()).WithName("[Images]")
 	imgLogger.Info("Building image-finder Pod", "namespace", img.Namespace, "name", img.Name, "envVars", mapVars)
 
+	podLabels := h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)
+	podLabels["skycluster.io/pod-type"] = "image-finder"
+
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    img.Namespace,
 			GenerateName: img.Name + "-image-finder",
-			Labels:       h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region),
+			Labels:       podLabels,
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -363,12 +368,30 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 	return cred, nil
 }
 
-func (r *ImageReconciler) generateJSON(zones []cv1a1.ImageOffering) (string, error) {
-	type payload struct {
-		Zones []cv1a1.ImageOffering `json:"zones"`
+func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []string) (string, error) {
+	type ImageOffering struct {
+		Zone      string `json:"zone"`
+		NameLabel string `json:"nameLabel"`
 	}
+	type payload struct {
+		Zones []ImageOffering `json:"zones"`
+	}
+
+	imgOfferings := []ImageOffering{}
+	for _, zone := range zones {
+		if !zone.Enabled {
+			continue
+		}
+		for _, img := range imageLabels {
+			imgOfferings = append(imgOfferings, ImageOffering{
+				Zone:      zone.Name,
+				NameLabel: img,
+			})
+		}
+	}
+
 	// Wrap zones in a payload struct
-	wrapped := payload{Zones: zones}
+	wrapped := payload{Zones: imgOfferings}
 	// Use the wrapped struct to ensure the correct JSON structure
 	// with "zones" as the top-level key
 	jsonDataByte, err := json.Marshal(wrapped)

@@ -118,16 +118,15 @@ func DefaultPodLabels(platform, region string) map[string]string {
 		"skycluster.io/managed-by":        "skycluster",
 		"skycluster.io/provider-platform": platform,
 		"skycluster.io/provider-region":   region,
-		"skycluster.io/pod-type":          "image-finder",
 	}
 }
 
 func ProviderProfileCMUpdate(ctx context.Context, c client.Client, pf *cv1a1.ProviderProfile, yamlDataStr, key string) error {
 
-	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-		return zone.DefaultZone
-	})
-	ll := DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+	// defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+	// 	return zone.DefaultZone
+	// })
+	ll := DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 
 	cmList := &corev1.ConfigMapList{}
 	if err := c.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(SKYCLUSTER_NAMESPACE)); err != nil {
