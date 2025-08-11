@@ -32,7 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 

@@ -2,12 +2,13 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
+cliVersion: 4.7.0
 domain: skycluster.io
 layout:
 - go.kubebuilder.io/v4
 multigroup: true
-projectName: skycluster-manager
-repo: github.com/etesami/skycluster-manager
+projectName: skycluster-operator
+repo: github.com/skycluster-project/skycluster-operator
 resources:
 - controller: true
   core: true
@@ -22,7 +23,7 @@ resources:
   domain: skycluster.io
   group: policy
   kind: DataflowPolicy
-  path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1
   version: v1alpha1
   webhooks:
     validation: true
@@ -34,7 +35,7 @@ resources:
   domain: skycluster.io
   group: policy
   kind: DeploymentPolicy
-  path: github.com/etesami/skycluster-manager/api/policy/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1
   version: v1alpha1
   webhooks:
     validation: true
@@ -53,7 +54,7 @@ resources:
   domain: skycluster.io
   group: core
   kind: Deployment
-  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -62,7 +63,7 @@ resources:
   domain: skycluster.io
   group: core
   kind: SkyCluster
-  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -71,7 +72,7 @@ resources:
   domain: skycluster.io
   group: core
   kind: ILPTask
-  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -79,7 +80,7 @@ resources:
   domain: skycluster.io
   group: core
   kind: SkyXRD
-  path: github.com/etesami/skycluster-manager/api/core/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -87,7 +88,7 @@ resources:
   domain: skycluster.io
   group: svc
   kind: SkyVM
-  path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1
   version: v1alpha1
 - api:
     crdVersion: v1
@@ -96,7 +97,7 @@ resources:
   domain: skycluster.io
   group: svc
   kind: SkyApp
-  path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1
   version: v1alpha1
 - controller: true
   domain: skycluster.io
@@ -110,9 +111,62 @@ resources:
   domain: skycluster.io
   group: svc
   kind: SkyProvider
-  path: github.com/etesami/skycluster-manager/api/svc/v1alpha1
+  path: github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1
   version: v1alpha1
   webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: InstanceType
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: DeviceNode
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: EgressCost
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: Image
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: ProviderProfile
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
     validation: true
     webhookVersion: v1
 version: "3"

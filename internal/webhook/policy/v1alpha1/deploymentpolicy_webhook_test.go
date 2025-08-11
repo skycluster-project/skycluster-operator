@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	// TODO (user): Add any additional imports if needed
 )
 

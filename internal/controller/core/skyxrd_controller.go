@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

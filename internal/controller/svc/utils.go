@@ -14,9 +14,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
-	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
+	ctrlutils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
 func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {

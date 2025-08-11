@@ -55,8 +55,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
-	ctrlutils "github.com/etesami/skycluster-manager/internal/controller"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
+	ctrlutils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
 // +kubebuilder:rbac:groups=svc.skycluster.io,resources=skyproviders,verbs=get;list;watch;create;update;patch;delete

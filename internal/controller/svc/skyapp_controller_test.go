@@ -27,7 +27,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 )
 
 var _ = Describe("SkyApp Controller", func() {

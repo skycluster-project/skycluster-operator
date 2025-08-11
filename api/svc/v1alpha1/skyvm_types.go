@@ -18,7 +18,7 @@ package v1alpha1
 
 import (
 	// xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

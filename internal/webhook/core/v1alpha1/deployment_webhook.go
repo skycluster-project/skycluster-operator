@@ -20,8 +20,8 @@ import (
 	"context"
 	"fmt"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	ctrlv1alpha1 "github.com/etesami/skycluster-manager/internal/controller"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	ctrlv1alpha1 "github.com/skycluster-project/skycluster-operator/internal/controller"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"

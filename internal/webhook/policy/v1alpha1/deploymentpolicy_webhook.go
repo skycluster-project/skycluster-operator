@@ -26,7 +26,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
+	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
 // nolint:unused

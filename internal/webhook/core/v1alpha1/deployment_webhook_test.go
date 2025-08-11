@@ -20,7 +20,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	// TODO (user): Add any additional imports if needed
 )
 

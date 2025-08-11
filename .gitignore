@@ -28,3 +28,5 @@ SkyCluster
 .devcontainer
 .github
 config/webhook/manifests-local.yaml
+
+config

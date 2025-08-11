@@ -24,9 +24,9 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	"go.uber.org/zap/zapcore"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -38,15 +38,12 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	policyv1alpha1 "github.com/etesami/skycluster-manager/api/policy/v1alpha1"
-	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
-	corecontroller "github.com/etesami/skycluster-manager/internal/controller/core"
-	policycontroller "github.com/etesami/skycluster-manager/internal/controller/policy"
-	svccontroller "github.com/etesami/skycluster-manager/internal/controller/svc"
-	webhookcorev1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/core/v1alpha1"
-	webhookpolicyv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/policy/v1alpha1"
-	webhooksvcv1alpha1 "github.com/etesami/skycluster-manager/internal/webhook/svc/v1alpha1"
+	"github.com/samber/lo"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
+	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -82,9 +79,11 @@ func main() {
 	var enableHTTP2 bool
 	var logOutput string
 	var tlsOpts []func(*tls.Config)
+	var webhookPort int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.IntVar(&webhookPort, "webhook-port", 0, "The port the webhook server binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -97,10 +96,9 @@ func main() {
 		"The directory that contains the metrics server certificate.")
 	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
-	flag.StringVar(&logOutput, "log-output-dir", "", "If provided logs will be written to the specified directory.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-
+	flag.StringVar(&logOutput, "log-dir", "", "If provided logs will be written to the specified directory.")
 	opts := zap.Options{}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
@@ -170,12 +168,13 @@ func main() {
 	}
 
 	webhookServer := webhook.NewServer(webhook.Options{
+		Port:    lo.Ternary(webhookPort > 0, webhookPort, 9443),
 		TLSOpts: webhookTLSOpts,
 	})
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
-	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.4/pkg/metrics/server
+	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/server
 	// - https://book.kubebuilder.io/reference/metrics.html
 	metricsServerOptions := metricsserver.Options{
 		BindAddress:   metricsAddr,
@@ -187,7 +186,7 @@ func main() {
 		// FilterProvider is used to protect the metrics endpoint with authn/authz.
 		// These configurations ensure that only authorized users and service accounts
 		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.4/pkg/metrics/filters#WithAuthenticationAndAuthorization
+		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
@@ -224,7 +223,7 @@ func main() {
 		WebhookServer:          webhookServer,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a555565e.skycluster.io",
+		LeaderElectionID:       "5f7651dc.skycluster.io",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -242,90 +241,127 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&corecontroller.SkyXRDReconciler{
+	// if err = (&corecontroller.SkyXRDReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+	// 	os.Exit(1)
+	// }
+	// if err = (&policycontroller.DataflowPolicyReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
+	// 	os.Exit(1)
+	// }
+	// if err = (&policycontroller.DeploymentPolicyReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
+	// 	os.Exit(1)
+	// }
+	if err := (&corecontroller.InstanceTypeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
 		os.Exit(1)
 	}
-	if err = (&policycontroller.DataflowPolicyReconciler{
+	if err := (&corecontroller.DeviceNodeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
+		setupLog.Error(err, "unable to create controller", "controller", "DeviceNode")
 		os.Exit(1)
 	}
-	if err = (&policycontroller.DeploymentPolicyReconciler{
+	if err := (&corecontroller.EgressCostReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
+		setupLog.Error(err, "unable to create controller", "controller", "EgressCost")
 		os.Exit(1)
 	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookcorev1alpha1.SetupDeploymentWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
-			os.Exit(1)
-		}
-	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookpolicyv1alpha1.SetupDataflowPolicyWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "DataflowPolicy")
-			os.Exit(1)
-		}
-	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookpolicyv1alpha1.SetupDeploymentPolicyWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "DeploymentPolicy")
-			os.Exit(1)
-		}
-	}
-	if err = (&corecontroller.SkyClusterReconciler{
+	if err := (&corecontroller.ImageReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyCluster")
+		setupLog.Error(err, "unable to create controller", "controller", "Image")
 		os.Exit(1)
 	}
-	if err = (&corecontroller.ILPTaskReconciler{
+	if err := (&corecontroller.ProviderProfileReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
-		os.Exit(1)
-	}
-	if err = (&svccontroller.SkyAppReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
-		os.Exit(1)
-	}
-	if err = (&svccontroller.SkyK8SReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
-		os.Exit(1)
-	}
-	if err = (&svccontroller.SkyProviderReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
+		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
 		os.Exit(1)
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
+		// if err = webhookcorev1alpha1.SetupDeploymentWebhookWithManager(mgr); err != nil {
+		// 	setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
+		// 	os.Exit(1)
+		// }
+		if err := webhookcorev1alpha1.SetupImageWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
+			os.Exit(1)
+		}
+		// if err = webhookpolicyv1alpha1.SetupDataflowPolicyWebhookWithManager(mgr); err != nil {
+		// 	setupLog.Error(err, "unable to create webhook", "webhook", "DataflowPolicy")
+		// 	os.Exit(1)
+		// }
+		// if err = webhookpolicyv1alpha1.SetupDeploymentPolicyWebhookWithManager(mgr); err != nil {
+		// 	setupLog.Error(err, "unable to create webhook", "webhook", "DeploymentPolicy")
+		// 	os.Exit(1)
+		// }
+		// if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {
+		// 	setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
+		// 	os.Exit(1)
+		// }
+		if err := webhookcorev1alpha1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
 			os.Exit(1)
 		}
 	}
+	// nolint:goconst
+
+	// if err = (&corecontroller.SkyClusterReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyCluster")
+	// 	os.Exit(1)
+	// }
+	// if err = (&corecontroller.ILPTaskReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
+	// 	os.Exit(1)
+	// }
+	// if err = (&svccontroller.SkyAppReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
+	// 	os.Exit(1)
+	// }
+	// if err = (&svccontroller.SkyK8SReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
+	// 	os.Exit(1)
+	// }
+	// if err = (&svccontroller.SkyProviderReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
+	// 	os.Exit(1)
+	// }
+
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

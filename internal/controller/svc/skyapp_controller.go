@@ -32,8 +32,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	corev1alpha1 "github.com/etesami/skycluster-manager/api/core/v1alpha1"
-	svcv1alpha1 "github.com/etesami/skycluster-manager/api/svc/v1alpha1"
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 )
 
 // SkyAppReconciler reconciles a SkyApp object
