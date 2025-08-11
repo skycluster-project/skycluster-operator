@@ -1,8 +1,8 @@
 package v1alpha1
 
 const (
-	ImgCondReady       = "Ready"
-	ImgCondReasonDone  = "Finished"
-	ImgCondReasonRun   = "Running"
-	ImgCondReasonStale = "SpecChangedWhileRunning"
+	CondReady       = "Ready"
+	CondReasonDone  = "Finished"
+	CondReasonRun   = "Running"
+	CondReasonStale = "SpecChangedWhileRunning"
 )

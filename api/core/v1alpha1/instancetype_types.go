@@ -17,18 +17,21 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // InstanceTypeSpec defines the desired state of InstanceType
 type InstanceTypeSpec struct {
-	ProviderRef string `json:"providerRef"`
+	ProviderRef      string   `json:"providerRef"`
+	ProviderFamilies []string `json:"providerFamilies,omitempty"`
 }
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region         string                 `json:"region"`
-	Zones          []ZoneInstanceTypeSpec `json:"zones"`
+	Region         string                 `json:"region,omitempty"`
+	Zones          []ZoneInstanceTypeSpec `json:"zones,omitempty"`
 	Generation     int64                  `json:"generation,omitempty"`
 	RunnerPodName  string                 `json:"runnerPodName,omitempty"`
 	NeedsRerun     bool                   `json:"needsRerun,omitempty"`
@@ -100,4 +103,16 @@ type InstanceTypeList struct {
 
 func init() {
 	SchemeBuilder.Register(&InstanceType{}, &InstanceTypeList{})
+}
+
+// helper to set a condition
+func (s *InstanceTypeStatus) SetCondition(t string, status corev1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:               t,
+		Status:             metav1.ConditionStatus(string(status)),
+		Reason:             reason,
+		Message:            msg,
+		ObservedGeneration: s.Generation,
+		LastTransitionTime: metav1.Now(),
+	})
 }

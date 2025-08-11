@@ -36,7 +36,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	"github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
+	h "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
 )
 
 // ImageReconciler reconciles a Image object
@@ -44,11 +44,6 @@ type ImageReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
-
-const (
-	updateThreshold = time.Duration(cv1a1.DefaultRefreshHourImages) * time.Hour
-	requeuePoll     = 10 * time.Second
-)
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images/status,verbs=get;update;patch
@@ -63,7 +58,7 @@ const (
 //    then immediately launch a fresh Pod for the new spec.
 
 func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
+	var imgLogger = zap.New(h.CustomLogger()).WithName("[Images]")
 	imgLogger.Info("Reconciler started.", "name", req.Name)
 
 	// Fetch the Images resource
@@ -95,13 +90,13 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	// If the last update is within the threshold, skip reconciliation
 	if !specChanged &&
 		!st.LastUpdateTime.IsZero() &&
-		now.Sub(st.LastUpdateTime.Time) < updateThreshold &&
+		now.Sub(st.LastUpdateTime.Time) < h.UpdateThreshold &&
 		st.RunnerPodName == "" && !st.NeedsRerun {
 		imgLogger.Info("Skipping reconciliation", "name", img.Name,
 			"lastUpdateTime", st.LastUpdateTime.Time,
 			"runnerPodName", st.RunnerPodName,
 			"needsRerun", st.NeedsRerun)
-		return ctrl.Result{RequeueAfter: updateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
+		return ctrl.Result{RequeueAfter: h.UpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
 	}
 
 	if specChanged && st.RunnerPodName != "" {
@@ -111,14 +106,14 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if !st.NeedsRerun { // if re-run is not needed
 			st.NeedsRerun = true
 			imgLogger.Info("Image spec changed, marking for re-run and returning")
-			st.SetCondition(cv1a1.ImgCondReady, corev1.ConditionFalse,
-				cv1a1.ImgCondReasonStale, "Spec changed; will re-run after current Pod finishes")
+			st.SetCondition(cv1a1.CondReady, corev1.ConditionFalse,
+				cv1a1.CondReasonStale, "Spec changed; will re-run after current Pod finishes")
 			if err := r.Status().Update(ctx, img); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
 		imgLogger.Info("Requeuing for re-run...")
-		return ctrl.Result{RequeueAfter: requeuePoll}, nil
+		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
 	}
 
 	// 2) ensure a runner Pod exists
@@ -143,7 +138,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// Check if the pod already exists
 		existingPods := &corev1.PodList{}
 		err = r.List(ctx, existingPods,
-			client.InNamespace(img.Namespace), client.MatchingLabels(defaultPodLabels(pp.Spec.Platform, pp.Spec.Region)))
+			client.InNamespace(img.Namespace), client.MatchingLabels(h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region)))
 		if err == nil && len(existingPods.Items) > 0 {
 			// Pod already exists, no need to create a new one
 			existingPod := &existingPods.Items[0]
@@ -158,13 +153,13 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		}
 
 		st.Generation = img.GetGeneration()
-		st.SetCondition(cv1a1.ImgCondReady, corev1.ConditionFalse, cv1a1.ImgCondReasonRun, "Runner Pod created")
+		st.SetCondition(cv1a1.CondReady, corev1.ConditionFalse, cv1a1.CondReasonRun, "Runner Pod created")
 		if err := r.Status().Update(ctx, img); err != nil {
 			return ctrl.Result{}, err
 		}
 		// start polling for completion
 		imgLogger.Info("Runner Pod created, starting polling for completion", "podName", pod.Name)
-		return ctrl.Result{RequeueAfter: requeuePoll}, nil
+		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
 	}
 
 	// 3) a Pod name is recorded: check its phase
@@ -178,7 +173,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			if err2 := r.Status().Update(ctx, img); err2 != nil {
 				return ctrl.Result{}, err2
 			}
-			return ctrl.Result{RequeueAfter: requeuePoll}, nil
+			return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
 		}
 		return ctrl.Result{}, err
 	}
@@ -187,15 +182,15 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	switch pod.Status.Phase {
 	case corev1.PodPending, corev1.PodRunning:
 		// keep polling
-		return ctrl.Result{RequeueAfter: requeuePoll}, nil
+		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
 
 	case corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
 		// 4) collect result, update status, clear runner, possibly start another run
 		st.LastRunPhase = string(pod.Status.Phase)
-		st.LastRunReason = helper.ContainerTerminatedReason(&pod)
-		st.LastRunMessage = helper.ContainerTerminatedMessage(&pod)
+		st.LastRunReason = h.ContainerTerminatedReason(&pod)
+		st.LastRunMessage = h.ContainerTerminatedMessage(&pod)
 		st.LastUpdateTime = metav1.NewTime(now)
-		st.SetCondition(cv1a1.ImgCondReady, corev1.ConditionTrue, cv1a1.ImgCondReasonDone, "Runner Pod finished")
+		st.SetCondition(cv1a1.CondReady, corev1.ConditionTrue, cv1a1.CondReasonDone, "Runner Pod finished")
 		// clear the runner
 		st.RunnerPodName = ""
 
@@ -215,7 +210,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		// If the pod termination reason is completed,
 		// we set the Zones based on the POD message
 		if pod.Status.Phase == corev1.PodSucceeded && st.LastRunReason == "Completed" {
-			zones, err := r.DecodeJSONToImageOffering(st.LastRunMessage)
+			zones, err := r.decodeJSONToImageOffering(st.LastRunMessage)
 			if err != nil {
 				imgLogger.Error(err, "failed to decode image offerings from JSON")
 				return ctrl.Result{}, err
@@ -231,7 +226,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 			imgLogger.Info("Generated YAML for ConfigMap", "yamlData", yamlData)
 
-			if err := r.handleConfigMap(ctx, pp, yamlData); err != nil {
+			if err := h.ProviderProfileCMUpdate(ctx, r.Client, pp, yamlData, "images.yaml"); err != nil {
 				imgLogger.Error(err, "failed to update/create ConfigMap for image offerings")
 				return ctrl.Result{}, err
 			}
@@ -252,7 +247,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	default:
 		// unexpected; check again soon
-		return ctrl.Result{RequeueAfter: requeuePoll}, nil
+		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
 	}
 
 }
@@ -287,14 +282,14 @@ func (r *ImageReconciler) buildRunnerPod(img *cv1a1.Image, pp *cv1a1.ProviderPro
 		})
 	}
 
-	var imgLogger = zap.New(helper.CustomLogger()).WithName("[Images]")
+	var imgLogger = zap.New(h.CustomLogger()).WithName("[Images]")
 	imgLogger.Info("Building image-finder Pod", "namespace", img.Namespace, "name", img.Name, "envVars", mapVars)
 
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    img.Namespace,
 			GenerateName: img.Name + "-image-finder",
-			Labels:       defaultPodLabels(pp.Spec.Platform, pp.Spec.Region),
+			Labels:       h.DefaultPodLabels(pp.Spec.Platform, pp.Spec.Region),
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
@@ -307,15 +302,6 @@ func (r *ImageReconciler) buildRunnerPod(img *cv1a1.Image, pp *cv1a1.ProviderPro
 	}, nil
 }
 
-func defaultPodLabels(platform, region string) map[string]string {
-	return map[string]string{
-		"skycluster.io/managed-by":        "skycluster",
-		"skycluster.io/provider-platform": platform,
-		"skycluster.io/provider-region":   region,
-		"skycluster.io/pod-type":          "image-finder",
-	}
-}
-
 func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a1.ProviderProfile) (map[string]string, error) {
 	// Fetch the AWS credentials from the secret
 	secrets := &corev1.SecretList{}
@@ -324,7 +310,7 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 		"skycluster.io/provider-platform": pp.Spec.Platform,
 		"skycluster.io/secret-role":       "credentials",
 	}
-	if err := r.List(ctx, secrets, client.InNamespace(helper.SKYCLUSTER_NAMESPACE), client.MatchingLabels(ll)); err != nil {
+	if err := r.List(ctx, secrets, client.InNamespace(h.SKYCLUSTER_NAMESPACE), client.MatchingLabels(ll)); err != nil {
 		return nil, fmt.Errorf("unable to list credentials secret: %w", err)
 	}
 	if len(secrets.Items) == 0 {
@@ -402,35 +388,7 @@ func (r *ImageReconciler) generateYAML(zones []cv1a1.ImageOffering) (string, err
 	return string(yamlDataByte), nil
 }
 
-func (r *ImageReconciler) handleConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, yamlDataStr string) error {
-
-	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-		return zone.DefaultZone
-	})
-	ll := helper.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
-
-	cmList := &corev1.ConfigMapList{}
-	if err := r.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(helper.SKYCLUSTER_NAMESPACE)); err != nil {
-		return fmt.Errorf("unable to list ConfigMaps for images: %w", err)
-	}
-	if len(cmList.Items) != 1 {
-		return fmt.Errorf("error listing ConfigMaps for images: expected 1, got %d", len(cmList.Items))
-	}
-	cm := cmList.Items[0]
-
-	if cm.Data == nil {
-		cm.Data = make(map[string]string)
-	}
-	cm.Data["images.yaml"] = yamlDataStr
-
-	if err := r.Update(ctx, &cm); err != nil {
-		return fmt.Errorf("failed to update ConfigMap for images: %w", err)
-	}
-
-	return nil
-}
-
-func (r *ImageReconciler) DecodeJSONToImageOffering(jsonData string) ([]cv1a1.ImageOffering, error) {
+func (r *ImageReconciler) decodeJSONToImageOffering(jsonData string) ([]cv1a1.ImageOffering, error) {
 	var payload struct {
 		Zones []cv1a1.ImageOffering `json:"zones"`
 	}

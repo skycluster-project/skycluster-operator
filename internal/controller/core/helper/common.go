@@ -1,19 +1,29 @@
 package helper
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/samber/lo"
 	"go.uber.org/zap/zapcore"
+
 	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	zapCtrl "sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/yaml"
+
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
 
 const (
 	SKYCLUSTER_NAMESPACE = "skycluster-system"
+	SKYCLUSTER_PV_NAME   = "skycluster-pv"
+	UpdateThreshold      = time.Duration(cv1a1.DefaultRefreshHourImages) * time.Hour
+	RequeuePollThreshold = 10 * time.Second
 )
 
 func customLoggerFormat() zapCtrl.EncoderConfigOption {
@@ -101,4 +111,41 @@ func DefaultLabels(p, r, z string) map[string]string {
 	l = lo.Assign(l, lo.Ternary(z != "",
 		map[string]string{"skycluster.io/provider-zone": z}, nil))
 	return l
+}
+
+func DefaultPodLabels(platform, region string) map[string]string {
+	return map[string]string{
+		"skycluster.io/managed-by":        "skycluster",
+		"skycluster.io/provider-platform": platform,
+		"skycluster.io/provider-region":   region,
+		"skycluster.io/pod-type":          "image-finder",
+	}
+}
+
+func ProviderProfileCMUpdate(ctx context.Context, c client.Client, pf *cv1a1.ProviderProfile, yamlDataStr, key string) error {
+
+	defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+		return zone.DefaultZone
+	})
+	ll := DefaultLabels(pf.Spec.Platform, pf.Spec.Region, lo.Ternary(ok, defaultZone.Name, ""))
+
+	cmList := &corev1.ConfigMapList{}
+	if err := c.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(SKYCLUSTER_NAMESPACE)); err != nil {
+		return fmt.Errorf("unable to list ConfigMaps for images: %w", err)
+	}
+	if len(cmList.Items) != 1 {
+		return fmt.Errorf("error listing ConfigMaps for images: expected 1, got %d", len(cmList.Items))
+	}
+	cm := cmList.Items[0]
+
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+	cm.Data[key] = yamlDataStr
+
+	if err := c.Update(ctx, &cm); err != nil {
+		return fmt.Errorf("failed to update ConfigMap for images: %w", err)
+	}
+
+	return nil
 }
