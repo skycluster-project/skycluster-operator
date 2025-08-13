@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +56,16 @@ type ProviderProfileReconciler struct {
 
 // Reconcile behavior:
 // 1. If it's being deleted, clean up config maps and remove finalizer.
-// 2. If it's being created or updated, copy spec to status and create a ConfigMap if it doesn't exist.
+
+// 2. If it's being created:
+// 		- copy spec to status
+// 		- create a ConfigMap
+
+// 3. If it exists (update only):
+// 	  (the update should be triggered by the image and instance type reconcilers)
+//    - copy spec to status
+//    - check if ConfigMap exists, if not create it
+//    - pull data from ConfigMap and update status
 
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
@@ -125,8 +135,18 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			lo.Map(cms.Items, func(n corev1.ConfigMap, _ int) string { return n.Name }), ",")
 	}
 	pp.Status.Enabled = pp.Spec.Enabled
+	pp.Status.Region = pp.Spec.Region
 	pp.Status.Zones = make([]cv1a1.ZoneSpec, len(pp.Spec.Zones))
 	pp.Status.Zones = lo.Filter(pp.Spec.Zones, func(zone cv1a1.ZoneSpec, _ int) bool { return true })
+	totalServices, err := getNumberOfServices(cms)
+	if err != nil {
+		logger.Error(err, "unable to get number of services for ProviderProfile", "name", req.Name)
+		pp.Status.Sync = false // TODO: Requeue for retry?
+		// continue updating the status even if we can't get the number of services
+	} else {
+		pp.Status.TotalServices = totalServices
+		pp.Status.Sync = true
+	}
 
 	// Update the status with the current spec
 	logger.Info("Updating ProviderProfile status", "name", req.Name)
@@ -204,4 +224,103 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, cms *corev1.Con
 	}
 
 	return nil
+}
+
+func getNumberOfServices(cms *corev1.ConfigMapList) (int, error) {
+	var logger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile]")
+	if cms == nil || len(cms.Items) == 0 {
+		return 0, fmt.Errorf("no ConfigMap found")
+	}
+
+	// Assuming each ConfigMap contains a list of services in a specific key
+	logger.Info("Counting services from ConfigMaps", "Found ConfigMaps", len(cms.Items))
+	serviceCount := 0
+	for _, cm := range cms.Items {
+		for svc, yamlData := range cm.Data { // svcData["images.yaml"]
+			logger.Info("Decoding YAML data from ConfigMap", "ConfigMap", cm.Name)
+			svcData, err := decodeSvcYaml(yamlData)
+			if err != nil {
+				return 0, fmt.Errorf("failed to decode YAML in ConfigMap %s: %w", cm.Name, err)
+			}
+			logger.Info("Decoded service data from ConfigMap", "ConfigMap", cm.Name, "Service", svc, "Data", len(svcData))
+			switch svc {
+			case "images.yaml":
+				serviceCount += availableSvcImage(svcData)
+			case "flavors.yaml":
+				serviceCount += availableSvcInstanceTypes(svcData)
+			default:
+				continue
+			}
+			logger.Info("Counted services from ConfigMap", "ConfigMap", cm.Name, "Svc", svc, "Count", serviceCount)
+		}
+	}
+
+	return serviceCount, nil
+}
+
+func decodeSvcYaml(yamlData string) ([]map[string]any, error) {
+	var services []map[string]any
+	if err := yaml.Unmarshal([]byte(yamlData), &services); err != nil {
+		return nil, fmt.Errorf("failed to decode YAML: %w", err)
+	}
+	return services, nil
+}
+
+func availableSvcImage(imgs []map[string]any) int {
+	if len(imgs) == 0 {
+		return 0 // Return 0 if no images found
+	}
+	imgNames := lo.Map(imgs, func(img map[string]any, _ int) string {
+		z, ok := img["zone"].(string)
+		n, ok2 := img["name"].(string)
+		if !ok || !ok2 || z == "" || n == "" {
+			return "" // Skip if zone or name is not a string
+		}
+		return n
+	})
+
+	// Count the number of services in the images.yaml
+	return len(imgNames)
+}
+
+func availableSvcInstanceTypes(s []map[string]any) int {
+	count := 0
+	// Assuming each service in the slice has a "zone" key to indicate zonal services
+	if len(s) == 0 {
+		return count
+	}
+	// Iterate through the slice and count services with "zone" key
+	zonalSvc := lo.Reduce(s,
+		func(acc map[string][]string, svc map[string]any, _ int) map[string][]string {
+			zone, _ := svc["zone"].(string)
+			if zone == "" {
+				return acc
+			}
+			flavors, ok := svc["flavors"].([]any)
+			if !ok || len(flavors) == 0 {
+				return acc
+			}
+
+			// extract non-empty flavor names
+			names := make([]string, 0, len(flavors))
+			for _, f := range flavors {
+				if m, ok := f.(map[string]any); ok {
+					if name, _ := m["name"].(string); name != "" {
+						names = append(names, name)
+					}
+				}
+			}
+			if len(names) > 0 {
+				acc[zone] = names
+			}
+			return acc
+		}, map[string][]string{})
+
+	// Count the number of zonal services
+	for _, flavors := range zonalSvc {
+		if len(flavors) > 0 {
+			count += len(flavors)
+		}
+	}
+	return count
 }

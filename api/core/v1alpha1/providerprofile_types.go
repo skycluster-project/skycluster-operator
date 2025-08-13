@@ -46,13 +46,20 @@ type ZoneSpec struct {
 
 // ProviderProfileStatus defines the observed state of ProviderProfile.
 type ProviderProfileStatus struct {
-	Enabled      bool       `json:"enabled,omitempty"`
-	Zones        []ZoneSpec `json:"zones,omitempty"`
-	ConfigMapRef string     `json:"configMapRef,omitempty"`
+	Enabled       bool       `json:"enabled,omitempty"`
+	Region        string     `json:"region,omitempty"`
+	Zones         []ZoneSpec `json:"zones,omitempty"`
+	ConfigMapRef  string     `json:"configMapRef,omitempty"`
+	Sync          bool       `json:"sync,omitempty"`
+	TotalServices int        `json:"totalServices,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
+// +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".status.enabled"
+// +kubebuilder:printcolumn:name="Sync",type="boolean",JSONPath=".status.sync"
+// +kubebuilder:printcolumn:name="Total Services",type="integer",JSONPath=".status.totalServices"
 
 // ProviderProfile is the Schema for the providerprofiles API
 type ProviderProfile struct {
