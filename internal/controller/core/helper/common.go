@@ -123,10 +123,8 @@ func DefaultPodLabels(platform, region string) map[string]string {
 
 func ProviderProfileCMUpdate(ctx context.Context, c client.Client, pf *cv1a1.ProviderProfile, yamlDataStr, key string) error {
 
-	// defaultZone, ok := lo.Find(pf.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-	// 	return zone.DefaultZone
-	// })
 	ll := DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
+	ll["skycluster.io/provider-config"] = pf.Name
 
 	cmList := &corev1.ConfigMapList{}
 	if err := c.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(SKYCLUSTER_NAMESPACE)); err != nil {
@@ -147,4 +145,12 @@ func ProviderProfileCMUpdate(ctx context.Context, c client.Client, pf *cv1a1.Pro
 	}
 
 	return nil
+}
+
+func TruncatedName(name, newName string) string {
+	max := 48 - len(newName) - 6 // "-" + ~5-char random suffix
+	if len(name) > max {
+		return name[:max] + newName
+	}
+	return name + newName
 }

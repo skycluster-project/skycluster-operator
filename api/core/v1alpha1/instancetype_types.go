@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -33,12 +32,9 @@ type InstanceTypeStatus struct {
 	Region         string                 `json:"region,omitempty"`
 	Zones          []ZoneInstanceTypeSpec `json:"zones,omitempty"`
 	Generation     int64                  `json:"generation,omitempty"`
-	RunnerPodName  string                 `json:"runnerPodName,omitempty"`
+	RunnerJobName  string                 `json:"runnerJobName,omitempty"`
 	NeedsRerun     bool                   `json:"needsRerun,omitempty"`
 	LastUpdateTime metav1.Time            `json:"lastUpdateTime,omitempty"`
-	LastRunPhase   string                 `json:"lastRunPhase,omitempty"`
-	LastRunReason  string                 `json:"lastRunReason,omitempty"`
-	LastRunMessage string                 `json:"lastRunMessage,omitempty"`
 	Conditions     []metav1.Condition     `json:"conditions,omitempty"`
 }
 
@@ -106,13 +102,11 @@ func init() {
 }
 
 // helper to set a condition
-func (s *InstanceTypeStatus) SetCondition(t string, status corev1.ConditionStatus, reason, msg string) {
+func (s *InstanceTypeStatus) SetCondition(conditionType, status, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-		Type:               t,
-		Status:             metav1.ConditionStatus(string(status)),
-		Reason:             reason,
-		Message:            msg,
-		ObservedGeneration: s.Generation,
-		LastTransitionTime: metav1.Now(),
+		Type:    conditionType,
+		Status:  metav1.ConditionStatus(status),
+		Reason:  reason,
+		Message: msg,
 	})
 }

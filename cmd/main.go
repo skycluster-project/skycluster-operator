@@ -43,6 +43,7 @@ import (
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	h "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
 	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -263,8 +264,10 @@ func main() {
 	// 	os.Exit(1)
 	// }
 	if err := (&corecontroller.InstanceTypeReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),
+		Logger:   zap.New(h.CustomLogger()).WithName("[InstanceType]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
 		os.Exit(1)
@@ -284,15 +287,17 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&corecontroller.ImageReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ImageController"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Image")
 		os.Exit(1)
 	}
 	if err := (&corecontroller.ProviderProfileReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
 		os.Exit(1)
