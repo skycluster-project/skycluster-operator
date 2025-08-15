@@ -26,27 +26,27 @@ import (
 
 // InstanceTypeSpec defines the desired state of InstanceType
 type InstanceTypeSpec struct {
-	ProviderRef  string   `json:"providerRef"`
-	TypeFamilies []string `json:"typeFamilies,omitempty"`
+	ProviderRef string          `json:"providerRef"`
+	Offerings   []ZoneOfferings `json:"offerings,omitempty"`
 }
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region                    string                 `json:"region,omitempty"`
-	Zones                     []ZoneInstanceTypeSpec `json:"zones,omitempty"`
-	LastUpdateTime            metav1.Time            `json:"lastUpdateTime,omitempty"`
-	ObservedGeneration        int64                  `json:"observedGeneration,omitempty"`
+	Region                    string          `json:"region,omitempty"`
+	Offerings                 []ZoneOfferings `json:"offerings,omitempty"`
+	LastUpdateTime            metav1.Time     `json:"lastUpdateTime,omitempty"`
+	ObservedGeneration        int64           `json:"observedGeneration,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`
 }
 
-type ZoneInstanceTypeSpec struct {
-	ZoneName string             `json:"zone" yaml:"zone"`
-	Flavors  []InstanceOffering `json:"flavors" yaml:"flavors"`
+type ZoneOfferings struct {
+	Zone      string             `json:"zone" yaml:"zone"`
+	Offerings []InstanceOffering `json:"zoneOfferings" yaml:"zoneOfferings"`
 }
 
 type InstanceOffering struct {
-	Name        string   `json:"name" yaml:"name"`
+	Name        string   `json:"name,omitempty" yaml:"name,omitempty"`
 	NameLabel   string   `json:"nameLabel" yaml:"nameLabel"`
 	VCPUs       int      `json:"vcpus" yaml:"vcpus"`
 	RAM         string   `json:"ram" yaml:"ram"`

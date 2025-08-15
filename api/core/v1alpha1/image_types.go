@@ -26,13 +26,13 @@ import (
 // ImageSpec defines the desired state of Image
 type ImageSpec struct {
 	ProviderRef string   `json:"providerRef"`
-	ImageLabels []string `json:"imageLabels,omitempty" yaml:"imageLabels,omitempty"`
+	Images      []ImageOffering `json:"images,omitempty" yaml:"images,omitempty"`
 }
 
 	// ImageStatus defines the observed state of Image.
 	type ImageStatus struct {
 		Region             string             `json:"region" yaml:"region"`
-		Zones              []ImageOffering    `json:"zones,omitempty" yaml:"zones,omitempty"`
+		Images             []ImageOffering    `json:"images,omitempty" yaml:"images,omitempty"`
 		ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
 		LastUpdateTime     metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
 		Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`

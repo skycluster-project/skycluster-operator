@@ -24,7 +24,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
@@ -238,12 +237,12 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 	it := &cv1a1.InstanceType{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    pf.Namespace,
-			GenerateName: fmt.Sprintf("%s", pf.Name),
+			GenerateName: fmt.Sprintf("%s-", pf.Name),
 			Labels:       labels.Set(ll),
 		},
 		Spec: cv1a1.InstanceTypeSpec{
 			ProviderRef:  pf.Name,
-			TypeFamilies: getTypeFamilies(pf.Spec.Platform),
+			Offerings: getTypeFamilies(pf.Spec.Platform, pf.Spec.Zones),
 		},
 	}
 
@@ -286,10 +285,16 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 		},
 		Spec: cv1a1.ImageSpec{
 			ProviderRef: pf.Name,
-			ImageLabels: []string{
-				"ubuntu-20.04",
-				"ubuntu-22.04",
-				"ubuntu-24.04",
+			Images: []cv1a1.ImageOffering{
+				{
+					NameLabel:  "ubuntu-20.04",
+				},
+				{
+					NameLabel:  "ubuntu-22.04",
+				},
+				{
+					NameLabel:  "ubuntu-24.04",
+				},
 			},
 		},
 	}
@@ -449,8 +454,8 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 		cm.Data = make(map[string]string)
 	}
 
-	imgYamlData, err1 := pkgenc.EncodeObjectToYAML(img.Status.Zones)
-	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Zones)
+	imgYamlData, err1 := pkgenc.EncodeObjectToYAML(img.Status.Images)
+	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
 
 	if err1 == nil {
 		cm.Data["images.yaml"] = imgYamlData
@@ -536,116 +541,101 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 // 	return serviceCount, nil
 // }
 
-func getTypeFamilies(platform string) []string {
+func buildZoneOfferings(zoneName string, offerings []string) cv1a1.ZoneOfferings {
+	o := make([]cv1a1.InstanceOffering, 0, len(offerings))
+	for _, offering := range offerings {
+		o = append(o, cv1a1.InstanceOffering{NameLabel: offering})
+	}
+	return cv1a1.ZoneOfferings{ Zone: zoneName, Offerings: o }
+}
+
+func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferings {
+	zoneNames := lo.Map(zones, func(z cv1a1.ZoneSpec, _ int) string { return z.Name })
+	zoneOfferings := make([]cv1a1.ZoneOfferings, 0, len(zoneNames))
+	
 	switch platform {
 	case "aws":
+		for _, z := range zoneNames {
+			zo := buildZoneOfferings(z, []string{"t3", "t4g"})
+			zoneOfferings = append(zoneOfferings, zo)
+		}
 		// "m5", "m6g", "c5", "c6g", "r5", "r6g"
-		return []string{"t3", "t4g"}
 	case "azure":
-		return []string{"Standard_A", "Standard_B"}
+		for _, z := range zoneNames {
+			zo := buildZoneOfferings(z, []string{"Standard_A", "Standard_B"})
+			zoneOfferings = append(zoneOfferings, zo)
+		}
 	case "gcp":
-		return []string{"e2", "n1"}
+		for _, z := range zoneNames {
+			zo := buildZoneOfferings(z, []string{"e2", "n1"})
+			zoneOfferings = append(zoneOfferings, zo)
+		}
 	default:
-		return []string{}
+		// return []string{}
+		return nil
 	}
+
+	return zoneOfferings
 }
 
-func decodeSvcYaml(yamlData string) ([]map[string]any, error) {
-	var services []map[string]any
-	if err := yaml.Unmarshal([]byte(yamlData), &services); err != nil {
-		return nil, fmt.Errorf("failed to decode YAML: %w", err)
-	}
-	return services, nil
-}
 
-func availableSvcImage(imgs []map[string]any) int {
-	if len(imgs) == 0 {
-		return 0 // Return 0 if no images found
-	}
-	imgNames := lo.Map(imgs, func(img map[string]any, _ int) string {
-		z, ok := img["zone"].(string)
-		n, ok2 := img["name"].(string)
-		if !ok || !ok2 || z == "" || n == "" {
-			return "" // Skip if zone or name is not a string
-		}
-		return n
-	})
+// func availableSvcImage(imgs []map[string]any) int {
+// 	if len(imgs) == 0 {
+// 		return 0 // Return 0 if no images found
+// 	}
+// 	imgNames := lo.Map(imgs, func(img map[string]any, _ int) string {
+// 		z, ok := img["zone"].(string)
+// 		n, ok2 := img["name"].(string)
+// 		if !ok || !ok2 || z == "" || n == "" {
+// 			return "" // Skip if zone or name is not a string
+// 		}
+// 		return n
+// 	})
 
-	// Count the number of services in the images.yaml
-	return len(imgNames)
-}
+// 	// Count the number of services in the images.yaml
+// 	return len(imgNames)
+// }
 
-func availableSvcInstanceTypes(s []map[string]any) int {
-	count := 0
-	// Assuming each service in the slice has a "zone" key to indicate zonal services
-	if len(s) == 0 {
-		return count
-	}
-	// Iterate through the slice and count services with "zone" key
-	zonalSvc := lo.Reduce(s,
-		func(acc map[string][]string, svc map[string]any, _ int) map[string][]string {
-			zone, _ := svc["zone"].(string)
-			if zone == "" {
-				return acc
-			}
-			flavors, ok := svc["flavors"].([]any)
-			if !ok || len(flavors) == 0 {
-				return acc
-			}
+// func availableSvcInstanceTypes(s []map[string]any) int {
+// 	count := 0
+// 	// Assuming each service in the slice has a "zone" key to indicate zonal services
+// 	if len(s) == 0 {
+// 		return count
+// 	}
+// 	// Iterate through the slice and count services with "zone" key
+// 	zonalSvc := lo.Reduce(s,
+// 		func(acc map[string][]string, svc map[string]any, _ int) map[string][]string {
+// 			zone, _ := svc["zone"].(string)
+// 			if zone == "" {
+// 				return acc
+// 			}
+// 			flavors, ok := svc["flavors"].([]any)
+// 			if !ok || len(flavors) == 0 {
+// 				return acc
+// 			}
 
-			// extract non-empty flavor names
-			names := make([]string, 0, len(flavors))
-			for _, f := range flavors {
-				if m, ok := f.(map[string]any); ok {
-					if name, _ := m["name"].(string); name != "" {
-						names = append(names, name)
-					}
-				}
-			}
-			if len(names) > 0 {
-				acc[zone] = names
-			}
-			return acc
-		}, map[string][]string{})
+// 			// extract non-empty flavor names
+// 			names := make([]string, 0, len(flavors))
+// 			for _, f := range flavors {
+// 				if m, ok := f.(map[string]any); ok {
+// 					if name, _ := m["name"].(string); name != "" {
+// 						names = append(names, name)
+// 					}
+// 				}
+// 			}
+// 			if len(names) > 0 {
+// 				acc[zone] = names
+// 			}
+// 			return acc
+// 		}, map[string][]string{})
 
-	// Count the number of zonal services
-	for _, flavors := range zonalSvc {
-		if len(flavors) > 0 {
-			count += len(flavors)
-		}
-	}
-	return count
-}
+// 	// Count the number of zonal services
+// 	for _, flavors := range zonalSvc {
+// 		if len(flavors) > 0 {
+// 			count += len(flavors)
+// 		}
+// 	}
+// 	return count
+// }
 
-func needUpdate(annotations map[string]string, cmName, imgName, instanceTypeName string) bool {
-	if annotations == nil {
-		return true
-	}
 
-	cmRef, ok := annotations["skycluster.io/configmap-ref"]
-	if !ok || cmRef != cmName {
-		return true
-	}
-
-	imgRef, ok := annotations["skycluster.io/image-ref"]
-	if !ok || imgRef != imgName {
-		return true
-	}
-
-	itRef, ok := annotations["skycluster.io/instance-type-ref"]
-	if !ok || itRef != instanceTypeName {
-		return true
-	}
-
-	return false
-}
-
-func constructAnnotationsRef(annt map[string]string, cmName, imgName, instanceTypeName string) map[string]string {
-	if annt == nil {
-		annt = make(map[string]string)
-	}
-	annt["skycluster.io/configmap-ref"] = cmName
-	annt["skycluster.io/image-ref"] = imgName
-	annt["skycluster.io/instance-type-ref"] = instanceTypeName
-	return annt
-}

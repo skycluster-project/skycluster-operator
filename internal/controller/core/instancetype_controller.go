@@ -168,7 +168,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	if reconcileRequired {
 		
 		// create the Pod for the current spec
-		jsonData, err := r.generateJSON(pf.Spec.Zones)
+		jsonData, err := r.generateJSON(it.Spec.Offerings)
 		if err != nil {
 			r.Logger.Error(err, "failed to generate JSON for runner Pod", "name", req.Name, "instanceType", it.Name)
 			r.Recorder.Event(it, corev1.EventTypeWarning, "GenerateJSONFailed", err.Error())
@@ -253,7 +253,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 				r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
 				r.Recorder.Event(it, corev1.EventTypeWarning, "DecodePodLogFailed", msg)
 				return ctrl.Result{}, err
-			} else { it.Status.Zones = zones }
+			} else { it.Status.Offerings = zones }
 
 			// The configMap is also updated by the ProviderProfile,
 			// I update it here to ensure latest update is applied to CM if manual 
@@ -309,10 +309,14 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 	}
 
 	outputPath := fmt.Sprintf("/data/%s-%s.yaml", it.Name, pf.Spec.Platform)
+	offeringsJSON, err := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to encode offerings to YAML")
+	}
 	mapVars := lo.Assign(cred, map[string]string{
 		"PROVIDER":    pf.Spec.Platform,
 		"REGION":      pf.Spec.Region,
-		"FAMILY":      strings.Join(it.Spec.TypeFamilies, ","),
+		"FAMILY":      offeringsJSON,
 		"INPUT_JSON":  jsonData,
 		"OUTPUT_PATH": outputPath,
 	})
@@ -467,12 +471,12 @@ func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, p
 	return cred, nil
 }
 
-func (r *InstanceTypeReconciler) generateJSON(zones []cv1a1.ZoneSpec) (string, error) {
+func (r *InstanceTypeReconciler) generateJSON(offerings []cv1a1.ZoneOfferings) (string, error) {
 	type payload struct {
-		Zones []cv1a1.ZoneSpec `json:"zones"`
+		Offerings []cv1a1.ZoneOfferings `json:"offerings"`
 	}
 	// Wrap zones in a payload struct
-	wrapped := payload{Zones: zones}
+	wrapped := payload{Offerings: offerings}
 	// Use the wrapped struct to ensure the correct JSON structure
 	// with "zones" as the top-level key
 	jsonDataByte, err := json.Marshal(wrapped)
@@ -484,17 +488,17 @@ func (r *InstanceTypeReconciler) generateJSON(zones []cv1a1.ZoneSpec) (string, e
 }
 
 
-func (r *InstanceTypeReconciler) decodePodLogJSON(jsonData string) ([]cv1a1.ZoneInstanceTypeSpec, error) {
+func (r *InstanceTypeReconciler) decodePodLogJSON(jsonData string) ([]cv1a1.ZoneOfferings, error) {
 	var payload struct {
-		Zones []cv1a1.ZoneInstanceTypeSpec `json:"zones"`
+		Offerings []cv1a1.ZoneOfferings `json:"offerings"`
 	}
 	if err := json.Unmarshal([]byte(jsonData), &payload); err != nil {
 		return nil, err
 	}
-	if payload.Zones == nil {
-		return nil, fmt.Errorf("missing or invalid zones field")
+	if payload.Offerings == nil {
+		return nil, fmt.Errorf("missing or invalid offerings field")
 	}
-	return payload.Zones, nil
+	return payload.Offerings, nil
 }
 
 // buildPVCForPV returns a PVC that will bind to the given PV.
@@ -611,7 +615,7 @@ func (r *InstanceTypeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.
 		cm.Data = make(map[string]string)
 	}
 
-	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Zones)
+	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
 
 	if err2 == nil {cm.Data["flavors.yaml"] = itYamlData}
 

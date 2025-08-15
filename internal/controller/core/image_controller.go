@@ -167,7 +167,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if reconcileRequired {
 		
 		// create the Pod for the current spec
-		jsonData, err := r.generateJSON(pf.Spec.Zones, img.Spec.ImageLabels)
+		jsonData, err := r.generateJSON(pf.Spec.Zones, img.Spec.Images)
 		if err != nil {
 			r.Logger.Error(err, "failed to generate input JSON for image-finder Pod")
 			r.Recorder.Event(img, corev1.EventTypeWarning, "GenerateJSONFailed", err.Error())
@@ -252,7 +252,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 				r.Logger.Error(err, msg, "name", req.Name, "image", img.Name)
 				r.Recorder.Event(img, corev1.EventTypeWarning, "DecodePodLogFailed", msg)
 				return ctrl.Result{}, err
-			} else { img.Status.Zones = zones }
+			} else { img.Status.Images = zones }
 			
 	
 			// The configMap is also updated by the ProviderProfile,
@@ -425,13 +425,13 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 	return cred, nil
 }
 
-func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []string) (string, error) {
+func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []cv1a1.ImageOffering) (string, error) {
 	type ImageOffering struct {
 		Zone      string `json:"zone"`
 		NameLabel string `json:"nameLabel"`
 	}
 	type payload struct {
-		Zones []ImageOffering `json:"zones"`
+		Images []ImageOffering `json:"images"`
 	}
 
 	imgOfferings := []ImageOffering{}
@@ -442,13 +442,13 @@ func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []str
 		for _, img := range imageLabels {
 			imgOfferings = append(imgOfferings, ImageOffering{
 				Zone:      zone.Name,
-				NameLabel: img,
+				NameLabel: img.NameLabel,
 			})
 		}
 	}
 
 	// Wrap zones in a payload struct
-	wrapped := payload{Zones: imgOfferings}
+	wrapped := payload{Images: imgOfferings}
 	// Use the wrapped struct to ensure the correct JSON structure
 	// with "zones" as the top-level key
 	jsonDataByte, err := json.Marshal(wrapped)
@@ -461,7 +461,7 @@ func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []str
 
 func (r *ImageReconciler) decodeJSONToImageOffering(jsonData string) ([]cv1a1.ImageOffering, error) {
 	var payload struct {
-		Zones []cv1a1.ImageOffering `json:"zones"`
+		Zones []cv1a1.ImageOffering `json:"images"`
 	}
 	if err := json.Unmarshal([]byte(jsonData), &payload); err != nil {
 		return nil, err
@@ -532,7 +532,7 @@ func (r *ImageReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.Provide
 		cm.Data = make(map[string]string)
 	}
 
-	imgYamlData, err2 := pkgenc.EncodeObjectToYAML(img.Status.Zones)
+	imgYamlData, err2 := pkgenc.EncodeObjectToYAML(img.Status.Images)
 
 	if err2 == nil {cm.Data["flavors.yaml"] = imgYamlData}
 
