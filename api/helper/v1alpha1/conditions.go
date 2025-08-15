@@ -8,10 +8,9 @@ const (
 	Degraded Condition = "Degraded"
 
 	// For Runner Pods
-	Finish    Condition = "Finished"
-	Running   Condition = "Running"
-	Succeeded Condition = "Succeeded"
+	JobRunning   Condition = "JobRunning"
+	JobSucceeded Condition = "JobSucceeded"
 
 	// Others
-	NeedsFullReconcile Condition = "NeedsFullReconcile"
+	ResyncRequired Condition = "ResyncRequired"
 )

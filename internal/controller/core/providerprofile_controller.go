@@ -59,20 +59,21 @@ type ProviderProfileReconciler struct {
 Reconcile behavior:
 
 - Being deleted: clean up and return
-- No changes and no FullReconcile condition: return
-- Spec changes OR FullReconcile condition: 
+- No changes and no ResyncRequired condition: return
+- Spec changes OR ResyncRequired condition: 
 	- Ensure ConfigMap
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
+	- Update status: [obsGen]
 	- Requeue  [Ready false]
-- No changes: pull data		
+- No changes: poll data		
   - not ready? requeue [Ready false]
-	- does not exist? requeue [Ready false, FullReconcile]
+	- does not exist? requeue [Ready N, ResyncRequired Y]
 	- ready? update and return
 */
 
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var logger = zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]")
+	var logger = zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]")	
 	logger.Info("Reconciler started", "name", req.Name, "namespace", req.Namespace)
 
 	// Copy all values from spec to status
@@ -82,7 +83,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	specChanged := pf.Generation != pf.Status.Generation
+	specChanged := pf.Generation != pf.Status.ObservedGeneration
 
 	// If object is being deleted
 	if !pf.DeletionTimestamp.IsZero() {
@@ -100,7 +101,8 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, nil
 	}
 
-	if specChanged {
+	resyncRequired := meta.IsStatusConditionTrue(pf.Status.Conditions, string(hv1a1.ResyncRequired))
+	if specChanged || resyncRequired {
 		// Create a ConfigMap if it doesn't exist
 		cm, err := r.ensureConfigMap(ctx, pf)
 		if err != nil {
@@ -130,7 +132,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			controllerutil.AddFinalizer(pf, hint.FN_Dependency)
 		}
 
-		pf.Status.Generation = pf.Generation
+		pf.Status.ObservedGeneration = pf.Generation
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "FreshReconcile", "Fresh reconcile: ConfigMap and dependencies ensured")
 		logger.Info("ProviderProfile spec changed, ConfigMap and dependencies ensured", "name", req.Name, "ProviderProfile", pf.Name)
 		_ = r.Status().Update(ctx, pf)
@@ -139,8 +141,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 
-	// no spec changes, pull data
-	// set static status
+	// no spec changes, poll data, set static status
 	pf.Status.Region = pf.Spec.Region
 	pf.Status.Zones = pf.Spec.Zones
 
@@ -148,13 +149,11 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	img, err1 := r.fetchImageData(ctx, pf); if err1 != nil {
 		msg := fmt.Sprintf("Failed to fetch Image data for ProviderProfile %s: %v", pf.Name, err1)
 		logger.Error(err1, msg)
-		r.Recorder.Event(pf, corev1.EventTypeWarning, "ImageFetchFailed", msg)
 	}
 
 	it, err2 := r.fetchInstanceTypeData(ctx, pf); if err2 != nil {
 		msg := fmt.Sprintf("Failed to fetch InstanceType data for ProviderProfile %s: %v", pf.Name, err2)
 		logger.Error(err2, msg)
-		r.Recorder.Event(pf, corev1.EventTypeWarning, "InstanceTypeFetchFailed", msg)
 	}
 
 	// Update the CM with the latest data
@@ -164,8 +163,9 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	if err1 != nil || err2 != nil || err3 != nil {
 		msg := fmt.Sprintf("Failed to fetch or update dependencies for ProviderProfile %s: %v, %v, %v", 
 			pf.Name, err1, err2, err3)
+		logger.Error(fmt.Errorf(msg), "Failed to fetch or update dependencies for ProviderProfile", "name", req.Name, "ProviderProfile", pf.Name)	
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DependencyFetchUpdateFailed", msg)
-		pf.Status.SetCondition(hv1a1.NeedsFullReconcile, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
+		pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
 		if err := r.Status().Update(ctx, pf); err != nil {
 			logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
 			return ctrl.Result{}, err
@@ -179,6 +179,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	if imgReady && instanceTypeReady {
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "Ready", "Image and InstanceType are ready")
+		pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "NoResyncNeeded", "No resync needed, dependencies are ready")
 
 		if err := r.Status().Update(ctx, pf); err != nil {
 			if apierrors.IsConflict(err) {

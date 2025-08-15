@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // ImageSpec defines the desired state of Image
@@ -27,19 +29,14 @@ type ImageSpec struct {
 	ImageLabels []string `json:"imageLabels,omitempty" yaml:"imageLabels,omitempty"`
 }
 
-// ImageStatus defines the observed state of Image.
-type ImageStatus struct {
-	Region         string             `json:"region" yaml:"region"`
-	Zones          []ImageOffering    `json:"zones,omitempty" yaml:"zones,omitempty"`
-	Generation     int64              `json:"generation,omitempty" yaml:"generation,omitempty"`
-	RunnerPodName  string             `json:"runnerPodName,omitempty" yaml:"runnerPodName,omitempty"`
-	NeedsRerun     bool               `json:"needsRerun,omitempty" yaml:"needsRerun,omitempty"`
-	LastUpdateTime metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
-	LastRunPhase   string             `json:"lastRunPhase,omitempty" yaml:"lastRunPhase,omitempty"`
-	LastRunReason  string             `json:"lastRunReason,omitempty" yaml:"lastRunReason,omitempty"`
-	LastRunMessage string             `json:"lastRunMessage,omitempty" yaml:"lastRunMessage,omitempty"`
-	Conditions     []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-}
+	// ImageStatus defines the observed state of Image.
+	type ImageStatus struct {
+		Region             string             `json:"region" yaml:"region"`
+		Zones              []ImageOffering    `json:"zones,omitempty" yaml:"zones,omitempty"`
+		ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+		LastUpdateTime     metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
+		Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	}
 
 type ImageOffering struct {
 	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;eks-optimized
@@ -85,10 +82,10 @@ func init() {
 }
 
 // helper to set a condition
-func (s *ImageStatus) SetCondition(conditionType, status, reason, msg string) {
+func (s *ImageStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-		Type:    conditionType,
-		Status:  metav1.ConditionStatus(status),
+		Type:    string(condition),
+		Status:  status,
 		Reason:  reason,
 		Message: msg,
 	})

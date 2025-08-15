@@ -53,7 +53,7 @@ type ProviderProfileStatus struct {
 	Enabled                   bool       `json:"enabled,omitempty"`
 	Region                    string     `json:"region,omitempty"`
 	Zones                     []ZoneSpec `json:"zones,omitempty"`
-	Generation                int64      `json:"generation,omitempty"`
+	ObservedGeneration        int64      `json:"observedGeneration,omitempty"`
 	NeedsRerun                 bool       `json:"needsReun,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`

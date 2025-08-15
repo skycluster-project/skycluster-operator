@@ -19,6 +19,9 @@ package v1alpha1
 import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
 
 // InstanceTypeSpec defines the desired state of InstanceType
@@ -29,13 +32,12 @@ type InstanceTypeSpec struct {
 
 // InstanceTypeStatus defines the observed state of InstanceType.
 type InstanceTypeStatus struct {
-	Region         string                 `json:"region,omitempty"`
-	Zones          []ZoneInstanceTypeSpec `json:"zones,omitempty"`
-	Generation     int64                  `json:"generation,omitempty"`
-	RunnerJobName  string                 `json:"runnerJobName,omitempty"`
-	NeedsRerun     bool                   `json:"needsRerun,omitempty"`
-	LastUpdateTime metav1.Time            `json:"lastUpdateTime,omitempty"`
-	Conditions     []metav1.Condition     `json:"conditions,omitempty"`
+	Region                    string                 `json:"region,omitempty"`
+	Zones                     []ZoneInstanceTypeSpec `json:"zones,omitempty"`
+	LastUpdateTime            metav1.Time            `json:"lastUpdateTime,omitempty"`
+	ObservedGeneration        int64                  `json:"observedGeneration,omitempty"`
+	depv1a1.DependencyManager `json:",inline"`
+	Conditions                []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type ZoneInstanceTypeSpec struct {
@@ -104,10 +106,10 @@ func init() {
 }
 
 // helper to set a condition
-func (s *InstanceTypeStatus) SetCondition(conditionType, status, reason, msg string) {
+func (s *InstanceTypeStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-		Type:    conditionType,
-		Status:  metav1.ConditionStatus(status),
+		Type:    string(condition),
+		Status:  status,
 		Reason:  reason,
 		Message: msg,
 	})

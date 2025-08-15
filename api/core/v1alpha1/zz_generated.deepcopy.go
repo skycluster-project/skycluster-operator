@@ -702,6 +702,7 @@ func (in *InstanceTypeStatus) DeepCopyInto(out *InstanceTypeStatus) {
 		}
 	}
 	in.LastUpdateTime.DeepCopyInto(&out.LastUpdateTime)
+	in.DependencyManager.DeepCopyInto(&out.DependencyManager)
 	if in.Conditions != nil {
 		in, out := &in.Conditions, &out.Conditions
 		*out = make([]v1.Condition, len(*in))
