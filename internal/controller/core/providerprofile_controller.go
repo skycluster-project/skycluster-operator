@@ -41,7 +41,7 @@ import (
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
 	pkgenc "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/encoding"
-	skylog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // ProviderProfileReconciler reconciles a ProviderProfile object
@@ -59,20 +59,21 @@ type ProviderProfileReconciler struct {
 Reconcile behavior:
 
 - Being deleted: clean up and return
-- No changes: return
-- Spec changes: 
+- No changes and no FullReconcile condition: return
+- Spec changes OR FullReconcile condition: 
 	- Ensure ConfigMap
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
-	- Requeue again
-- No changes? poll data		
-  - not ready? requeue
+	- Requeue  [Ready false]
+- No changes: pull data		
+  - not ready? requeue [Ready false]
+	- does not exist? requeue [Ready false, FullReconcile]
 	- ready? update and return
 */
 
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var logger = zap.New(skylog.CustomLogger()).WithName("[ProviderProfile]")
-	logger.Info(fmt.Sprintf("Reconciler started", "name", req.Name, "namespace", req.Namespace))
+	var logger = zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]")
+	logger.Info("Reconciler started", "name", req.Name, "namespace", req.Namespace)
 
 	// Copy all values from spec to status
 	pf := &cv1a1.ProviderProfile{}
@@ -130,7 +131,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 
 		pf.Status.Generation = pf.Generation
-		pf.Status.SetCondition(hv1a1.ConditionReady, hv1a1.ConditionFalse, "SpecChanged", "ProviderProfile spec changed, ConfigMap and dependencies ensured")
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "FreshReconcile", "Fresh reconcile: ConfigMap and dependencies ensured")
 		logger.Info("ProviderProfile spec changed, ConfigMap and dependencies ensured", "name", req.Name, "ProviderProfile", pf.Name)
 		_ = r.Status().Update(ctx, pf)
 
@@ -148,31 +149,23 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		msg := fmt.Sprintf("Failed to fetch Image data for ProviderProfile %s: %v", pf.Name, err1)
 		logger.Error(err1, msg)
 		r.Recorder.Event(pf, corev1.EventTypeWarning, "ImageFetchFailed", msg)
-		// continue checking other resources
 	}
 
 	it, err2 := r.fetchInstanceTypeData(ctx, pf); if err2 != nil {
 		msg := fmt.Sprintf("Failed to fetch InstanceType data for ProviderProfile %s: %v", pf.Name, err2)
 		logger.Error(err2, msg)
 		r.Recorder.Event(pf, corev1.EventTypeWarning, "InstanceTypeFetchFailed", msg)
-		// continue 
 	}
 
 	// Update the CM with the latest data
 	// TODO: this function return error on configmap update failure
-	if err := r.updateConfigMap(ctx, pf, img, it); err != nil {
-		msg := fmt.Sprintf("Failed to update ConfigMap for ProviderProfile %s: %v", pf.Name, err)
-		logger.Error(err, msg)
-		pf.Status.SetCondition(hv1a1.ConditionReady, hv1a1.ConditionFalse, "ConfigMapUpdateFailed", msg)
-		if err := r.Status().Update(ctx, pf); err != nil {
-			logger.Error(err, "unable to update ProviderProfile status after ConfigMap update failure")
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, err
-	} 
+	err3 := r.updateConfigMap(ctx, pf, img, it); 
 	
-	if err1 != nil || err2 != nil {
-		pf.Status.SetCondition(hv1a1.ConditionReady, hv1a1.ConditionFalse, "DataFetchFailed", "Failed to fetch Image or InstanceType data")
+	if err1 != nil || err2 != nil || err3 != nil {
+		msg := fmt.Sprintf("Failed to fetch or update dependencies for ProviderProfile %s: %v, %v, %v", 
+			pf.Name, err1, err2, err3)
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DependencyFetchUpdateFailed", msg)
+		pf.Status.SetCondition(hv1a1.NeedsFullReconcile, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
 		if err := r.Status().Update(ctx, pf); err != nil {
 			logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
 			return ctrl.Result{}, err
@@ -181,11 +174,11 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// If no error and dep objects are ready, update the status
-	imgReady := meta.IsStatusConditionTrue(img.Status.Conditions, hv1a1.ConditionReady)
-	instanceTypeReady := meta.IsStatusConditionTrue(it.Status.Conditions, hv1a1.ConditionReady)
+	imgReady := meta.IsStatusConditionTrue(img.Status.Conditions, string(hv1a1.Ready))
+	instanceTypeReady := meta.IsStatusConditionTrue(it.Status.Conditions, string(hv1a1.Ready))
 
 	if imgReady && instanceTypeReady {
-		pf.Status.SetCondition(hv1a1.ConditionReady, hv1a1.ConditionTrue, "Ready", "Image and InstanceType are ready")
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "Ready", "Image and InstanceType are ready")
 
 		if err := r.Status().Update(ctx, pf); err != nil {
 			if apierrors.IsConflict(err) {
@@ -201,7 +194,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// not ready:
-	pf.Status.SetCondition(hv1a1.ConditionReady, hv1a1.ConditionFalse, "NotReady", "Image or InstanceType is not ready")
+	pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "NotReady", "Image or InstanceType is not ready")
 	_ = r.Status().Update(ctx, pf)
 	return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 }
@@ -221,7 +214,7 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 	
 	its := &cv1a1.InstanceTypeList{}
 	if err := r.List(ctx, its, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return nil, fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
@@ -229,7 +222,7 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 
 	it := &cv1a1.InstanceType{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    hint.SKYCLUSTER_NAMESPACE,
+			Namespace:    pf.Namespace,
 			GenerateName: fmt.Sprintf("%s", pf.Name),
 			Labels:       labels.Set(ll),
 		},
@@ -263,7 +256,7 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 	
 	imgs := &cv1a1.ImageList{}
 	if err := r.List(ctx, imgs, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return nil, fmt.Errorf("unable to fetch Images for ProviderProfile %s: %w", pf.Name, err)
@@ -272,7 +265,7 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 
 	img := &cv1a1.Image{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:    hint.SKYCLUSTER_NAMESPACE,
+			Namespace:    pf.Namespace,
 			GenerateName: fmt.Sprintf("%s-", pf.Name),
 			Labels:       labels.Set(ll),
 		},
@@ -326,9 +319,7 @@ func (r *ProviderProfileReconciler) ensureConfigMap(ctx context.Context, pf *cv1
 	}
 
 	// Set the owner reference to the ProviderProfile
-	if err := controllerutil.SetControllerReference(pf, cm, r.Scheme); err != nil {
-		return nil, fmt.Errorf("unable to set owner reference for ConfigMap: %w", err)
-	}
+	// does not work since ConfigMap is in a different namespace
 
 	// Create the ConfigMap
 	if err := r.Create(ctx, cm); err != nil && !apierrors.IsAlreadyExists(err) {
@@ -343,7 +334,7 @@ func (r *ProviderProfileReconciler) cleanUpInstanceTypes(ctx context.Context, pf
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "instance-types")
 	its := &cv1a1.InstanceTypeList{}
 	if err := r.List(ctx, its, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
@@ -365,7 +356,7 @@ func (r *ProviderProfileReconciler) cleanUpImages(ctx context.Context, pf *cv1a1
 
 	imgs := &cv1a1.ImageList{}
 	if err := r.List(ctx, imgs, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return fmt.Errorf("unable to fetch Images for ProviderProfile %s: %w", pf.Name, err)
@@ -421,8 +412,10 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *cv1a1.Provi
 // If any of the input data is not nil, it will update the ConfigMap with the data.
 // If both are nil, it will not update the ConfigMap and return nil.
 func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, img *cv1a1.Image, it *cv1a1.InstanceType) error {
+	// early return if both are nil
+	if img == nil && it == nil { return nil }
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
-	ll["skycluster.io/provider-config"] = pf.Name
+	ll["skycluster.io/provider-profile"] = pf.Name
 
 	cmList := &corev1.ConfigMapList{}
 	if err := r.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(hint.SKYCLUSTER_NAMESPACE)); err != nil {
@@ -460,13 +453,13 @@ func (r *ProviderProfileReconciler) fetchImageData(ctx context.Context, pf *cv1a
 
 	imgList := &cv1a1.ImageList{}
 	if err := r.List(ctx, imgList, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return nil, fmt.Errorf("unable to fetch Images for ProviderProfile %s: %w", pf.Name, err)
 	}
 	if len(imgList.Items) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("no Images found for ProviderProfile %s", pf.Name)
 	}
 
 	img := &imgList.Items[0]
@@ -481,13 +474,13 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 
 	itList := &cv1a1.InstanceTypeList{}
 	if err := r.List(ctx, itList, &client.ListOptions{
-		Namespace:     hint.SKYCLUSTER_NAMESPACE,
+		Namespace:     pf.Namespace,
 		LabelSelector: labels.SelectorFromSet(labels.Set(ll)),
 	}); err != nil {
 		return nil, fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
 	}
 	if len(itList.Items) == 0 {
-		return nil, nil
+		return nil, fmt.Errorf("no InstanceTypes found for ProviderProfile %s", pf.Name)
 	}
 
 	it := &itList.Items[0]

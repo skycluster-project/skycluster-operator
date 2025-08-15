@@ -20,6 +20,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
 
@@ -53,6 +54,7 @@ type ProviderProfileStatus struct {
 	Region                    string     `json:"region,omitempty"`
 	Zones                     []ZoneSpec `json:"zones,omitempty"`
 	Generation                int64      `json:"generation,omitempty"`
+	NeedsRerun                 bool       `json:"needsReun,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -94,10 +96,10 @@ func init() {
 	SchemeBuilder.Register(&ProviderProfile{}, &ProviderProfileList{})
 }
 
-func (s *ProviderProfileStatus) SetCondition(conditionType, status, reason, msg string) {
+func (s *ProviderProfileStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
-		Type:    conditionType,
-		Status:  metav1.ConditionStatus(status),
+		Type:    string(condition),
+		Status:  status,
 		Reason:  reason,
 		Message: msg,
 	})
