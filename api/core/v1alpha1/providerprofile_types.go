@@ -50,11 +50,9 @@ type ZoneSpec struct {
 
 // ProviderProfileStatus defines the observed state of ProviderProfile.
 type ProviderProfileStatus struct {
-	Enabled                   bool       `json:"enabled,omitempty"`
 	Region                    string     `json:"region,omitempty"`
 	Zones                     []ZoneSpec `json:"zones,omitempty"`
 	ObservedGeneration        int64      `json:"observedGeneration,omitempty"`
-	NeedsRerun                 bool       `json:"needsReun,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`
 }
@@ -62,9 +60,7 @@ type ProviderProfileStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
-// +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".status.enabled"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
-// +kubebuilder:printcolumn:name="Total Services",type="integer",JSONPath=".status.totalServices"
 
 // ProviderProfile is the Schema for the providerprofiles API
 type ProviderProfile struct {

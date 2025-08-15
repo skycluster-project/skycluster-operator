@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -32,16 +34,12 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/samber/lo"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
 	pkgenc "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/encoding"
-	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // ProviderProfileReconciler reconciles a ProviderProfile object
@@ -49,6 +47,7 @@ type ProviderProfileReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+	Logger   logr.Logger
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles,verbs=get;list;watch;create;update;patch;delete
@@ -60,26 +59,28 @@ Reconcile behavior:
 
 - Being deleted: clean up and return
 - No changes and no ResyncRequired condition: return
-- Spec changes OR ResyncRequired condition: 
+- Spec changes OR ResyncRequired condition:
 	- Ensure ConfigMap
+
+	- set statis status
+
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
 	- Update status: [obsGen]
 	- Requeue  [Ready false]
-- No changes: poll data		
+- No changes: poll data
   - not ready? requeue [Ready false]
 	- does not exist? requeue [Ready N, ResyncRequired Y]
 	- ready? update and return
 */
 
 func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	var logger = zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]")	
-	logger.Info("Reconciler started", "name", req.Name, "namespace", req.Namespace)
+	r.Logger.Info("Reconciler started", "name", req.Name, "namespace", req.Namespace)
 
 	// Copy all values from spec to status
 	pf := &cv1a1.ProviderProfile{}
 	if err := r.Get(ctx, req.NamespacedName, pf); err != nil {
-		logger.Info("unable to fetch ProviderProfile, may be deleted", "name", req.Name, "ProviderProfile", pf.Name)
+		r.Logger.Info("unable to fetch ProviderProfile, may be deleted", "name", req.Name, "ProviderProfile", pf.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -88,13 +89,15 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	// If object is being deleted
 	if !pf.DeletionTimestamp.IsZero() {
 		// If finalizer is present, clean up ConfigMaps
+		r.Logger.Info("ProviderProfile is being deleted", "name", req.Name, "ProviderProfile", pf.Name)
 		if controllerutil.ContainsFinalizer(pf, hint.FN_Dependency) {
+			r.Logger.Info("ProviderProfile has finalizer, cleaning up resources", "name", req.Name, "ProviderProfile", pf.Name)
 			// Best effort Clean up resources
 			_ = r.cleanUp(ctx, pf)
 			// Remove finalizer once cleanup is done
 			_ = controllerutil.RemoveFinalizer(pf, hint.FN_Dependency)
 			if err := r.Update(ctx, pf); err != nil {
-				logger.Error(err, "unable to remove finalizer from ProviderProfile")
+				r.Logger.Error(err, "unable to remove finalizer from ProviderProfile")
 				return ctrl.Result{}, err
 			}
 		}
@@ -106,68 +109,77 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		// Create a ConfigMap if it doesn't exist
 		cm, err := r.ensureConfigMap(ctx, pf)
 		if err != nil {
-			logger.Error(err, "unable to ensure ConfigMap for ProviderProfile")
+			r.Logger.Error(err, "unable to ensure ConfigMap for ProviderProfile")
 			return ctrl.Result{}, err
 		}
 		pf.Status.DependencyManager.SetDependency(cm.Name, "ConfigMap", pf.Namespace)
-		
+
 		// Platform is one of the major clouds? then ensure dependencies:
 		if lo.Contains([]string{"aws", "azure", "gcp"}, pf.Spec.Platform) {
 			img, err := r.ensureImages(ctx, pf)
 			if err != nil {
-				logger.Error(err, "unable to ensure Images for ProviderProfile")
+				r.Logger.Error(err, "unable to ensure Images for ProviderProfile")
 				return ctrl.Result{}, err
 			}
 			instanceType, err := r.ensureInstanceTypes(ctx, pf)
 			if err != nil {
-				logger.Error(err, "unable to ensure InstanceTypes for ProviderProfile")
+				r.Logger.Error(err, "unable to ensure InstanceTypes for ProviderProfile")
 				return ctrl.Result{}, err
 			}
 			pf.Status.DependencyManager.SetDependency(img.Name, "Image", pf.Namespace)
 			pf.Status.DependencyManager.SetDependency(instanceType.Name, "InstanceType", pf.Namespace)
 		}
-		
-		// ensure finalizer if not present
-		if !controllerutil.ContainsFinalizer(pf, hint.FN_Dependency) {
-			controllerutil.AddFinalizer(pf, hint.FN_Dependency)
-		}
 
 		pf.Status.ObservedGeneration = pf.Generation
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "FreshReconcile", "Fresh reconcile: ConfigMap and dependencies ensured")
-		logger.Info("ProviderProfile spec changed, ConfigMap and dependencies ensured", "name", req.Name, "ProviderProfile", pf.Name)
+		r.Logger.Info("ProviderProfile spec changed, ConfigMap and dependencies ensured", "name", req.Name, "ProviderProfile", pf.Name)
 		_ = r.Status().Update(ctx, pf)
+
+		// ensure finalizer if not present
+		if !controllerutil.ContainsFinalizer(pf, hint.FN_Dependency) {
+			r.Logger.Info("Adding finalizer to ProviderProfile", "name", req.Name, "ProviderProfile", pf.Name)
+			controllerutil.AddFinalizer(pf, hint.FN_Dependency)
+		}
+		if err := r.Update(ctx, pf); err != nil {
+			r.Logger.Error(err, "Failed to update ProviderProfile with finalizer")
+			return ctrl.Result{}, err
+    }
 
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
-
 
 	// no spec changes, poll data, set static status
 	pf.Status.Region = pf.Spec.Region
 	pf.Status.Zones = pf.Spec.Zones
 
 	// fetch latest image and instance type data (if "ready") and update configmap
-	img, err1 := r.fetchImageData(ctx, pf); if err1 != nil {
+	img, err1 := r.fetchImageData(ctx, pf)
+	if err1 != nil {
 		msg := fmt.Sprintf("Failed to fetch Image data for ProviderProfile %s: %v", pf.Name, err1)
-		logger.Error(err1, msg)
+		if !apierrors.IsNotFound(err1) {
+			r.Logger.Error(err1, msg)
+		}
 	}
 
-	it, err2 := r.fetchInstanceTypeData(ctx, pf); if err2 != nil {
+	it, err2 := r.fetchInstanceTypeData(ctx, pf)
+	if err2 != nil {
 		msg := fmt.Sprintf("Failed to fetch InstanceType data for ProviderProfile %s: %v", pf.Name, err2)
-		logger.Error(err2, msg)
+		if !apierrors.IsNotFound(err2) {
+			r.Logger.Error(err2, msg)
+		}
 	}
 
 	// Update the CM with the latest data
 	// TODO: this function return error on configmap update failure
-	err3 := r.updateConfigMap(ctx, pf, img, it); 
-	
+	err3 := r.updateConfigMap(ctx, pf, img, it)
+
 	if err1 != nil || err2 != nil || err3 != nil {
-		msg := fmt.Sprintf("Failed to fetch or update dependencies for ProviderProfile %s: %v, %v, %v", 
-			pf.Name, err1, err2, err3)
-		logger.Error(fmt.Errorf(msg), "Failed to fetch or update dependencies for ProviderProfile", "name", req.Name, "ProviderProfile", pf.Name)	
+		msg := "Failed to fetch dependencies, [ResynceRequired]"
+		r.Logger.Info(msg, "name", req.Name, "ProviderProfile", pf.Name)
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DependencyFetchUpdateFailed", msg)
 		pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
 		if err := r.Status().Update(ctx, pf); err != nil {
-			logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
+			r.Logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
@@ -183,15 +195,17 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 		if err := r.Status().Update(ctx, pf); err != nil {
 			if apierrors.IsConflict(err) {
-				logger.Info("Conflict while updating ProviderProfile status, requeuing", "name", req.Name)
+				r.Logger.Info("Conflict while updating ProviderProfile status, requeuing", "name", req.Name)
 				return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 			}
-			logger.Error(err, "unable to update ProviderProfile status")
+			r.Logger.Error(err, "unable to update ProviderProfile status")
 			return ctrl.Result{}, err
 		}
 
 		// We are good for now, request a requeue after a longer period
 		return ctrl.Result{RequeueAfter: 12 * time.Hour}, nil
+	} else {
+		r.Logger.Info("Image or InstanceType not ready, requeuing", "name", req.Name, "ProviderProfile", pf.Name)
 	}
 
 	// not ready:
@@ -212,7 +226,7 @@ func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf *cv1a1.ProviderProfile) (*cv1a1.InstanceType, error) {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
-	
+
 	its := &cv1a1.InstanceTypeList{}
 	if err := r.List(ctx, its, &client.ListOptions{
 		Namespace:     pf.Namespace,
@@ -254,7 +268,7 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.ProviderProfile) (*cv1a1.Image, error) {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
-	
+
 	imgs := &cv1a1.ImageList{}
 	if err := r.List(ctx, imgs, &client.ListOptions{
 		Namespace:     pf.Namespace,
@@ -299,6 +313,7 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 func (r *ProviderProfileReconciler) ensureConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile) (*corev1.ConfigMap, error) {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
+	ll["skycluster.io/config-type"] = "provider-profile"
 
 	cms := &corev1.ConfigMapList{}
 	if err := r.List(ctx, cms, &client.ListOptions{
@@ -329,7 +344,6 @@ func (r *ProviderProfileReconciler) ensureConfigMap(ctx context.Context, pf *cv1
 
 	return cm, nil
 }
-
 
 func (r *ProviderProfileReconciler) cleanUpInstanceTypes(ctx context.Context, pf *cv1a1.ProviderProfile) error {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "instance-types")
@@ -376,6 +390,8 @@ func (r *ProviderProfileReconciler) cleanUpImages(ctx context.Context, pf *cv1a1
 
 func (r *ProviderProfileReconciler) cleanUpConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile) error {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
+	ll["skycluster.io/provider-profile"] = pf.Name
+	ll["skycluster.io/config-type"] = "provider-profile"
 
 	// Get the ConfigMap associated with the provider profile
 	cms := &corev1.ConfigMapList{}
@@ -399,11 +415,11 @@ func (r *ProviderProfileReconciler) cleanUpConfigMap(ctx context.Context, pf *cv
 }
 
 func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *cv1a1.ProviderProfile) error {
-	err1 := r.cleanUpConfigMap(ctx, pf); 
-	err2 := r.cleanUpImages(ctx, pf);
-	err3 := r.cleanUpInstanceTypes(ctx, pf); 
-	
-	if err1 != nil || err2 != nil || err3 != nil {	
+	err1 := r.cleanUpConfigMap(ctx, pf)
+	err2 := r.cleanUpImages(ctx, pf)
+	err3 := r.cleanUpInstanceTypes(ctx, pf)
+
+	if err1 != nil || err2 != nil || err3 != nil {
 		return fmt.Errorf("failed to clean up resources for ProviderProfile %s", pf.Name)
 	}
 
@@ -414,7 +430,9 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *cv1a1.Provi
 // If both are nil, it will not update the ConfigMap and return nil.
 func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, img *cv1a1.Image, it *cv1a1.InstanceType) error {
 	// early return if both are nil
-	if img == nil && it == nil { return nil }
+	if img == nil && it == nil {
+		return nil
+	}
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
 
@@ -434,8 +452,12 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 	imgYamlData, err1 := pkgenc.EncodeObjectToYAML(img.Status.Zones)
 	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Zones)
 
-	if err1 == nil {cm.Data["images.yaml"] = imgYamlData}
-	if err2 == nil {cm.Data["flavors.yaml"] = itYamlData}
+	if err1 == nil {
+		cm.Data["images.yaml"] = imgYamlData
+	}
+	if err2 == nil {
+		cm.Data["flavors.yaml"] = itYamlData
+	}
 
 	if err1 != nil || err2 != nil {
 		if err := r.Update(ctx, &cm); err != nil {
@@ -490,16 +512,16 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 
 // func getNumberOfServices(cm *corev1.ConfigMap) (int, error) {
 // 	// Assuming each ConfigMap contains a list of services in a specific key
-// 	logger.Info("Counting services from ConfigMap", "ConfigMap", cm.Name)
+// 	r.Logger.Info("Counting services from ConfigMap", "ConfigMap", cm.Name)
 // 	serviceCount := 0
 
 // 	for svc, yamlData := range cm.Data { // svcData["images.yaml"]
-// 		logger.Info("Decoding YAML data from ConfigMap", "ConfigMap", cm.Name)
+// 		r.Logger.Info("Decoding YAML data from ConfigMap", "ConfigMap", cm.Name)
 // 		svcData, err := decodeSvcYaml(yamlData)
 // 		if err != nil {
 // 			return 0, fmt.Errorf("failed to decode YAML in ConfigMap %s: %w", cm.Name, err)
 // 		}
-// 		logger.Info("Decoded service data from ConfigMap", "ConfigMap", cm.Name, "Service", svc, "Data", len(svcData))
+// 		r.Logger.Info("Decoded service data from ConfigMap", "ConfigMap", cm.Name, "Service", svc, "Data", len(svcData))
 // 		switch svc {
 // 		case "images.yaml":
 // 			serviceCount += availableSvcImage(svcData)
@@ -508,7 +530,7 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 // 		default:
 // 			continue
 // 		}
-// 		logger.Info("Counted services from ConfigMap", "ConfigMap", cm.Name, "Svc", svc, "Count", serviceCount)
+// 		r.Logger.Info("Counted services from ConfigMap", "ConfigMap", cm.Name, "Svc", svc, "Count", serviceCount)
 // 	}
 
 // 	return serviceCount, nil
@@ -596,16 +618,24 @@ func availableSvcInstanceTypes(s []map[string]any) int {
 }
 
 func needUpdate(annotations map[string]string, cmName, imgName, instanceTypeName string) bool {
-	if annotations == nil { return true }
+	if annotations == nil {
+		return true
+	}
 
 	cmRef, ok := annotations["skycluster.io/configmap-ref"]
-	if !ok || cmRef != cmName { return true }
+	if !ok || cmRef != cmName {
+		return true
+	}
 
 	imgRef, ok := annotations["skycluster.io/image-ref"]
-	if !ok || imgRef != imgName { return true }
+	if !ok || imgRef != imgName {
+		return true
+	}
 
 	itRef, ok := annotations["skycluster.io/instance-type-ref"]
-	if !ok || itRef != instanceTypeName { return true }
+	if !ok || itRef != instanceTypeName {
+		return true
+	}
 
 	return false
 }

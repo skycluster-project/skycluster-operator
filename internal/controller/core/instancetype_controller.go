@@ -202,18 +202,21 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// JobRunning
 	pod, err := r.fetchPod(ctx, pf, it)
 	if err != nil {
-		r.Logger.Error(err, "failed to fetch Pod for InstanceType", "name", req.Name, "instanceType", it.Name)
 		if apierrors.IsNotFound(err) {
 			st.SetCondition(hv1a1.JobRunning, metav1.ConditionFalse, "PodNotFound", "Runner Pod not found, will try to create a new one")
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "PodNotFound", "Runner Pod not found, will try to create a new one")
+			r.Logger.Info("Runner Pod not found, will try to create a new one", "name", req.Name, "instanceType", it.Name)
 			if err2 := r.Status().Update(ctx, it); err2 != nil {return ctrl.Result{}, err2}
 			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-		} else {return ctrl.Result{}, err}
+			} else {
+			r.Logger.Error(err, "failed to fetch Pod for InstanceType", "name", req.Name, "instanceType", it.Name)
+			return ctrl.Result{}, err
+		}
 	} 
 
 	// Pod exists and now check its phase
-	msg := fmt.Sprintf("Runner Pod %s is in phase %s for InstanceType %s", pod.Name, pod.Status.Phase, it.Name)
-	r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name)
+	msg := fmt.Sprintf("Runner Pod status [%s]", pod.Status.Phase)
+	r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase)
 	r.Recorder.Event(it, corev1.EventTypeNormal, "RunnerPodStatus", msg)
 	
 	switch pod.Status.Phase {
@@ -269,8 +272,8 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = it.GetGeneration()
 		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
-		msg := fmt.Sprintf("Runner Pod finished with phase %s, termination reason: %s", pod.Status.Phase, pkgpod.ContainerTerminatedReason(pod))
-		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name)
+		msg := fmt.Sprintf("Runner Pod finished [%s]", pod.Status.Phase)
+		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
 		
 		if err := r.Status().Update(ctx, it); err != nil { return ctrl.Result{}, err }
 		return ctrl.Result{}, nil

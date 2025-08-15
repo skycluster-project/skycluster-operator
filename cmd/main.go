@@ -300,6 +300,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
 		os.Exit(1)
