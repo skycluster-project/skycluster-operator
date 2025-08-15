@@ -32,7 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 )
 
@@ -96,7 +96,7 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			r.setConditionUnreadyAndUpdate(skyApp, "Error creating YAML manifest.")
 			return ctrl.Result{}, err
 		}
-		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
+		skyApp.Status.Objects = append(skyApp.Status.Objects, hv1a1.SkyService{
 			ComponentRef: corev1.ObjectReference{
 				Name:       obj.GetName(),
 				Kind:       obj.GetKind(),
@@ -116,7 +116,7 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			r.setConditionUnreadyAndUpdate(skyApp, "Error creating YAML manifest.")
 			return ctrl.Result{}, err
 		}
-		skyApp.Status.Objects = append(skyApp.Status.Objects, corev1alpha1.SkyService{
+		skyApp.Status.Objects = append(skyApp.Status.Objects, hv1a1.SkyService{
 			ComponentRef: corev1.ObjectReference{
 				Name:       obj.GetName(),
 				Kind:       obj.GetKind(),
@@ -145,7 +145,7 @@ func (r *SkyAppReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
+func generateDeployObjectManifests(manifests []hv1a1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
 	objs := map[string]unstructured.Unstructured{}
 	// Generate deployment and service manifests
 	for _, manifest := range manifests {
@@ -156,7 +156,7 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 			obj.SetKind("Object")
 			obj.SetName(manifest.ComponentRef.Name)
 			obj.SetLabels(map[string]string{
-				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+				hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
 			})
 			// "Object" type requires type <object> for manifest
 			// we marshal the manifest to map[string]interface{}
@@ -180,7 +180,7 @@ func generateDeployObjectManifests(manifests []corev1alpha1.SkyService, provider
 	return objs
 }
 
-func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
+func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgName string) map[string]unstructured.Unstructured {
 
 	objs := map[string]unstructured.Unstructured{}
 	// Generate Istio configuration
@@ -198,7 +198,7 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 				fmt.Println("Error unmarshalling manifest yaml")
 			}
 
-			svcTypeLabel := corev1alpha1.SKYCLUSTER_SVCTYPE_LABEL
+			svcTypeLabel := hv1a1.SKYCLUSTER_SVCTYPE_LABEL
 			labels, err := GetNestedField(yamlManifest, "metadata", "labels")
 			if err != nil {
 				// This service is not eligible for istio configuration
@@ -211,9 +211,9 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 			}
 
 			failovers := []string{
-				corev1alpha1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL,
-				corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL,
-				corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL,
+				hv1a1.SKYCLUSTER_PROVIDERREGIONALIAS_LABEL,
+				hv1a1.SKYCLUSTER_PROVIDERREGION_LABEL,
+				hv1a1.SKYCLUSTER_PROVIDERZONE_LABEL,
 			}
 
 			istioObj := map[string]interface{}{
@@ -244,7 +244,7 @@ func generateIstioConfig(manifests []corev1alpha1.SkyService, providerCfgName st
 			obj.SetKind("Object")
 			obj.SetName(manifest.ComponentRef.Name)
 			obj.SetLabels(map[string]string{
-				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+				hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
 			})
 			obj.Object["spec"] = map[string]interface{}{
 				"forProvider": map[string]interface{}{

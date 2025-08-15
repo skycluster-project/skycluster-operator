@@ -17,7 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
 
 // ProviderProfileSpec defines the desired state of ProviderProfile
@@ -46,19 +49,19 @@ type ZoneSpec struct {
 
 // ProviderProfileStatus defines the observed state of ProviderProfile.
 type ProviderProfileStatus struct {
-	Enabled       bool       `json:"enabled,omitempty"`
-	Region        string     `json:"region,omitempty"`
-	Zones         []ZoneSpec `json:"zones,omitempty"`
-	ConfigMapRef  string     `json:"configMapRef,omitempty"`
-	Sync          bool       `json:"sync,omitempty"`
-	TotalServices int        `json:"totalServices,omitempty"`
+	Enabled                   bool       `json:"enabled,omitempty"`
+	Region                    string     `json:"region,omitempty"`
+	Zones                     []ZoneSpec `json:"zones,omitempty"`
+	Generation                int64      `json:"generation,omitempty"`
+	depv1a1.DependencyManager `json:",inline"`
+	Conditions                []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
 // +kubebuilder:printcolumn:name="Enabled",type="boolean",JSONPath=".status.enabled"
-// +kubebuilder:printcolumn:name="Sync",type="boolean",JSONPath=".status.sync"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 // +kubebuilder:printcolumn:name="Total Services",type="integer",JSONPath=".status.totalServices"
 
 // ProviderProfile is the Schema for the providerprofiles API
@@ -89,4 +92,13 @@ type ProviderProfileList struct {
 
 func init() {
 	SchemeBuilder.Register(&ProviderProfile{}, &ProviderProfileList{})
+}
+
+func (s *ProviderProfileStatus) SetCondition(conditionType, status, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    conditionType,
+		Status:  metav1.ConditionStatus(status),
+		Reason:  reason,
+		Message: msg,
+	})
 }

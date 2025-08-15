@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	ctrlv1alpha1 "github.com/skycluster-project/skycluster-operator/internal/controller"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -56,7 +56,7 @@ func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 
 	deployment, ok := obj.(*appsv1.Deployment)
 	exists := ctrlv1alpha1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
-		corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+		hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
 	})
 	if !ok || !exists {
 		return nil

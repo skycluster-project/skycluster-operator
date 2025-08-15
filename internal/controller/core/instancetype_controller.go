@@ -43,7 +43,8 @@ import (
 	"gopkg.in/yaml.v3"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	h "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
+	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
+	pkgpod "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/pod"
 )
 
 // InstanceTypeReconciler reconciles a InstanceType object
@@ -62,7 +63,7 @@ type InstanceTypeReconciler struct {
 
 Reconcile behavior:
 
-- Deleted: clean up and return
+- Being deleted: clean up and return
 - No change, no running pod, within threshold: requeue 12 hours
 - Spec changed && runner pod exists: set NeedsRerun, requeue
 - No runner pod: create a new Pod, requeue
@@ -108,12 +109,12 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	// with a reference to this InstanceType.
 	pf := &cv1a1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, pf); err != nil {
-		st.SetCondition(
-			cv1a1.ConditionReady,
-			cv1a1.ConditionFalse,
-			cv1a1.ReasonProviderProfileNotFound,
-			fmt.Sprintf("providerRef %q not found: %v", it.Spec.ProviderRef, err),
-		)
+		// st.SetCondition(
+		// 	cv1a1.ConditionReady,
+		// 	cv1a1.ConditionFalse,
+		// 	cv1a1.ReasonProviderProfileNotFound,
+		// 	fmt.Sprintf("providerRef %q not found: %v", it.Spec.ProviderRef, err),
+		// )
 		_ = r.Status().Update(ctx, it)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -135,10 +136,10 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	//    no runner pod &&
 	//    no NeedRerun set ==> then nothing to do, requeue (12 hours)
 	if !specChanged &&
-		!st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < h.UpdateThreshold &&
+		!st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold &&
 		st.RunnerJobName == "" && !st.NeedsRerun {
 		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "instanceType", it.Name, "lastUpdateTime", st.LastUpdateTime.Time)
-		return ctrl.Result{RequeueAfter: h.UpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
+		return ctrl.Result{RequeueAfter: hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
 	}
 
 	// If:
@@ -149,12 +150,12 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if !st.NeedsRerun { // if re-run is already set, do not set it again, just requeue
 			st.NeedsRerun = true
 			r.Logger.Info("Object spec changed, changing status to not ready", "name", req.Name, "instanceType", it.Name)
-			st.SetCondition(cv1a1.ConditionReady, cv1a1.ConditionFalse, cv1a1.ConditionStale,
-				"Spec changed; will re-run after current Pod finishes")
+			// st.SetCondition(cv1a1.ConditionReady, cv1a1.ConditionFalse, cv1a1.ConditionStale,
+			// 	"Spec changed; will re-run after current Pod finishes")
 			_ = r.Status().Update(ctx, it) // best effort update
 		}
 		r.Logger.Info("Requeuing for re-run...")
-		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
+		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
 	// 2) ensure a runner Pod; poll (requeueAfter) until Pod ends.
@@ -178,7 +179,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		}
 		st.RunnerJobName = theJob.Name
 		st.Generation = it.GetGeneration()
-		st.SetCondition(cv1a1.ConditionReady, cv1a1.ConditionFalse, cv1a1.ConditionRunning, "Runner Pod just created")
+		// st.SetCondition(cv1a1.ConditionReady, cv1a1.ConditionFalse, cv1a1.ConditionRunning, "Runner Pod just created")
 		if err := r.Status().Update(ctx, it); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -186,7 +187,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		r.Logger.Info("Runner Pod created, starting polling for completion", "podName", job.Name)
 		r.Recorder.Event(it, corev1.EventTypeNormal, "RunnerPodCreated",
 			fmt.Sprintf("Runner Pod %s created for InstanceType %s", job.Name, it.Name))
-		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
+		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
 	// 3) a job name is recorded: check its phase
@@ -195,7 +196,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		if apierrors.IsNotFound(err) {
 			st.RunnerJobName = ""
 			if err2 := r.Status().Update(ctx, it); err2 != nil {return ctrl.Result{}, err2}
-			return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
+			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 		} else {return ctrl.Result{}, err}
 	} 
 
@@ -207,7 +208,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	switch pod.Status.Phase {
 	case corev1.PodPending, corev1.PodRunning:
 		// keep polling
-		return ctrl.Result{RequeueAfter: h.RequeuePollThreshold}, nil
+		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 
 	// 4) collect result, update status, clear runner, possibly start another run
 	default:  // corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
@@ -233,7 +234,7 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// If the pod termination reason is completed,
 		// we set the Zones based on the POD message
-		success := pod.Status.Phase == corev1.PodSucceeded && h.ContainerTerminatedReason(pod) == "Completed"
+		success := pod.Status.Phase == corev1.PodSucceeded && pkgpod.ContainerTerminatedReason(pod) == "Completed"
 		if success {
 			if zones, err := r.decodePodLogJSON(podOutput); err != nil {
 				msg := fmt.Sprintf("Failed to decode image offerings from Pod logs: %s", err.Error())
@@ -243,20 +244,20 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 			} else { it.Status.Zones = zones }
 
 			// Update or create the ConfigMap with the image offerings
-			yamlData, err := r.generateYAML(it.Status.Zones)
-			if err != nil {
-				msg := fmt.Sprintf("Failed to generate input YAML for ConfigMap: %s", err.Error())
-				r.Recorder.Event(it, corev1.EventTypeWarning, "GenerateYAMLFailed", msg)
-				r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
-				return ctrl.Result{}, err
-			}
+			// yamlData, err := r.generateYAML(it.Status.Zones)
+			// if err != nil {
+			// 	msg := fmt.Sprintf("Failed to generate input YAML for ConfigMap: %s", err.Error())
+			// 	r.Recorder.Event(it, corev1.EventTypeWarning, "GenerateYAMLFailed", msg)
+			// 	r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
+			// 	return ctrl.Result{}, err
+			// }
 
-			if err := h.ProviderProfileCMUpdate(ctx, r.Client, pf, yamlData, "flavors.yaml"); err != nil {
-				msg := fmt.Sprintf("Failed to update/create ConfigMap for image offerings: %s", err.Error())
-				r.Recorder.Event(it, corev1.EventTypeWarning, "ConfigMapUpdateFailed", msg)
-				r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
-				return ctrl.Result{}, err
-			}
+			// if err := h.ProviderProfileCMUpdate(ctx, r.Client, pf, yamlData, "flavors.yaml"); err != nil {
+			// 	msg := fmt.Sprintf("Failed to update/create ConfigMap for image offerings: %s", err.Error())
+			// 	r.Recorder.Event(it, corev1.EventTypeWarning, "ConfigMapUpdateFailed", msg)
+			// 	r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
+			// 	return ctrl.Result{}, err
+			// }
 
 			// We let the job controller handle the deletion of the job Pod
 		}
@@ -264,10 +265,10 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 		// no more work
 		st.LastUpdateTime = metav1.NewTime(now)
 		st.Generation = it.GetGeneration()
-		st.SetCondition(cv1a1.ConditionReady,
-			lo.Ternary(success, cv1a1.ConditionTrue, cv1a1.ConditionFalse), 
-			"RunnerPodFinished", "Runner Pod finished")
-		msg := fmt.Sprintf("Runner Pod finished with phase %s, termination reason: %s", pod.Status.Phase, h.ContainerTerminatedReason(pod))
+		// st.SetCondition(cv1a1.ConditionReady,
+		// 	lo.Ternary(success, cv1a1.ConditionTrue, cv1a1.ConditionFalse), 
+		// 	"RunnerPodFinished", "Runner Pod finished")
+		msg := fmt.Sprintf("Runner Pod finished with phase %s, termination reason: %s", pod.Status.Phase, pkgpod.ContainerTerminatedReason(pod))
 		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name)
 		
 		if err := r.Status().Update(ctx, it); err != nil { return ctrl.Result{}, err }
@@ -285,7 +286,7 @@ func (r *InstanceTypeReconciler) updateProviderProfile(ctx context.Context, it *
 	if pf.Annotations == nil {
 		pf.Annotations = map[string]string{}
 	}
-	pf.Annotations[annITRef] = it.Name
+	pf.Annotations["skycluster.io/instancetype-name"] = it.Name
 
 	return r.Patch(ctx, pf, client.MergeFrom(orig))
 }
@@ -324,7 +325,7 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 		})
 	}
 
-	labels := h.DefaultPodLabels(pf.Spec.Platform, pf.Spec.Region)
+	labels := hint.DefaultPodLabels(pf.Spec.Platform, pf.Spec.Region)
 	labels["skycluster.io/job-type"] = "instance-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
 
@@ -332,7 +333,7 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    it.Namespace,
-			GenerateName: h.TruncatedName(it.Name, "-it-finder-"),
+			GenerateName: hint.TruncatedName(it.Name, "-it-finder-"),
 			Labels:       labels,
 		},
 		Spec: batchv1.JobSpec{
@@ -414,7 +415,7 @@ func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, p
 		"skycluster.io/provider-platform": pp.Spec.Platform,
 		"skycluster.io/secret-role":       "credentials",
 	}
-	if err := r.List(ctx, secrets, client.InNamespace(h.SKYCLUSTER_NAMESPACE), client.MatchingLabels(ll)); err != nil {
+	if err := r.List(ctx, secrets, client.InNamespace(hint.SKYCLUSTER_NAMESPACE), client.MatchingLabels(ll)); err != nil {
 		return nil, fmt.Errorf("unable to list credentials secret: %w", err)
 	}
 	if len(secrets.Items) == 0 {
@@ -510,12 +511,12 @@ func (r *InstanceTypeReconciler) decodePodLogJSON(jsonData string) ([]cv1a1.Zone
 func (r *InstanceTypeReconciler) buildPVCForPV(pvcNS, pvcName string) (*corev1.PersistentVolumeClaim, error) {
 	// Get the default SkyCluster PV
 	var pv *corev1.PersistentVolume
-	if err := r.Get(context.TODO(), types.NamespacedName{Name: h.SKYCLUSTER_PV_NAME}, pv); err != nil {
+	if err := r.Get(context.TODO(), types.NamespacedName{Name: hint.SKYCLUSTER_PV_NAME}, pv); err != nil {
 		return nil, fmt.Errorf("failed to get default PV: %w", err)
 	}
 	// Ensure the PV is not nil
 	if pv == nil {
-		return nil, fmt.Errorf("default PV %s not found", h.SKYCLUSTER_PV_NAME)
+		return nil, fmt.Errorf("default PV %s not found", hint.SKYCLUSTER_PV_NAME)
 	}
 
 	// Derive request size from PV capacity (must be <= PV capacity)
@@ -556,7 +557,7 @@ func (r *InstanceTypeReconciler) buildPVCForPV(pvcNS, pvcName string) (*corev1.P
 // create the job if does not exist
 func (r *InstanceTypeReconciler) ensureJobRunner(ctx context.Context, job *batchv1.Job, it *cv1a1.InstanceType, pf *cv1a1.ProviderProfile) (*batchv1.Job, error) {
 	existings := &batchv1.JobList{}
-	labels := h.DefaultPodLabels(pf.Spec.Platform, pf.Spec.Region)
+	labels := hint.DefaultPodLabels(pf.Spec.Platform, pf.Spec.Region)
 	labels["skycluster.io/job-type"] = "instance-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
 	err := r.List(ctx, existings, client.InNamespace(it.Namespace), client.MatchingLabels(labels))

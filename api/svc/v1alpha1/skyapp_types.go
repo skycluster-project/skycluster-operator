@@ -17,21 +17,22 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // SkyAppSpec defines the desired state of SkyApp.
 type SkyAppSpec struct {
 	// Manifests is a list of manifests that should be applied to the cluster
-	Manifests []corev1alpha1.SkyService `json:"manifests,omitempty"`
+	Manifests []h.SkyService `json:"manifests,omitempty"`
 }
 
 // SkyAppStatus defines the observed state of SkyApp.
 type SkyAppStatus struct {
 	// Objects is a list of objects that will be created in the remote cluster
 	// Based on the manifests in the spec
-	Objects           []corev1alpha1.SkyService `json:"objects,omitempty"`
+	Objects           []h.SkyService `json:"objects,omitempty"`
 	ProviderConfigRef string                    `json:"providerConfigRef,omitempty"`
 	Conditions        []metav1.Condition        `json:"conditions,omitempty"`
 }

@@ -39,12 +39,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/samber/lo"
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
-	h "github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
-	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
+	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
+
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -63,7 +64,7 @@ func customLoggerFormat() zap.EncoderConfigOption {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(cv1a1.AddToScheme(scheme))
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(svcv1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
@@ -267,7 +268,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),
-		Logger:   zap.New(h.CustomLogger()).WithName("[InstanceType]"),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[InstanceType]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
 		os.Exit(1)
@@ -304,11 +305,11 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		// if err = webhookcorev1alpha1.SetupDeploymentWebhookWithManager(mgr); err != nil {
+		// if err = webhookcv1a1.SetupDeploymentWebhookWithManager(mgr); err != nil {
 		// 	setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
 		// 	os.Exit(1)
 		// }
-		if err := webhookcorev1alpha1.SetupImageWebhookWithManager(mgr); err != nil {
+		if err := webhookcv1a1.SetupImageWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
 			os.Exit(1)
 		}
@@ -324,7 +325,7 @@ func main() {
 		// 	setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
 		// 	os.Exit(1)
 		// }
-		if err := webhookcorev1alpha1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
+		if err := webhookcv1a1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
 			os.Exit(1)
 		}

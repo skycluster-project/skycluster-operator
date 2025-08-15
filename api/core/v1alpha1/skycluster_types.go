@@ -19,6 +19,8 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // SkyClusterSpec defines the desired state of SkyCluster.
@@ -33,10 +35,10 @@ type SkyClusterSpec struct {
 	DeploymentPolciyRef corev1.LocalObjectReference `json:"deploymentPolicyRef,omitempty"`
 	// SkyProviders is the list of the SkyProvider that will be provisioned
 	// This list should be populated when the optimizer is executed
-	SkyProviders []ProviderRefSpec `json:"skyProviders,omitempty"`
+	SkyProviders []h.ProviderRefSpec `json:"skyProviders,omitempty"`
 	// SkyComponents is the list of the SkyComponent including deployments
 	// and all Sky Services such as SkyVM that will be used by the optimization.
-	SkyComponents []SkyComponent `json:"skyComponents,omitempty"`
+	SkyComponents []h.SkyComponent `json:"skyComponents,omitempty"`
 }
 
 // SkyClusterStatus defines the observed state of SkyCluster.

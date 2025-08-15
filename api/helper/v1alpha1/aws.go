@@ -1,8 +1,5 @@
 package v1alpha1
 
-const DefaultRefreshHourInstanceType = 12 // Default refresh interval in hours
-const DefaultRefreshHourImages = 12       // Default refresh interval in hours
-
 var ImageLabelList = []string{
 	"ubuntu-20.04",
 	"ubuntu-22.04",

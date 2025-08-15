@@ -19,20 +19,22 @@ package v1alpha1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 type OptimizationSpec struct {
 	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
 	Status       string                      `json:"status,omitempty"`
 	Result       string                      `json:"result,omitempty"`
-	DeployMap    DeployMap                   `json:"deployMap,omitempty"`
+	DeployMap    h.DeployMap                 `json:"deployMap,omitempty"`
 	ConfigMapRef corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 	PodRef       corev1.LocalObjectReference `json:"podRef,omitempty"`
 }
 
 // ILPTaskSpec defines the desired state of ILPTask.
 type ILPTaskSpec struct {
-	SkyComponents []SkyComponent `json:"skyComponents"`
+	SkyComponents []h.SkyComponent `json:"skyComponents"`
 }
 
 // ILPTaskStatus defines the observed state of ILPTask.

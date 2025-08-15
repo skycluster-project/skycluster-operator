@@ -24,8 +24,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	"github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // DeviceNodeReconciler reconciles a DeviceNode object
@@ -39,18 +39,18 @@ type DeviceNodeReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=devicenodes/finalizers,verbs=update
 
 func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := zap.New(helper.CustomLogger()).WithName("[DeviceNode]")
+	logger := zap.New(pkglog.CustomLogger()).WithName("[DeviceNode]")
 	logger.Info("Reconciler started.", "name", req.Name)
 
 	// Fetch the DeviceNode instance
-	deviceNode := &corev1alpha1.DeviceNode{}
+	deviceNode := &cv1a1.DeviceNode{}
 	if err := r.Get(ctx, req.NamespacedName, deviceNode); err != nil {
 		logger.Info("unable to fetch DeviceNode")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
 	// Based on providerRef, fetch the provider details
-	provider := &corev1alpha1.ProviderProfile{}
+	provider := &cv1a1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: deviceNode.Spec.ProviderRef, Namespace: deviceNode.Namespace}, provider); err != nil {
 		logger.Error(err, "failed to fetch ProviderProfile", "providerRef", deviceNode.Spec.ProviderRef)
 		return ctrl.Result{}, err
@@ -64,7 +64,7 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 
 	// For each device spec, if the zone does not exist, we ignore the device node, otherwise
 	// we copy the device spec to the status
-	observedDevices := make([]corev1alpha1.DeviceSpec, 0)
+	observedDevices := make([]cv1a1.DeviceSpec, 0)
 	for _, deviceSpec := range deviceNode.Spec.DeviceSpec {
 		if !checkZone(deviceSpec.ZoneRef, provider) {
 			logger.Info("Ignoring DeviceNode creation for non-existing zone", "zone", deviceSpec.ZoneRef)
@@ -104,7 +104,7 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func checkZone(zoneName string, provider *corev1alpha1.ProviderProfile) bool {
+func checkZone(zoneName string, provider *cv1a1.ProviderProfile) bool {
 	// iterate over the zones in the provider and check if the zone exists
 	for _, zone := range provider.Spec.Zones {
 		if zone.Name == zoneName {
@@ -117,7 +117,7 @@ func checkZone(zoneName string, provider *corev1alpha1.ProviderProfile) bool {
 // SetupWithManager sets up the controller with the Manager.
 func (r *DeviceNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.DeviceNode{}).
+		For(&cv1a1.DeviceNode{}).
 		Named("core-devicenode").
 		Complete(r)
 }

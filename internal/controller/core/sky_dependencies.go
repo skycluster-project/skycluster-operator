@@ -1,7 +1,7 @@
 package core
 
 import (
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	ha1va "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -30,24 +30,24 @@ var SkyDependencies = map[string][]SkyDependency{
 	"SkyProvider": []SkyDependency{
 		SkyDependency{
 			Kind:       "SkyProvider",
-			APIVersion: corev1alpha1.SKYCLUSTER_XRDsGROUP + "/" + corev1alpha1.SKYCLUSTER_VERSION,
+			APIVersion: ha1va.SKYCLUSTER_XRDsGROUP + "/" + ha1va.SKYCLUSTER_VERSION,
 			Replicas:   1,
 
 			// Deprecated
-			Group: corev1alpha1.SKYCLUSTER_XRDsGROUP,
+			Group: ha1va.SKYCLUSTER_XRDsGROUP,
 			// Deprecated
-			Version: corev1alpha1.SKYCLUSTER_VERSION,
+			Version: ha1va.SKYCLUSTER_VERSION,
 		},
 	},
 	"SkyVM": []SkyDependency{
 		SkyDependency{
 			Kind:       "SkyProvider",
-			APIVersion: corev1alpha1.SKYCLUSTER_XRDsGROUP + "/" + corev1alpha1.SKYCLUSTER_VERSION,
+			APIVersion: ha1va.SKYCLUSTER_XRDsGROUP + "/" + ha1va.SKYCLUSTER_VERSION,
 			Replicas:   1,
 
 			// Deprecated
-			Group:   corev1alpha1.SKYCLUSTER_XRDsGROUP,
-			Version: corev1alpha1.SKYCLUSTER_VERSION,
+			Group:   ha1va.SKYCLUSTER_XRDsGROUP,
+			Version: ha1va.SKYCLUSTER_VERSION,
 		},
 	},
 }

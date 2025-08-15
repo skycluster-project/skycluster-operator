@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	ctrlutils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
@@ -57,9 +57,9 @@ func generateYAMLManifest(obj any) (string, error) {
 }
 
 // getUniqueProviders returns a list of unique providers from the given manifests
-func getUniqueProviders(manifests []corev1alpha1.SkyService) []corev1alpha1.ProviderRefSpec {
+func getUniqueProviders(manifests []hv1a1.SkyService) []hv1a1.ProviderRefSpec {
 	pExists := map[string]any{}
-	providers := []corev1alpha1.ProviderRefSpec{}
+	providers := []hv1a1.ProviderRefSpec{}
 	for _, manifest := range manifests {
 		// ProviderName uniquely identifies a provider
 		// Only deployments are considered as the services do not tie to a provider
@@ -81,7 +81,7 @@ func getUniqueProviders(manifests []corev1alpha1.SkyService) []corev1alpha1.Prov
 
 // GetProviderTypeFromConfigMap returns the provider type from the ConfigMap with the given providerLabels labels
 func getProviderTypeFromConfigMap(c client.Client, providerLabels map[string]string) (string, error) {
-	if configMaps, err := ctrlutils.GetConfigMapsByLabels(c, corev1alpha1.SKYCLUSTER_NAMESPACE, providerLabels); err != nil || configMaps == nil {
+	if configMaps, err := ctrlutils.GetConfigMapsByLabels(c, hv1a1.SKYCLUSTER_NAMESPACE, providerLabels); err != nil || configMaps == nil {
 		return "", errors.Wrap(err, "failed to get ConfigMaps by labels")
 	} else {
 		// check the length of the configMaps
@@ -89,7 +89,7 @@ func getProviderTypeFromConfigMap(c client.Client, providerLabels map[string]str
 			return "", errors.New(fmt.Sprintf("expected 1 ConfigMap, got %d", len(configMaps.Items)))
 		}
 		for _, configMap := range configMaps.Items {
-			if value, exists := configMap.Labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL]; exists {
+			if value, exists := configMap.Labels[hv1a1.SKYCLUSTER_PROVIDERTYPE_LABEL]; exists {
 				return value, nil
 			}
 		}
@@ -99,7 +99,7 @@ func getProviderTypeFromConfigMap(c client.Client, providerLabels map[string]str
 
 // sameProviders returns true if the two providers are the same
 // based on the provider name, region and zone
-func sameProviders(p1, p2 corev1alpha1.ProviderRefSpec) bool {
+func sameProviders(p1, p2 hv1a1.ProviderRefSpec) bool {
 	return p1.ProviderName == p2.ProviderName &&
 		p1.ProviderRegion == p2.ProviderRegion &&
 		p1.ProviderZone == p2.ProviderZone
@@ -107,7 +107,7 @@ func sameProviders(p1, p2 corev1alpha1.ProviderRefSpec) bool {
 
 // getProviderId returns a unique identifier for the provider
 // based on the provider name, region, zone and type
-func getProviderId(p corev1alpha1.ProviderRefSpec) string {
+func getProviderId(p hv1a1.ProviderRefSpec) string {
 	var parts []string
 	if p.ProviderName != "" {
 		parts = append(parts, p.ProviderName)
@@ -189,20 +189,20 @@ func generateProviderGwSpec(spec svcv1alpha1.SkyProviderSpec) map[string]any {
 }
 
 // addDefaultLabels return the default skycluster labels
-func addDefaultLabels(providerSpec corev1alpha1.ProviderRefSpec) map[string]string {
+func addDefaultLabels(providerSpec hv1a1.ProviderRefSpec) map[string]string {
 	labels := make(map[string]string)
 	if providerSpec.ProviderName != "" {
-		labels[corev1alpha1.SKYCLUSTER_PROVIDERNAME_LABEL] = providerSpec.ProviderName
+		labels[hv1a1.SKYCLUSTER_PROVIDERNAME_LABEL] = providerSpec.ProviderName
 	}
 	if providerSpec.ProviderRegion != "" {
-		labels[corev1alpha1.SKYCLUSTER_PROVIDERREGION_LABEL] = providerSpec.ProviderRegion
+		labels[hv1a1.SKYCLUSTER_PROVIDERREGION_LABEL] = providerSpec.ProviderRegion
 	}
 	if providerSpec.ProviderZone != "" {
-		labels[corev1alpha1.SKYCLUSTER_PROVIDERZONE_LABEL] = providerSpec.ProviderZone
+		labels[hv1a1.SKYCLUSTER_PROVIDERZONE_LABEL] = providerSpec.ProviderZone
 	}
 	if providerSpec.ProviderType != "" {
-		labels[corev1alpha1.SKYCLUSTER_PROVIDERTYPE_LABEL] = providerSpec.ProviderType
+		labels[hv1a1.SKYCLUSTER_PROVIDERTYPE_LABEL] = providerSpec.ProviderType
 	}
-	labels[corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL] = corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE
+	labels[hv1a1.SKYCLUSTER_MANAGEDBY_LABEL] = hv1a1.SKYCLUSTER_MANAGEDBY_VALUE
 	return labels
 }

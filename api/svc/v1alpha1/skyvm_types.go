@@ -18,9 +18,10 @@ package v1alpha1
 
 import (
 	// xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 type SecGroup struct {
@@ -56,7 +57,7 @@ type SkyVMSpec struct {
 	// SecGroup is the security group definition to apply to the VM
 	SecGroup []SecGroup `json:"secGroup,omitempty"`
 	// ProviderRef is the reference to the provider that this VM should be deployed to
-	ProviderRef corev1alpha1.ProviderRefSpec `json:"providerRef,omitempty"`
+	ProviderRef h.ProviderRefSpec `json:"providerRef,omitempty"`
 }
 
 // SkyVMStatus defines the observed state of SkyVM.

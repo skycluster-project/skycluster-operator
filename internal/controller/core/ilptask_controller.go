@@ -38,6 +38,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -46,9 +47,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
-	"github.com/pkg/errors"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks,verbs=get;list;watch;create;update;patch;delete
@@ -69,14 +70,14 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	logger.Info(fmt.Sprintf("[%s]\t Reconciling %s", loggerName, req.Name))
 
 	// Fetch the ILPTask instance
-	instance := &corev1alpha1.ILPTask{}
+	instance := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 		logger.Info(fmt.Sprintf("[%s]\t ILPTask not found.", loggerName))
 		logger.Info(fmt.Sprintf("[%s]\t Deleting the optimization pod as the ILPTask is not found.", loggerName))
 		// Delete the optimization pod
 		pod := &corev1.Pod{}
 		if err := r.Get(ctx, client.ObjectKey{
-			Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
+			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
 			Name:      OPTMIZATION_POD_NAME,
 		}, pod); err != nil {
 			return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -121,9 +122,9 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 
 			// We set the deployPlan only if the result is Optimal
-			skyCluster := &corev1alpha1.SkyCluster{}
+			skyCluster := &cv1a1.SkyCluster{}
 			if optResult == "Optimal" {
-				deployPlan := corev1alpha1.DeployMap{}
+				deployPlan := hv1a1.DeployMap{}
 				if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
 					logger.Info(fmt.Sprintf("[%s]\t Failed to unmarshal deploy plan", loggerName))
 					return ctrl.Result{}, err
@@ -191,7 +192,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// We iterate over all components in the spec.skyComponents
 	// and create corresponding tasks for optimization problem.
 
-	skyCluster := &corev1alpha1.SkyCluster{}
+	skyCluster := &cv1a1.SkyCluster{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace,
 		Name:      req.Name,
@@ -204,7 +205,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Creating task-locations.csv
 	// Location constraints should be retrived from deployment policy object
 	// with the same name as the current object
-	dp := &policyv1alpha1.DeploymentPolicy{}
+	dp := &pv1a1.DeploymentPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace,
 		Name:      skyCluster.Spec.DeploymentPolciyRef.Name,
@@ -218,7 +219,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	}
 	// Creating tasks-edges.csv
-	df := &policyv1alpha1.DataflowPolicy{}
+	df := &pv1a1.DataflowPolicy{}
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace,
 		Name:      skyCluster.Spec.DataflowPolicyRef.Name,
@@ -280,8 +281,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	return ctrl.Result{RequeueAfter: time.Second * 5}, nil
 }
 
-func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan corev1alpha1.DeployMap, result, status string) (*corev1alpha1.SkyCluster, error) {
-	skyCluster := &corev1alpha1.SkyCluster{}
+func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan hv1a1.DeployMap, result, status string) (*cv1a1.SkyCluster, error) {
+	skyCluster := &cv1a1.SkyCluster{}
 	// It has a same name as the ILPTask
 	if err := r.Get(ctx, client.ObjectKey{
 		Namespace: req.Namespace,
@@ -296,7 +297,7 @@ func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Reque
 	return skyCluster, nil
 }
 
-func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
+func getTasksFromSkyCluster(skyCluster *cv1a1.SkyCluster) string {
 	tasks := make([]string, 0)
 	tasks = append(tasks, "# header")
 	for _, component := range skyCluster.Spec.SkyComponents {
@@ -324,7 +325,7 @@ func getTasksFromSkyCluster(skyCluster *corev1alpha1.SkyCluster) string {
 	return strings.Join(tasks, "\n")
 }
 
-func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) (string, error) {
+func getTasksLocationsFromDeployPolicy(dp *pv1a1.DeploymentPolicy) (string, error) {
 	taskLocations := make([]string, 0)
 	taskLocations = append(taskLocations, "# header")
 	for _, dpItem := range dp.Spec.DeploymentPolicies {
@@ -378,7 +379,7 @@ func getTasksLocationsFromDeployPolicy(dp *policyv1alpha1.DeploymentPolicy) (str
 	return strings.Join(taskLocations, "\n"), nil
 }
 
-func getTasksEdgesFromDataflowPolicy(df *policyv1alpha1.DataflowPolicy) string {
+func getTasksEdgesFromDataflowPolicy(df *pv1a1.DataflowPolicy) string {
 	taskEdges := make([]string, 0)
 	taskEdges = append(taskEdges, "# header")
 	for _, df := range df.Spec.DataDependencies {
@@ -397,9 +398,9 @@ func defineOptimizationPod(configMapList map[string]corev1.ConfigMap, skyCluster
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      OPTMIZATION_POD_NAME,
-			Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
+			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
 			Labels: map[string]string{
-				corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL: corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
+				hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -495,8 +496,8 @@ func getOptimizationConfigMaps(ctx context.Context, r *ILPTaskReconciler) (map[s
 	for _, label := range configMapLabels {
 		var configMapList corev1.ConfigMapList
 		if err := r.List(ctx, &configMapList, client.MatchingLabels{
-			corev1alpha1.SKYCLUSTER_MANAGEDBY_LABEL:  corev1alpha1.SKYCLUSTER_MANAGEDBY_VALUE,
-			corev1alpha1.SKYCLUSTER_CONFIGTYPE_LABEL: label,
+			hv1a1.SKYCLUSTER_MANAGEDBY_LABEL:  hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
+			hv1a1.SKYCLUSTER_CONFIGTYPE_LABEL: label,
 		}); err != nil {
 			return nil, err
 		}
@@ -520,7 +521,7 @@ func getOptimizationConfigMaps(ctx context.Context, r *ILPTaskReconciler) (map[s
 func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus string, optmizationStatus string, deployPlan string, err error) {
 	pod := &corev1.Pod{}
 	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
+		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
 		Name:      OPTMIZATION_POD_NAME,
 	}, pod); err != nil {
 		return "", "", "", err
@@ -529,7 +530,7 @@ func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus
 		// get the result from the configmap
 		configMap := &corev1.ConfigMap{}
 		if err := r.Get(ctx, client.ObjectKey{
-			Namespace: corev1alpha1.SKYCLUSTER_NAMESPACE,
+			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
 			Name:      OPTMIZATION_POD_NAME,
 		}, configMap); err != nil {
 			return "", "", "", err
@@ -545,7 +546,7 @@ func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus
 // SetupWithManager sets up the controller with the Manager.
 func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.ILPTask{}).
+		For(&cv1a1.ILPTask{}).
 		Named("core-ilptask").
 		WithOptions(controller.Options{
 			RateLimiter: newCustomRateLimiter(),

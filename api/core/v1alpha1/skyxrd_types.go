@@ -18,12 +18,14 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // SkyXRDSpec defines the desired state of SkyXRD.
 type SkyXRDSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
-	Manifests []SkyService `json:"manifests,omitempty"`
+	Manifests []h.SkyService `json:"manifests,omitempty"`
 }
 
 // SkyXRDStatus defines the observed state of SkyXRD.

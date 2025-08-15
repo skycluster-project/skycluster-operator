@@ -29,12 +29,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	"github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // nolint:unused
 // log is for logging in this package.
-var ppLogger = zap.New(helper.CustomLogger()).WithName("[ProviderProfile Webhook]")
+var ppLogger = zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile Webhook]")
 
 // SetupProviderProfileWebhookWithManager registers the webhook for ProviderProfile in the manager.
 func SetupProviderProfileWebhookWithManager(mgr ctrl.Manager) error {

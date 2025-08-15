@@ -28,8 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	"github.com/skycluster-project/skycluster-operator/internal/controller/core/helper"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // EgressCostReconciler reconciles a EgressCost object
@@ -43,12 +43,12 @@ type EgressCostReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=egresscosts/finalizers,verbs=update
 
 func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := zap.New(helper.CustomLogger()).WithName("[EgressCost]")
+	logger := zap.New(pkglog.CustomLogger()).WithName("[EgressCost]")
 	logger.Info("Reconciler started.", "name", req.Name)
 
 	// The controller first calculates the egress costs based on the provider specifications.
 	// Then if consider user defined inputs from spec, it will override the calculated costs.
-	egressCost := &corev1alpha1.EgressCost{}
+	egressCost := &cv1a1.EgressCost{}
 	if err := r.Get(ctx, req.NamespacedName, egressCost); err != nil {
 		logger.Info("unable to fetch EgressCost")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -80,7 +80,7 @@ func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// Fetch all providers to calculate costs
-	providerList := &corev1alpha1.ProviderProfileList{}
+	providerList := &cv1a1.ProviderProfileList{}
 	if err := r.List(ctx, providerList); err != nil {
 		logger.Error(err, "failed to list ProviderProfiles")
 		return ctrl.Result{}, err
@@ -90,11 +90,11 @@ func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	for _, p := range providerList.Items {
 		if _, exists := effectiveEgressCosts[p.Name]; !exists {
 			// Add default costs for new provider, e.g., copy from internet tier or set defaults
-			if _, ok := corev1alpha1.BaseCosts[p.Spec.Platform]; !ok {
-				effectiveEgressCosts[p.Name] = corev1alpha1.BaseCosts[p.Spec.Platform]
-			} else {
-				effectiveEgressCosts[p.Name] = corev1alpha1.BaseCosts["other"]
-			}
+			// if _, ok := cv1a1.BaseCosts[p.Spec.Platform]; !ok {
+			// 	effectiveEgressCosts[p.Name] = cv1a1.BaseCosts[p.Spec.Platform]
+			// } else {
+			// 	effectiveEgressCosts[p.Name] = cv1a1.BaseCosts["other"]
+			// }
 		}
 	}
 
@@ -149,7 +149,7 @@ func (r *EgressCostReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // SetupWithManager sets up the controller with the Manager.
 func (r *EgressCostReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1alpha1.EgressCost{}).
+		For(&cv1a1.EgressCost{}).
 		Named("core-egresscost").
 		Complete(r)
 }

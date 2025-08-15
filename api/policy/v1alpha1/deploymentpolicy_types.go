@@ -17,9 +17,10 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // type Location struct {
@@ -43,9 +44,9 @@ import (
 
 type LocationConstraint struct {
 	// Permitted is the list of locations that are permitted
-	Permitted corev1alpha1.LocationPermittedRuleSet `json:"permitted,omitempty"`
+	Permitted h.LocationPermittedRuleSet `json:"permitted,omitempty"`
 	// Required is the list of locations that are required for deployment
-	Required corev1alpha1.LocationRequiredRuleSet `json:"required,omitempty"`
+	Required h.LocationRequiredRuleSet `json:"required,omitempty"`
 }
 
 type CustomMetric struct {

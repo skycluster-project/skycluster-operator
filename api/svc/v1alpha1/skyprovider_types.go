@@ -17,7 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -44,8 +44,8 @@ type ProviderGatewaySpec struct {
 // SkyProviderSpec defines the desired state of SkyProvider.
 type SkyProviderSpec struct {
 	ProviderGateway ProviderGatewaySpec          `json:"providerGateway"`
-	ProviderRef     corev1alpha1.ProviderRefSpec `json:"providerRef"`
-	Monitoring      MonitoringSpec               `json:"monitoring,omitempty"`
+	ProviderRef     h.ProviderRefSpec `json:"providerRef"`
+	Monitoring      h.MonitoringSpec               `json:"monitoring,omitempty"`
 }
 
 // SkyProviderStatus defines the observed state of SkyProvider.
