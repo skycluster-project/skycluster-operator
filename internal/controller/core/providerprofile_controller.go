@@ -20,16 +20,19 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -114,7 +117,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		pf.Status.DependencyManager.SetDependency(cm.Name, "ConfigMap", pf.Namespace)
 
 		// Platform is one of the major clouds? then ensure dependencies:
-		if lo.Contains([]string{"aws", "azure", "gcp"}, pf.Spec.Platform) {
+		if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
 			img, err := r.ensureImages(ctx, pf)
 			if err != nil {
 				r.Logger.Error(err, "unable to ensure Images for ProviderProfile")
@@ -181,7 +184,12 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			r.Logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+
+		// We don't need to requeue if it is not a major cloud provider
+		if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
+			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+		} else { return ctrl.Result{}, nil }
+
 	}
 
 	// If no error and dep objects are ready, update the status
@@ -487,7 +495,10 @@ func (r *ProviderProfileReconciler) fetchImageData(ctx context.Context, pf *cv1a
 		return nil, fmt.Errorf("unable to fetch Images for ProviderProfile %s: %w", pf.Name, err)
 	}
 	if len(imgList.Items) == 0 {
-		return nil, fmt.Errorf("no Images found for ProviderProfile %s", pf.Name)
+		return nil, errors.NewNotFound(
+			schema.GroupResource{Group: "core.skycluster.io", Resource: "images"},
+			fmt.Sprintf("no Image found for ProviderProfile %s", pf.Name),
+		)
 	}
 
 	img := &imgList.Items[0]
@@ -508,7 +519,10 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 		return nil, fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
 	}
 	if len(itList.Items) == 0 {
-		return nil, fmt.Errorf("no InstanceTypes found for ProviderProfile %s", pf.Name)
+		return nil, errors.NewNotFound(
+			schema.GroupResource{Group: "core.skycluster.io", Resource: "instancetypes"},
+			fmt.Sprintf("no InstanceType found for ProviderProfile %s", pf.Name),
+		)
 	}
 
 	it := &itList.Items[0]

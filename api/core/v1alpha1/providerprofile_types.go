@@ -30,7 +30,6 @@ type ProviderProfileSpec struct {
 	Region      string      `json:"region"`
 	RegionAlias string      `json:"regionAlias"`
 	Continent   string      `json:"continent,omitempty"`
-	Gateway     GatewaySpec `json:"gateway,omitempty"`
 	Enabled     bool        `json:"enabled"`
 	Zones       []ZoneSpec  `json:"zones"`
 }
