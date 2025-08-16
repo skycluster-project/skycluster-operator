@@ -39,12 +39,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/samber/lo"
+
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	wbhkcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
@@ -370,6 +372,13 @@ func main() {
 	// 	os.Exit(1)
 	// }
 
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := wbhkcv1a1.SetupInstanceTypeWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "InstanceType")
+			os.Exit(1)
+		}
+	}
 	// +kubebuilder:scaffold:builder
 
 	if metricsCertWatcher != nil {

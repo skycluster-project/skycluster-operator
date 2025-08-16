@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"encoding/json"
+	"errors"
 
 	"gopkg.in/yaml.v3"
 )
@@ -19,6 +20,9 @@ func EncodeJSONStringToYAML(jsonString string) (string, error) {
 }
 
 func EncodeObjectToYAML(obj interface{}) (string, error) {
+	if obj == nil{
+		return "", errors.New("object to encode cannot be nil")
+	}
 	data, err := yaml.Marshal(obj)
 	if err != nil {
 		return "", err

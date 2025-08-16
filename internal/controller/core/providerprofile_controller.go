@@ -68,7 +68,9 @@ Reconcile behavior:
 
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
-	- Update status: [obsGen]
+		- [ResyncRequired Y] if dependencies not found (major cloud only)	
+
+	- Update status: [observedGeneration]
 	- Requeue  [Ready false]
 - No changes: poll data
   - not ready? requeue [Ready false]
@@ -145,7 +147,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		if err := r.Update(ctx, pf); err != nil {
 			r.Logger.Error(err, "Failed to update ProviderProfile with finalizer")
 			return ctrl.Result{}, err
-    }
+		}
 
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
@@ -179,16 +181,19 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		msg := "Failed to fetch dependencies, [ResynceRequired]"
 		r.Logger.Info(msg, "name", req.Name, "ProviderProfile", pf.Name)
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DependencyFetchUpdateFailed", msg)
-		pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
+		// if this is a custom provider, we may check if dependencies are available
+		if !lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
+			pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "NoResyncNeeded", "Resync not needed, waiting for dependencies to be ready")
+		} else {
+			pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "DependencyFetchUpdateFailed", msg)
+		}
+
 		if err := r.Status().Update(ctx, pf); err != nil {
 			r.Logger.Error(err, "unable to update ProviderProfile status after data fetch failure")
 			return ctrl.Result{}, err
 		}
 
-		// We don't need to requeue if it is not a major cloud provider
-		if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
-			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-		} else { return ctrl.Result{}, nil }
+		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 
 	}
 
@@ -249,8 +254,8 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 			Labels:       labels.Set(ll),
 		},
 		Spec: cv1a1.InstanceTypeSpec{
-			ProviderRef:  pf.Name,
-			Offerings: getTypeFamilies(pf.Spec.Platform, pf.Spec.Zones),
+			ProviderRef: pf.Name,
+			Offerings:   getTypeFamilies(pf.Spec.Platform, pf.Spec.Zones),
 		},
 	}
 
@@ -295,13 +300,13 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 			ProviderRef: pf.Name,
 			Images: []cv1a1.ImageOffering{
 				{
-					NameLabel:  "ubuntu-20.04",
+					NameLabel: "ubuntu-20.04",
 				},
 				{
-					NameLabel:  "ubuntu-22.04",
+					NameLabel: "ubuntu-22.04",
 				},
 				{
-					NameLabel:  "ubuntu-24.04",
+					NameLabel: "ubuntu-24.04",
 				},
 			},
 		},
@@ -462,17 +467,24 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 		cm.Data = make(map[string]string)
 	}
 
-	imgYamlData, err1 := pkgenc.EncodeObjectToYAML(img.Status.Images)
-	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
-
-	if err1 == nil {
-		cm.Data["images.yaml"] = imgYamlData
+	updated := false
+	if img != nil {
+		imgYamlData, err1 := pkgenc.EncodeObjectToYAML(img.Status.Images)
+		if err1 == nil {
+			cm.Data["images.yaml"] = imgYamlData
+			updated = true
+		}
 	}
-	if err2 == nil {
-		cm.Data["flavors.yaml"] = itYamlData
+
+	if it != nil {
+		itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
+		if err2 == nil {
+			cm.Data["flavors.yaml"] = itYamlData
+			updated = true
+		}
 	}
 
-	if err1 != nil || err2 != nil {
+	if updated {
 		if err := r.Update(ctx, &cm); err != nil {
 			return fmt.Errorf("failed to update ConfigMap for images: %w", err)
 		}
@@ -560,13 +572,13 @@ func buildZoneOfferings(zoneName string, offerings []string) cv1a1.ZoneOfferings
 	for _, offering := range offerings {
 		o = append(o, cv1a1.InstanceOffering{NameLabel: offering})
 	}
-	return cv1a1.ZoneOfferings{ Zone: zoneName, Offerings: o }
+	return cv1a1.ZoneOfferings{Zone: zoneName, Offerings: o}
 }
 
 func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferings {
 	zoneNames := lo.Map(zones, func(z cv1a1.ZoneSpec, _ int) string { return z.Name })
 	zoneOfferings := make([]cv1a1.ZoneOfferings, 0, len(zoneNames))
-	
+
 	switch platform {
 	case "aws":
 		for _, z := range zoneNames {
@@ -591,7 +603,6 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 
 	return zoneOfferings
 }
-
 
 // func availableSvcImage(imgs []map[string]any) int {
 // 	if len(imgs) == 0 {
@@ -651,5 +662,3 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 // 	}
 // 	return count
 // }
-
-

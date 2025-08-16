@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 
-	lo "github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,19 +27,24 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
+	"github.com/go-logr/logr"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 // nolint:unused
-// log is for logging in this package.
-var imgLogger = zap.New(pkglog.CustomLogger()).WithName("[Images Webhook]")
 
 // SetupImageWebhookWithManager registers the webhook for Image in the manager.
 func SetupImageWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr).For(&cv1a1.Image{}).
-		WithValidator(&ImageCustomValidator{client: mgr.GetClient()}).
-		WithDefaulter(&ImageCustomDefaulter{client: mgr.GetClient()}).
+		WithValidator(&ImageCustomValidator{
+			client: mgr.GetClient(),
+			logger: zap.New(pkglog.CustomLogger()).WithName("[ImageWebhook]"),
+		}).
+		WithDefaulter(&ImageCustomDefaulter{
+			client: mgr.GetClient(),
+			logger: zap.New(pkglog.CustomLogger()).WithName("[ImageWebhook]"),
+		}).
 		Complete()
 }
 
@@ -53,6 +57,7 @@ func SetupImageWebhookWithManager(mgr ctrl.Manager) error {
 // as it is used only for temporary operations and does not need to be deeply copied.
 type ImageCustomDefaulter struct {
 	client client.Client
+	logger logr.Logger
 }
 
 var _ webhook.CustomDefaulter = &ImageCustomDefaulter{}
@@ -64,11 +69,10 @@ func (d *ImageCustomDefaulter) Default(_ context.Context, obj runtime.Object) er
 	if !ok {
 		return fmt.Errorf("expected an Image object but got %T", obj)
 	}
-	imgLogger.Info("Defaulting for Image", "name", img.GetName())
 
 	provider := &cv1a1.ProviderProfile{}
 	if err := d.client.Get(context.Background(), client.ObjectKey{Name: img.Spec.ProviderRef, Namespace: img.Namespace}, provider); err != nil {
-		imgLogger.Info("unable to fetch ProviderProfile for image", "name", img.Spec.ProviderRef)
+		d.logger.Info("unable to fetch ProviderProfile for image", "name", img.Spec.ProviderRef)
 		return client.IgnoreNotFound(err)
 	}
 
@@ -90,6 +94,7 @@ func (d *ImageCustomDefaulter) Default(_ context.Context, obj runtime.Object) er
 // as this struct is used only for temporary operations and does not need to be deeply copied.
 type ImageCustomValidator struct {
 	client client.Client
+	logger logr.Logger
 }
 
 var _ webhook.CustomValidator = &ImageCustomValidator{}
@@ -100,11 +105,10 @@ func (v *ImageCustomValidator) ValidateCreate(_ context.Context, obj runtime.Obj
 	if !ok {
 		return nil, fmt.Errorf("expected a Image object but got %T", obj)
 	}
-	imgLogger.Info("Validation for Image upon creation", "name", img.GetName())
 
 	provider := &cv1a1.ProviderProfile{}
 	if err := v.client.Get(context.Background(), client.ObjectKey{Name: img.Spec.ProviderRef, Namespace: img.Namespace}, provider); err != nil {
-		imgLogger.Info("unable to fetch ProviderProfile for image", "name", img.Spec.ProviderRef)
+		v.logger.Info("unable to fetch ProviderProfile for image", "name", img.Spec.ProviderRef)
 		return nil, err
 	}
 
@@ -117,7 +121,7 @@ func (v *ImageCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj 
 	if !ok {
 		return nil, fmt.Errorf("expected a Image object for the newObj but got %T", newObj)
 	}
-	imgLogger.Info("Validation for Image upon update", "name", image.GetName())
+	v.logger.Info("Validation for Image upon update", "name", image.GetName())
 
 	return nil, nil
 }
@@ -128,7 +132,7 @@ func (v *ImageCustomValidator) ValidateDelete(ctx context.Context, obj runtime.O
 	if !ok {
 		return nil, fmt.Errorf("expected a Image object but got %T", obj)
 	}
-	imgLogger.Info("Validation for Image upon deletion", "name", image.GetName())
+	v.logger.Info("Validation for Image upon deletion", "name", image.GetName())
 
 	return nil, nil
 }
@@ -138,13 +142,16 @@ func (d *ImageCustomDefaulter) addUpdateDefaultLabels(img *cv1a1.Image, provider
 		img.Labels = make(map[string]string)
 	}
 
-	defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
-		return zone.DefaultZone
-	})
-	if ok {
-		img.Labels["skycluster.io/provider-zone"] = defaultZone.Name
-	}
+	// defaultZone, ok := lo.Find(provider.Spec.Zones, func(zone cv1a1.ZoneSpec) bool {
+	// 	return zone.DefaultZone
+	// })
+	// if ok {
+	// 	img.Labels["skycluster.io/provider-zone"] = defaultZone.Name
+	// }
+
 	img.Labels["skycluster.io/provider-platform"] = provider.Spec.Platform
 	img.Labels["skycluster.io/provider-region"] = provider.Spec.Region
+	img.Labels["skycluster.io/provider-profile"] = provider.Name
+	img.Labels["skycluster.io/managed-by"] = "skycluster"
 	return img.Labels
 }

@@ -69,7 +69,7 @@ Conditions: [Ready, JobRunning, ResyncRequired]
 - No changes, [N ResyncRequired, N JobRunning], within threshold: requeue 12 hours
 
 - Set static status: st.region
-- If not a cloud provider, set the status and trigger ProviderProfile controller
+- If not a cloud provider, copy spec to status, [Ready Y] and trigger ProviderProfile controller
 
 - Changes Detected && JobRunning: [conflict] set [N Ready, Y ResyncRequired], requeue 
 - ResyncRequired: 
@@ -110,7 +110,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	if !lo.Contains([]string{"aws", "azure", "gcp"}, pf.Spec.Platform) {
+	if !lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
 		if pf.Annotations == nil { pf.Annotations = make(map[string]string) }
 		pf.Annotations["skycluster.io/image-ref"] = img.Name
 		if err := r.Patch(ctx, pf, client.MergeFrom(pf.DeepCopy())); err != nil {
@@ -120,6 +120,8 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			r.Recorder.Event(img, corev1.EventTypeWarning, "ProviderProfileUpdateFailed", msg)
 			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
 		}
+		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "image does not require fetching data.")
+		st.Images = img.Spec.Images // copy spec to status
 	}
 
 	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
