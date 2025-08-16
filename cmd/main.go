@@ -47,6 +47,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	wbhkcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
+	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
@@ -278,6 +279,7 @@ func main() {
 	if err := (&corecontroller.DeviceNodeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[DeviceNode]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DeviceNode")
 		os.Exit(1)
@@ -376,6 +378,13 @@ func main() {
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
 		if err := wbhkcv1a1.SetupInstanceTypeWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "InstanceType")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcorev1alpha1.SetupDeviceNodeWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DeviceNode")
 			os.Exit(1)
 		}
 	}

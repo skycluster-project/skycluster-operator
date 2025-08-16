@@ -22,33 +22,31 @@ import (
 
 // DeviceNodeSpec defines the desired state of DeviceNode
 type DeviceNodeSpec struct {
-	ProviderRef string       `json:"providerRef"`
-	DeviceSpec  []DeviceSpec `json:"deviceSpec"`
+	ProviderRef string `json:"providerRef"`
+	Zone        string `json:"zone" yaml:"zone"`
+	CPUs        int    `json:"cpus" yaml:"cpus"`
+	RAM         string `json:"ram" yaml:"ram"`
+	GPU         []GPU  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Price       string `json:"price,omitempty" yaml:"price,omitempty"`
+	NameLabel   string `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
 }
 
 // DeviceNodeStatus defines the observed state of DeviceNode.
 type DeviceNodeStatus struct {
-	Region      string       `json:"region"`
-	DevicesSpec []DeviceSpec `json:"devicesSpec"`
-}
-
-type DeviceSpec struct {
-	ZoneRef string    `json:"zoneRef"`
-	COREs   int       `json:"cores"`
-	RAM     string    `json:"ram"`
-	GPU     DeviceGPU `json:"gpu"`
-}
-
-type DeviceGPU struct {
-	Enabled      bool   `json:"enabled"`
-	Manufacturer string `json:"manufacturer"`
-	Count        int    `json:"count"`
-	Model        string `json:"model"`
-	Memory       string `json:"memory"`
+	Region    string `json:"region"`
+	Zone      string `json:"zone" yaml:"zone"`
+	CPUs      int    `json:"cpus" yaml:"cpus"`
+	RAM       string `json:"ram" yaml:"ram"`
+	GPU       []GPU  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	Price     string `json:"price,omitempty" yaml:"price,omitempty"`
+	NameLabel string `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
+// +kubebuilder:printcolumn:name="Zone",type="string",JSONPath=".status.zone"
+// +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 
 // DeviceNode is the Schema for the devicenodes API
 type DeviceNode struct {
