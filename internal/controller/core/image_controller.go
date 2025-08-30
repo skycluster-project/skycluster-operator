@@ -126,7 +126,11 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
 	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
-	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
+	lastUpdateTime, err := GetTimeAnnotation(img, "skycluster.io/last-update-time")
+	withinThreshold := false
+	if err == nil && lastUpdateTime != nil {
+		withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
+	}
 
 	if !specChanged && withinThreshold && !jobRunning && !reconcileRequired {
 		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "image", img.Name, "lastUpdateTime", st.LastUpdateTime.Time)
@@ -271,16 +275,23 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 		// no more work
 		st.LastUpdateTime = metav1.NewTime(now)
+		SetTimeAnnotation(img, "skycluster.io/last-update-time", metav1.NewTime(now))
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = img.GetGeneration()
 		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
 		r.Logger.Info("Runner Pod finished", "name", req.Name, "image", img.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
 
+		if err := r.Update(ctx, img); err != nil {return ctrl.Result{}, err}
 		if err := r.Status().Update(ctx, img); err != nil { return ctrl.Result{}, err }
 		return ctrl.Result{}, nil
 	}
-
 }
+
+/*
+
+HELPER FUNCTIONS
+
+*/
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -536,7 +547,7 @@ func (r *ImageReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.Provide
 
 	imgYamlData, err2 := pkgenc.EncodeObjectToYAML(img.Status.Images)
 
-	if err2 == nil {cm.Data["flavors.yaml"] = imgYamlData}
+	if err2 == nil {cm.Data["images.yaml"] = imgYamlData}
 
 	if err := r.Update(ctx, &cm); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for images: %w", err)

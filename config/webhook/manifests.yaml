@@ -30,6 +30,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /mutate-core-skycluster-io-v1alpha1-devicenode
+  failurePolicy: Fail
+  name: mdevicenode-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - devicenodes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /mutate-core-skycluster-io-v1alpha1-image
   failurePolicy: Fail
   name: mimage-v1alpha1.kb.io
@@ -43,6 +63,26 @@ webhooks:
     - UPDATE
     resources:
     - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-core-skycluster-io-v1alpha1-instancetype
+  failurePolicy: Fail
+  name: minstancetype-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - instancetypes
   sideEffects: None
 - admissionReviewVersions:
   - v1
@@ -76,6 +116,26 @@ webhooks:
     service:
       name: webhook-service
       namespace: system
+      path: /validate-core-skycluster-io-v1alpha1-devicenode
+  failurePolicy: Fail
+  name: vdevicenode-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - devicenodes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
       path: /validate-core-skycluster-io-v1alpha1-image
   failurePolicy: Fail
   name: vimage-v1alpha1.kb.io
@@ -89,6 +149,26 @@ webhooks:
     - UPDATE
     resources:
     - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-core-skycluster-io-v1alpha1-instancetype
+  failurePolicy: Fail
+  name: vinstancetype-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - instancetypes
   sideEffects: None
 - admissionReviewVersions:
   - v1

@@ -49,6 +49,7 @@ type ImageOffering struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
+// +kubebuilder:printcolumn:name="Last_Update",type=string,JSONPath=".status.lastUpdateTime"
 // +kubebuilder:subresource:status
 
 // Image is the Schema for the images API

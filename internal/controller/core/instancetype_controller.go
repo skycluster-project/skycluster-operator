@@ -128,8 +128,12 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	
 	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
 	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
-	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
-
+	lastUpdateTime, err := GetTimeAnnotation(it, "skycluster.io/last-update-time")
+	withinThreshold := false
+	if err == nil && lastUpdateTime != nil {
+		withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
+	}
+	
 	if !specChanged && withinThreshold && !jobRunning && !reconcileRequired {
 		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "instanceType", it.Name, "lastUpdateTime", st.LastUpdateTime.Time)
 		return ctrl.Result{RequeueAfter: hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
@@ -271,16 +275,26 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// no more work
 		st.LastUpdateTime = metav1.NewTime(now)
+		SetTimeAnnotation(it, "skycluster.io/last-update-time", metav1.NewTime(now))
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = it.GetGeneration()
 		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
 		msg := fmt.Sprintf("Runner Pod finished [%s]", pod.Status.Phase)
 		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
 		
+		if err := r.Update(ctx, it); err != nil {return ctrl.Result{}, err}
 		if err := r.Status().Update(ctx, it); err != nil { return ctrl.Result{}, err }
 		return ctrl.Result{}, nil
 	}
 }
+
+
+/*
+
+HELPER FUNCTIONS
+
+*/
+
 
 func (r *InstanceTypeReconciler) updateProviderProfile(ctx context.Context, pf *cv1a1.ProviderProfile, it *cv1a1.InstanceType) error {
 	if err := r.Get(ctx, client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, pf); err != nil {

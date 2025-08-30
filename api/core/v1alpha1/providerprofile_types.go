@@ -49,6 +49,7 @@ type ZoneSpec struct {
 
 // ProviderProfileStatus defines the observed state of ProviderProfile.
 type ProviderProfileStatus struct {
+	Platform                  string     `json:"platform,omitempty"`
 	Region                    string     `json:"region,omitempty"`
 	Zones                     []ZoneSpec `json:"zones,omitempty"`
 	ObservedGeneration        int64      `json:"observedGeneration,omitempty"`
@@ -58,6 +59,7 @@ type ProviderProfileStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Platform",type="string",JSONPath=".status.platform"
 // +kubebuilder:printcolumn:name="Region",type="string",JSONPath=".status.region"
 // +kubebuilder:printcolumn:name="Ready",type=string,JSONPath=`.status.conditions[?(@.type=="Ready")].status`
 

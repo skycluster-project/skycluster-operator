@@ -19,6 +19,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+func SetTimeAnnotation(obj metav1.Object, key string, t metav1.Time) {
+    anns := obj.GetAnnotations()
+    if anns == nil {
+        anns = map[string]string{}
+    }
+    anns[key] = t.UTC().Format(time.RFC3339) // serialize
+    obj.SetAnnotations(anns)
+}
+
+// retrieve metav1.Time from annotations
+func GetTimeAnnotation(obj metav1.Object, key string) (*metav1.Time, error) {
+    anns := obj.GetAnnotations()
+    v, ok := anns[key]
+    if !ok {
+        return nil, fmt.Errorf("annotation %q not found", key)
+    }
+    parsed, err := time.Parse(time.RFC3339, v) // parse
+    if err != nil {
+        return nil, err
+    }
+    mt := metav1.NewTime(parsed)
+    return &mt, nil
+}
+
 func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
 	return workqueue.NewTypedMaxOfRateLimiter(
 		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),

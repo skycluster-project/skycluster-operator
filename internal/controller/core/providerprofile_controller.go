@@ -153,6 +153,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	// no spec changes, poll data, set static status
+	pf.Status.Platform = pf.Spec.Platform
 	pf.Status.Region = pf.Spec.Region
 	pf.Status.Zones = pf.Spec.Zones
 
