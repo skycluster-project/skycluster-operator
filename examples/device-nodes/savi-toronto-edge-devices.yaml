@@ -1,0 +1,123 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-nano1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: Jetson Nano
+      ram: 4GB
+      gpu: 
+        count: 472
+        unit: GFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Maxwell
+        model: JetsonNano
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-google-edge-tpu1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: Google Edge TPU
+      ram: 1GB
+      gpu: 
+        count: 4
+        unit: TOPS
+        enabled: true
+        manufacturer: Google
+        model: EdgeTPU
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-orin1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: Jetson Orin
+      ram: 64GB
+      gpu: 
+        count: 275
+        unit: TOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Ampere
+        model: JetsonOrin
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-nuc11-1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: Nuc 11
+      ram: 6GB
+      gpu: 
+        count: 52
+        unit: TOPS
+        enabled: true
+        manufacturer: Intel
+        memory: Integrated
+        model: Nuc11
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-agx-xavier1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: Jetson AGX Xavier
+      ram: 32GB
+      gpu: 
+        count: 11
+        unit: TFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Volta
+        model: JetsonAGXXavier
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-geforce-3080-1
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    configs:
+      name: GeForce 3080
+      ram: 12GB
+      gpu: 
+        count: 1
+        enabled: true
+        manufacturer: NVIDIA
+        memory: 12GB
+        model: GeForce3080
+      price: "0"

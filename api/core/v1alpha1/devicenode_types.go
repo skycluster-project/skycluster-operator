@@ -23,23 +23,21 @@ import (
 // DeviceNodeSpec defines the desired state of DeviceNode
 type DeviceNodeSpec struct {
 	ProviderRef string `json:"providerRef"`
-	Zone        string `json:"zone" yaml:"zone"`
-	CPUs        int    `json:"cpus" yaml:"cpus"`
-	RAM         string `json:"ram" yaml:"ram"`
-	GPU         []GPU  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-	Price       string `json:"price,omitempty" yaml:"price,omitempty"`
-	NameLabel   string `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
+	DeviceSpec  DeviceZoneSpec `json:"deviceSpec"`
+}
+
+type DeviceZoneSpec struct {
+	Type      string             `json:"type,omitempty" yaml:"type,omitempty"`
+	Zone      string             `json:"zone,omitempty" yaml:"zone,omitempty"`
+	Configs   InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
 }
 
 // DeviceNodeStatus defines the observed state of DeviceNode.
 type DeviceNodeStatus struct {
-	Region    string `json:"region"`
-	Zone      string `json:"zone" yaml:"zone"`
-	CPUs      int    `json:"cpus" yaml:"cpus"`
-	RAM       string `json:"ram" yaml:"ram"`
-	GPU       []GPU  `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-	Price     string `json:"price,omitempty" yaml:"price,omitempty"`
-	NameLabel string `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
+	Region             string         `json:"region,omitempty"`
+	LastUpdateTime     metav1.Time     `json:"lastUpdateTime,omitempty"`
+	ObservedGeneration int64           `json:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

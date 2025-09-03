@@ -1,0 +1,16 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: savi-vaughan-default
+spec:
+  platform: openstack
+  region: VAUGHAN
+  regionAlias: vaughan # Optional
+  continent: north-america # Optional
+  enabled: true
+  zones:
+    - name: default
+      locationName: default # Optional
+      defaultZone: true
+      enabled: true
+      type: edge

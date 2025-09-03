@@ -1,0 +1,21 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: gcp-northamerica-northeast2
+spec:
+  platform: gcp
+  region: northamerica-northeast2
+  regionAlias: us-east
+  continent: north-america
+  enabled: true
+  zones:
+    - name: northamerica-northeast2-b
+      locationName: northamerica-northeast2-b
+      defaultZone: true
+      enabled: true
+      type: cloud
+    - name: northamerica-northeast2-c
+      locationName: northamerica-northeast2-c
+      defaultZone: false
+      enabled: true
+      type: cloud

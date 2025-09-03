@@ -1,0 +1,21 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: aws-us-west-2
+spec:
+  platform: aws
+  region: us-west-2
+  regionAlias: us-west
+  continent: north-america
+  enabled: true
+  zones:
+    - name: us-west-2a
+      locationName: us-west-2a
+      defaultZone: true
+      enabled: true
+      type: cloud
+    - name: us-west-2b
+      locationName: us-west-2b
+      defaultZone: false
+      enabled: true
+      type: cloud

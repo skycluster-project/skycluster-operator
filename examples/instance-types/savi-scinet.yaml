@@ -1,0 +1,76 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: InstanceType
+metadata:
+  name: savi-scinet-default-instance-types
+spec:
+  providerRef: savi-scinet-default
+  # Must match the provider name in the Provider resource
+
+  offerings:
+    - zone: default
+      zoneOfferings:
+        - name: m1.small
+          nameLabel: 1vCPU-2GB
+          price: "0.0015"
+          ram: 2GB
+          vcpus: 1
+        - name: n1.small
+          nameLabel: 1vCPU-4GB
+          vcpus: 1
+          ram: 4GB
+          price: "0.02"
+        - name: o1.small
+          nameLabel: 1vCPU-8GB
+          vcpus: 1
+          ram: 8GB
+          price: "0.04"
+        - name: m1.medium
+          nameLabel: 2vCPU-4GB
+          vcpus: 2
+          ram: 4GB
+          price: "0.02"
+        - name: n1.medium
+          nameLabel: 2vCPU-8GB
+          vcpus: 2
+          ram: 8GB
+          price: "0.04"
+        - name: o1.medium
+          nameLabel: 2vCPU-16GB
+          vcpus: 2
+          ram: 16GB
+          price: "0.08"
+        - name: p1.medium
+          nameLabel: 2vCPU-32GB
+          vcpus: 2
+          ram: 32GB
+          price: "0.16"
+        - name: p1.large
+          nameLabel: 4vCPU-8GB
+          vcpus: 4
+          ram: 8GB
+          price: "0.08"
+        - name: p2.large
+          nameLabel: 4vCPU-16GB
+          vcpus: 4
+          ram: 16GB
+          price: "0.16"
+        - name: p3.large
+          nameLabel: 4vCPU-32GB
+          vcpus: 4
+          ram: 32GB
+          price: "0.32"
+        - name: m1.xlarge
+          nameLabel: 8vCPU-16GB
+          vcpus: 8
+          ram: 16GB
+          price: "0.16"
+        - name: m2.xlarge
+          nameLabel: 8vCPU-32GB
+          vcpus: 8
+          ram: 32GB
+          price: "0.32"
+        - name: s1.large
+          nameLabel: 12vCPU-32GB
+          vcpus: 12
+          ram: 32GB
+          price: "0.48"

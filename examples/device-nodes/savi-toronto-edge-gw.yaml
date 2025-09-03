@@ -1,0 +1,9 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-gw
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: gateway
+    zone: default

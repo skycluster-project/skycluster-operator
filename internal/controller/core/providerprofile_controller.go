@@ -118,6 +118,11 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 		pf.Status.DependencyManager.SetDependency(cm.Name, "ConfigMap", pf.Namespace)
 
+		// if resync is required, set it to false
+		if resyncRequired {
+			pf.Status.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "NoResyncNeeded", "Resync not needed, waiting for dependencies to be ready")
+		}
+
 		// Platform is one of the major clouds? then ensure dependencies:
 		if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
 			img, err := r.ensureImages(ctx, pf)
@@ -583,7 +588,7 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 	switch platform {
 	case "aws":
 		for _, z := range zoneNames {
-			zo := buildZoneOfferings(z, []string{"t3", "t4g"})
+			zo := buildZoneOfferings(z, []string{"t3.", "m5.", "p3."})
 			zoneOfferings = append(zoneOfferings, zo)
 		}
 		// "m5", "m6g", "c5", "c6g", "r5", "r6g"

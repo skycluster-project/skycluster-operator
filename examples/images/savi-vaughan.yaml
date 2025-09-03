@@ -1,0 +1,18 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: Image
+metadata:
+  name: savi-vaughan-default-images
+spec:
+  providerRef: savi-vaughan-default
+  # Must match the provider profile name in the Provider resource
+
+  images:
+    - zone: default
+      nameLabel: ubuntu-20.04
+      name: ubuntu-20.04 # Local identifier corresponding to the image
+    - zone: default
+      nameLabel: ubuntu-22.04
+      name: ubuntu-22.04 # Local identifier corresponding to the image
+    - zone: default
+      nameLabel: ubuntu-24.04
+      name: ubuntu-24.04 # Local identifier corresponding to the image

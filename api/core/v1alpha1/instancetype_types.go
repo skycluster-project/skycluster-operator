@@ -47,9 +47,9 @@ type ZoneOfferings struct {
 
 type InstanceOffering struct {
 	Name        string   `json:"name,omitempty" yaml:"name,omitempty"`
-	NameLabel   string   `json:"nameLabel" yaml:"nameLabel"`
-	VCPUs       int      `json:"vcpus" yaml:"vcpus"`
-	RAM         string   `json:"ram" yaml:"ram"`
+	NameLabel   string   `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
+	VCPUs       int      `json:"vcpus,omitempty" yaml:"vcpus,omitempty"`
+	RAM         string   `json:"ram,omitempty" yaml:"ram,omitempty"`
 	Price       string   `json:"price,omitempty" yaml:"price,omitempty"`
 	GPU         GPU      `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 	Generation  string   `json:"generation,omitempty" yaml:"generation,omitempty"`
@@ -58,16 +58,17 @@ type InstanceOffering struct {
 }
 
 type GPU struct {
-	Enabled      bool   `json:"enabled" yaml:"enabled"`
-	Manufacturer string `json:"manufacturer" yaml:"manufacturer"`
-	Count        int    `json:"count" yaml:"count"`
-	Model        string `json:"model" yaml:"model"`
-	Memory       string `json:"memory" yaml:"memory"`
+	Enabled      bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Manufacturer string `json:"manufacturer,omitempty" yaml:"manufacturer,omitempty"`
+	Count        int    `json:"count,omitempty" yaml:"count,omitempty"`
+	Model        string `json:"model,omitempty" yaml:"model,omitempty"`
+	Unit         string `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Memory       string `json:"memory,omitempty" yaml:"memory,omitempty"`
 }
 
 type Spot struct {
-	Price   string `json:"price" yaml:"price"`
-	Enabled bool   `json:"enabled" yaml:"enabled"`
+	Price   string `json:"price,omitempty" yaml:"price,omitempty"`
+	Enabled bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 // +kubebuilder:object:root=true

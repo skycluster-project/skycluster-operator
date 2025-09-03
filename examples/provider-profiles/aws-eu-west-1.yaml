@@ -1,0 +1,21 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: aws-eu-west-1
+spec:
+  platform: aws
+  region: eu-west-1
+  regionAlias: eu-west
+  continent: europe
+  enabled: true
+  zones:
+    - name: eu-west-1a
+      locationName: eu-west-1a
+      defaultZone: true
+      enabled: true
+      type: cloud
+    - name: eu-west-1b
+      locationName: eu-west-1b
+      defaultZone: false
+      enabled: true
+      type: cloud

@@ -1,0 +1,21 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: gcp-us-south1
+spec:
+  platform: gcp
+  region: us-south1
+  regionAlias: us-east
+  continent: north-america
+  enabled: true
+  zones:
+    - name: us-south1-b
+      locationName: us-south1-b
+      defaultZone: true
+      enabled: true
+      type: cloud
+    - name: us-south1-c
+      locationName: us-south1-c
+      defaultZone: false
+      enabled: true
+      type: cloud

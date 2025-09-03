@@ -128,11 +128,12 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 	
 	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
 	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
-	lastUpdateTime, err := GetTimeAnnotation(it, "skycluster.io/last-update-time")
-	withinThreshold := false
-	if err == nil && lastUpdateTime != nil {
-		withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
-	}
+	// lastUpdateTime, err := GetTimeAnnotation(it, "skycluster.io/last-update-time")
+	// withinThreshold := false
+	// if err == nil && lastUpdateTime != nil {
+	// 	withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
+	// }
+	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
 	
 	if !specChanged && withinThreshold && !jobRunning && !reconcileRequired {
 		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "instanceType", it.Name, "lastUpdateTime", st.LastUpdateTime.Time)
@@ -275,14 +276,14 @@ func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request
 
 		// no more work
 		st.LastUpdateTime = metav1.NewTime(now)
-		SetTimeAnnotation(it, "skycluster.io/last-update-time", metav1.NewTime(now))
+		// SetTimeAnnotation(it, "skycluster.io/last-update-time", metav1.NewTime(now))
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = it.GetGeneration()
 		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
 		msg := fmt.Sprintf("Runner Pod finished [%s]", pod.Status.Phase)
 		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
 		
-		if err := r.Update(ctx, it); err != nil {return ctrl.Result{}, err}
+		// if err := r.Update(ctx, it); err != nil {return ctrl.Result{}, err}
 		if err := r.Status().Update(ctx, it); err != nil { return ctrl.Result{}, err }
 		return ctrl.Result{}, nil
 	}

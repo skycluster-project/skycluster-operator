@@ -1,0 +1,21 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: aws-ca-central-1
+spec:
+  platform: aws
+  region: ca-central-1
+  regionAlias: ca-central
+  continent: north-america
+  enabled: true
+  zones:
+    - name: ca-central-1a
+      locationName: ca-central-1a
+      defaultZone: true
+      enabled: true
+      type: cloud
+    - name: ca-central-1b
+      locationName: ca-central-1b
+      defaultZone: false
+      enabled: true
+      type: cloud

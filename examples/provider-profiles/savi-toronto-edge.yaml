@@ -1,0 +1,16 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: ProviderProfile
+metadata:
+  name: savi-toronto-edge
+spec:
+  platform: baremetal
+  region: toronto
+  regionAlias: toronto # Optional
+  continent: north-america # Optional
+  enabled: true
+  zones:
+    - name: default
+      locationName: BahenBuilding # Optional
+      defaultZone: true
+      enabled: true
+      type: edge

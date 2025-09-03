@@ -1,0 +1,81 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: InstanceType
+metadata:
+  name: savi-vaughan-default-instance-types
+spec:
+  providerRef: savi-vaughan-default
+  # Must match the provider name in the Provider resource
+
+  offerings:
+    - zone: default
+      zoneOfferings:
+        - name: m1.tiny
+          nameLabel: 1vCPU-512MB
+          vcpus: 1
+          ram: 512MB
+          price: "0.0005"
+        - name: m1.small
+          nameLabel: 1vCPU-2GB
+          vcpus: 1
+          ram: 2GB
+          price: "0.0015"
+        - name: n1.small
+          nameLabel: 1vCPU-4GB
+          vcpus: 1
+          ram: 4GB
+          price: "0.02"
+        - name: o1.small
+          nameLabel: 1vCPU-8GB
+          vcpus: 1
+          ram: 8GB
+          price: "0.04"
+        - name: m1.medium
+          nameLabel: 2vCPU-4GB
+          vcpus: 2
+          ram: 4GB
+          price: "0.02"
+        - name: n1.medium
+          nameLabel: 2vCPU-8GB
+          vcpus: 2
+          ram: 8GB
+          price: "0.04"
+        - name: o1.medium
+          nameLabel: 2vCPU-16GB
+          vcpus: 2
+          ram: 16GB
+          price: "0.08"
+        - name: p1.medium
+          nameLabel: 2vCPU-32GB
+          vcpus: 2
+          ram: 32GB
+          price: "0.16"
+        - name: m1.large
+          nameLabel: 4vCPU-8GB
+          vcpus: 4
+          ram: 8GB
+          price: "0.08"
+        - name: m1.large16
+          nameLabel: 4vCPU-16GB
+          vcpus: 4
+          ram: 16GB
+          price: "0.16"
+        - name: m1.large32
+          nameLabel: 4vCPU-32GB
+          vcpus: 4
+          ram: 32GB
+          price: "0.32"
+        - name: o1.large
+          nameLabel: 4vCPU-64GB
+          vcpus: 4
+          ram: 64GB
+          price: "0.64"
+        - name: r1.large
+          nameLabel: 8vCPU-32GB
+          vcpus: 8
+          ram: 32GB
+          price: "0.32"
+        - name: s1.large
+          nameLabel: 12vCPU-32GB
+          vcpus: 12
+          ram: 32GB
+          price: "0.48"
