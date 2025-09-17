@@ -1,6 +1,6 @@
 # SkyCluster
 
-## Installation
+## Setup
 
 For development environments use `kind` to create a local cluster to run `skycluster-operator`:
 
@@ -27,3 +27,13 @@ nodes:
   - role: control-plane
 ```
 
+
+## Develop
+
+```bash
+mkdir -p /var/log/skycluster
+go run cmd/main.go \
+  --webhook-cert-path /home/ubuntu/keys/webhook-certs \
+  --webhook-port 9445
+  --log-dir /var/log/skycluster/operator.log
+```
