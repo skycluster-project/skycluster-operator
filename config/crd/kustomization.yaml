@@ -16,6 +16,7 @@ resources:
 - bases/core.skycluster.io_providerprofiles.yaml
 - bases/core.skycluster.io_egresscosts.yaml
 - bases/core.skycluster.io_devicenodes.yaml
+# - ../webhook
 - ../webhook-local
 # +kubebuilder:scaffold:crdkustomizeresource
 
