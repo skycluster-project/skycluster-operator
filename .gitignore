@@ -30,3 +30,4 @@ SkyCluster
 config/webhook/manifests-local.yaml
 
 config
+*.notindexed.*

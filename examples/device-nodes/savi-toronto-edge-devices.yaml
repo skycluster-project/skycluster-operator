@@ -7,6 +7,51 @@ spec:
   deviceSpec:
     type: worker
     zone: default
+    privateIp: 10.23.100.201
+    configs:
+      name: Jetson Nano
+      ram: 4GB
+      gpu: 
+        count: 472
+        unit: GFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Maxwell
+        model: JetsonNano
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-nano2
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.202
+    configs:
+      name: Jetson Nano
+      ram: 4GB
+      gpu: 
+        count: 472
+        unit: GFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Maxwell
+        model: JetsonNano
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-nano3
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.203
     configs:
       name: Jetson Nano
       ram: 4GB
@@ -28,6 +73,49 @@ spec:
   deviceSpec:
     type: worker
     zone: default
+    privateIp: 10.23.100.211
+    configs:
+      name: Google Edge TPU
+      ram: 1GB
+      gpu: 
+        count: 4
+        unit: TOPS
+        enabled: true
+        manufacturer: Google
+        model: EdgeTPU
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-google-edge-tpu2
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.212
+    configs:
+      name: Google Edge TPU
+      ram: 1GB
+      gpu: 
+        count: 4
+        unit: TOPS
+        enabled: true
+        manufacturer: Google
+        model: EdgeTPU
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-google-edge-tpu3
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.213
     configs:
       name: Google Edge TPU
       ram: 1GB
@@ -48,9 +136,32 @@ spec:
   deviceSpec:
     type: worker
     zone: default
+    privateIp: 10.23.100.225
     configs:
-      name: Jetson Orin
-      ram: 64GB
+      name: Jetson AGX Orin
+      ram: 32GB
+      gpu: 
+        count: 275
+        unit: TOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Ampere
+        model: JetsonOrin
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-orin2
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.226
+    configs:
+      name: Jetson AGX Orin
+      ram: 32GB
       gpu: 
         count: 275
         unit: TOPS
@@ -69,6 +180,29 @@ spec:
   deviceSpec:
     type: worker
     zone: default
+    privateIp: 10.23.100.221
+    configs:
+      name: Nuc 11
+      ram: 6GB
+      gpu: 
+        count: 52
+        unit: TOPS
+        enabled: true
+        manufacturer: Intel
+        memory: Integrated
+        model: Nuc11
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-nuc11-3
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.223
     configs:
       name: Nuc 11
       ram: 6GB
@@ -90,6 +224,51 @@ spec:
   deviceSpec:
     type: worker
     zone: default
+    privateIp: 10.23.100.221
+    configs:
+      name: Jetson AGX Xavier
+      ram: 32GB
+      gpu: 
+        count: 11
+        unit: TFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Volta
+        model: JetsonAGXXavier
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-agx-xavier2
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.222
+    configs:
+      name: Jetson AGX Xavier
+      ram: 32GB
+      gpu: 
+        count: 11
+        unit: TFLOPS
+        enabled: true
+        manufacturer: NVIDIA
+        memory: Volta
+        model: JetsonAGXXavier
+      price: "0"
+---
+apiVersion: core.skycluster.io/v1alpha1
+kind: DeviceNode
+metadata:
+  name: savi-toronto-edge-jetson-agx-xavier3
+spec:
+  providerRef: savi-toronto-edge
+  deviceSpec:
+    type: worker
+    zone: default
+    privateIp: 10.23.100.223
     configs:
       name: Jetson AGX Xavier
       ram: 32GB

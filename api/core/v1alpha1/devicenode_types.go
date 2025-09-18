@@ -17,24 +17,30 @@ limitations under the License.
 package v1alpha1
 
 import (
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // DeviceNodeSpec defines the desired state of DeviceNode
 type DeviceNodeSpec struct {
 	ProviderRef string `json:"providerRef"`
-	DeviceSpec  DeviceZoneSpec `json:"deviceSpec"`
+	DeviceSpec  *DeviceZoneSpec `json:"deviceSpec"`
 }
 
 type DeviceZoneSpec struct {
-	Type      string             `json:"type,omitempty" yaml:"type,omitempty"`
-	Zone      string             `json:"zone,omitempty" yaml:"zone,omitempty"`
+	Type      string             `json:"type" yaml:"type"`
+	Zone      string             `json:"zone" yaml:"zone"`
+	PrivateIp string             `json:"privateIp" yaml:"privateIp"`
+	PublicIp  string             `json:"publicIp,omitempty" yaml:"publicIp,omitempty"`
 	Configs   InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
 }
 
 // DeviceNodeStatus defines the observed state of DeviceNode.
 type DeviceNodeStatus struct {
 	Region             string         `json:"region,omitempty"`
+	Zone               string         `json:"zone,omitempty"`
 	LastUpdateTime     metav1.Time     `json:"lastUpdateTime,omitempty"`
 	ObservedGeneration int64           `json:"observedGeneration,omitempty"`
 	Conditions         []metav1.Condition `json:"conditions,omitempty"`
@@ -74,4 +80,14 @@ type DeviceNodeList struct {
 
 func init() {
 	SchemeBuilder.Register(&DeviceNode{}, &DeviceNodeList{})
+}
+
+
+func (s *DeviceNodeStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    string(condition),
+		Status:  status,
+		Reason:  reason,
+		Message: msg,
+	})
 }

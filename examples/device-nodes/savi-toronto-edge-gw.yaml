@@ -5,5 +5,7 @@ metadata:
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
+    publicIp: x.y.z.w
+    privateIp: 10.23.100.22
     type: gateway
     zone: default
