@@ -6,6 +6,21 @@ spec:
   providerRef: savi-toronto-edge
   deviceSpec:
     publicIp: x.y.z.w
+    # by default the subnet mask is /24 for this network
     privateIp: 10.23.100.22
+    auth:
+      privateKeySecretRef:
+        name: savi-toronto-edge-ssh-key
+        key: privateKey
+      username: ubuntu
     type: gateway
     zone: default
+---
+# Secret is created separately, for example:
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: savi-toronto-edge-ssh-key
+# type: Opaque
+# data:
+#   privateKey: | <base64-encoded-private-key>

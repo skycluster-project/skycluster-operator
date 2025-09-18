@@ -34,7 +34,20 @@ type DeviceZoneSpec struct {
 	Zone      string             `json:"zone" yaml:"zone"`
 	PrivateIp string             `json:"privateIp" yaml:"privateIp"`
 	PublicIp  string             `json:"publicIp,omitempty" yaml:"publicIp,omitempty"`
-	Configs   InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
+	Auth      *DeviceNodeAuth    `json:"auth" yaml:"auth"`
+	Configs   *InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
+}
+
+type DeviceNodeAuth struct {
+	Username            string               `json:"username" yaml:"username"`
+	PrivateKeySecretRef *SecretKeySelector 	`json:"privateKeySecretRef,omitempty" yaml:"privateKeySecretRef,omitempty"`
+}
+
+type SecretKeySelector struct {
+	// Name of the secret
+	Name string `json:"name" yaml:"name"`
+	// Key in the secret
+	Key string `json:"key" yaml:"key"`
 }
 
 // DeviceNodeStatus defines the observed state of DeviceNode.
