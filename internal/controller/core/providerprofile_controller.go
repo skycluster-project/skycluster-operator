@@ -162,6 +162,30 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	pf.Status.Region = pf.Spec.Region
 	pf.Status.Zones = pf.Spec.Zones
 
+	switch strings.ToLower(pf.Spec.Platform) {
+	case "aws", "azure", "gcp", "openstack":
+		return r.handlerPlatformCloud(ctx, pf, req)
+	case "baremetal":
+		return r.handlerPlatformBareMetal(ctx, pf, req)
+	default:
+		r.Logger.Info("Custom platform detected, no specific handler implemented", "platform", pf.Spec.Platform)
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "CustomPlatform", "Custom platform detected, no specific handler implemented")
+		// r.handlerPlatformCustom(pf) // not implemented
+	}
+
+	_ = r.Status().Update(ctx, pf)
+	return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+}
+
+// SetupWithManager sets up the controller with the Manager.
+func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&cv1a1.ProviderProfile{}).
+		Named("core-providerprofile").
+		Complete(r)
+}
+
+func (r *ProviderProfileReconciler) handlerPlatformCloud(ctx context.Context, pf *cv1a1.ProviderProfile, req ctrl.Request) (ctrl.Result, error) {
 	// fetch latest image and instance type data (if "ready") and update configmap
 	img, err1 := r.fetchImageData(ctx, pf)
 	if err1 != nil {
@@ -200,7 +224,6 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-
 	}
 
 	// If no error and dep objects are ready, update the status
@@ -226,18 +249,30 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		r.Logger.Info("Image or InstanceType not ready, requeuing", "name", req.Name, "ProviderProfile", pf.Name)
 	}
 
-	// not ready:
-	pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "NotReady", "Image or InstanceType is not ready")
+	pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DependenciesNotReady", "Image or InstanceType not ready, requeuing")
 	_ = r.Status().Update(ctx, pf)
 	return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
-func (r *ProviderProfileReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&cv1a1.ProviderProfile{}).
-		Named("core-providerprofile").
-		Complete(r)
+// handlerPlatformBareMetal creates a ConfigMap and set status as ready.
+func (r *ProviderProfileReconciler) handlerPlatformBareMetal(ctx context.Context, pf *cv1a1.ProviderProfile, req ctrl.Request) (ctrl.Result, error) {
+	if err := r.updateConfigMap(ctx, pf, nil, nil); err != nil {
+	
+		msg := fmt.Sprintf("Failed to update ConfigMap for ProviderProfile %s: %v", pf.Name, err)
+		r.Logger.Error(err, msg)
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "ConfigMapUpdateFailed", msg)
+		_ = r.Status().Update(ctx, pf)
+	
+		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+
+	} else {
+
+		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "Ready", "BareMetal platform, configmap configured.")
+		_ = r.Status().Update(ctx, pf)
+		// we are good for now, request a requeue after a longer period
+		return ctrl.Result{RequeueAfter: 12 * time.Hour}, nil
+	
+	}
 }
 
 // create or update
