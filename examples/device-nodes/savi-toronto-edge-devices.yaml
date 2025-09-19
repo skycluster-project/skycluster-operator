@@ -9,9 +9,6 @@ spec:
     zone: default
     privateIp: 10.23.100.201
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: jetson
     configs:
       name: Jetson Nano
@@ -36,9 +33,6 @@ spec:
     zone: default
     privateIp: 10.23.100.202
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: jetson
     configs:
       name: Jetson Nano
@@ -63,9 +57,6 @@ spec:
     zone: default
     privateIp: 10.23.100.203
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: jetson
     configs:
       name: Jetson Nano
@@ -90,9 +81,6 @@ spec:
     zone: default
     privateIp: 10.23.100.211
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: mendel
     configs:
       name: Google Edge TPU
@@ -116,9 +104,6 @@ spec:
     zone: default
     privateIp: 10.23.100.212
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: mendel
     configs:
       name: Google Edge TPU
@@ -142,9 +127,6 @@ spec:
     zone: default
     privateIp: 10.23.100.213
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: mendel
     configs:
       name: Google Edge TPU
@@ -168,9 +150,6 @@ spec:
     zone: default
     privateIp: 10.23.100.225
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: nvidia
     configs:
       name: Jetson AGX Orin
@@ -195,9 +174,6 @@ spec:
     zone: default
     privateIp: 10.23.100.226
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: nvidia
     configs:
       name: Jetson AGX Orin
@@ -222,9 +198,6 @@ spec:
     zone: default
     privateIp: 10.23.100.221
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: ubuntu
     configs:
       name: Nuc 11
@@ -249,9 +222,6 @@ spec:
     zone: default
     privateIp: 10.23.100.223
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: ubuntu
     configs:
       name: Nuc 11
@@ -276,9 +246,6 @@ spec:
     zone: default
     privateIp: 10.23.100.221
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: nvidia
     configs:
       name: Jetson AGX Xavier
@@ -303,9 +270,6 @@ spec:
     zone: default
     privateIp: 10.23.100.222
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: nvidia
     configs:
       name: Jetson AGX Xavier
@@ -330,9 +294,6 @@ spec:
     zone: default
     privateIp: 10.23.100.223
     auth:
-      privateKeySecretRef:
-        name: savi-toronto-edge-ssh-key
-        key: privateKey
       username: nvidia
     configs:
       name: Jetson AGX Xavier
