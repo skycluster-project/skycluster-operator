@@ -57,6 +57,15 @@ type ProviderProfileReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/finalizers,verbs=update
 
 /*
+
+- On spec change or ResyncRequired, the reconciler ensures a ConfigMap and (for aws/azure/gcp) Image and InstanceType resources exist, then records them in pf.Status.DependencyManager with SetDependency(name, kind, namespace).
+- It sets pf.Status.ObservedGeneration and marks Ready=false ("FreshReconcile") after creating/ensuring dependencies, then adds a finalizer (hint.FN_Dependency) and requeues.
+- The finalizer protects cleanup: on deletion, if the finalizer is present the reconciler calls cleanUp (best-effort cleanup of managed resources like ConfigMaps), removes the finalizer, and updates the object so deletion can complete.
+- If no spec changes, the reconciler populates static status fields (Platform/Region/Zones) and delegates to platform-specific handlers (cloud platforms → handlerPlatformCloud; baremetal → handlerPlatformBareMetal) which may further observe or reconcile dependencies.
+- ResyncRequired condition is cleared when handled; Ready is set False for fresh or unhandled/custom platforms. Reconciliation always requeues periodically (RequeueAfter hint).
+*/
+
+/*
 Reconcile behavior:
 
 - Being deleted: clean up and return
@@ -64,7 +73,7 @@ Reconcile behavior:
 - Spec changes OR ResyncRequired condition:
 	- Ensure ConfigMap
 
-	- set statis status
+	- set status
 
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
@@ -523,6 +532,28 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 			cm.Data["flavors.yaml"] = itYamlData
 			updated = true
 		}
+	}
+
+	// add managed cluster (EKS/GKE/AKS generic mapping) service and costs
+	// fixed cost values for common managed control plane offerings and
+	// an estimated overhead cost for a "system" node type (hosting e.g. karpenter).
+	managedClusters := []map[string]any{
+		{
+			"name":               "managedKubernetes",
+			"price":              lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
+			"overheads": []map[string]any{
+				{
+					"instanceType":  lo.If(pf.Spec.Platform == "aws", "m5.large").ElseIf(pf.Spec.Platform == "gcp", "e2-standard-2").Else("Standard_D2s_v3"),
+					"cost": lo.If(pf.Spec.Platform == "aws", "0.096").ElseIf(pf.Spec.Platform == "gcp", "0.067").Else("0.096"),
+					"count": 1,
+				},
+			},
+		},
+	}
+	managedYaml, err3 := pkgenc.EncodeObjectToYAML(managedClusters)
+	if err3 == nil {
+		cm.Data["managed-clusters.yaml"] = managedYaml
+		updated = true
 	}
 
 	if updated {
