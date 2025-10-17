@@ -18,36 +18,11 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
-
-// type Location struct {
-// 	// Name is the name of the location e.g. aws, gcp, os (OpenStack)
-// 	Name string `json:"name,omitempty"`
-// 	// Type is the type of the location e.g. cloud, nte, edge
-// 	Type string `json:"type,omitempty"`
-// 	// Region is the region of the location
-// 	Region string `json:"region,omitempty"`
-// 	// Zone is the zone of the location
-// 	Zone string `json:"zone,omitempty"`
-// }
-
-// type LocationSet struct {
-// 	AllOf []B1 `json:"allOf,omitempty"`
-// }
-// type B1 struct {
-// 	AnyOf    []Location `json:"anyOf,omitempty"`
-// 	Location Location   `json:"providerRef,omitempty"`
-// }
-
-type LocationConstraint struct {
-	// Permitted is the list of locations that are permitted
-	Permitted h.LocationPermittedRuleSet `json:"permitted,omitempty"`
-	// Required is the list of locations that are required for deployment
-	Required h.LocationRequiredRuleSet `json:"required,omitempty"`
-}
 
 type CustomMetric struct {
 	// Name is the name of the custom metric
@@ -67,7 +42,7 @@ type DeploymentPolicyItem struct {
 	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
 	// LocationConstraint is the location constraint for the component
-	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
+	LocationConstraint hv1a1.LocationConstraint `json:"locationConstraint,omitempty"`
 }
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.
@@ -82,6 +57,7 @@ type DeploymentPolicyStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status",description="The sync status of the DeploymentPolicy"
 
 // DeploymentPolicy is the Schema for the deploymentpolicies API.
 type DeploymentPolicy struct {
@@ -105,38 +81,12 @@ func init() {
 	SchemeBuilder.Register(&DeploymentPolicy{}, &DeploymentPolicyList{})
 }
 
-func (in *DeploymentPolicy) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	var c *metav1.Condition
-	for i := range in.Status.Conditions {
-		if in.Status.Conditions[i].Type == ctype {
-			c = &in.Status.Conditions[i]
-		}
-	}
-	if c == nil {
-		in.addCondition(ctype, status, reason, message)
-	} else {
-		// check message ?
-		if c.Status == status && c.Reason == reason && c.Message == message {
-			return
-		}
-		now := metav1.Now()
-		if c.Status != status {
-			c.LastTransitionTime = now
-		}
-		c.Status = status
-		c.Reason = reason
-		c.Message = message
-	}
-}
 
-func (in *DeploymentPolicy) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	now := metav1.Now()
-	c := metav1.Condition{
-		Type:               ctype,
-		LastTransitionTime: now,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-	}
-	in.Status.Conditions = append(in.Status.Conditions, c)
+func (s *DeploymentPolicyStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    string(condition),
+		Status:  status,
+		Reason:  reason,
+		Message: msg,
+	})
 }

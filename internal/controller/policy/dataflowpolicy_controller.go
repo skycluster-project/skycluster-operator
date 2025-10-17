@@ -20,14 +20,18 @@ import (
 	"context"
 	"fmt"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
 // DataflowPolicyReconciler reconciles a DataflowPolicy object
@@ -41,74 +45,64 @@ type DataflowPolicyReconciler struct {
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=dataflowpolicies/finalizers,verbs=update
 
 func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	loggerName := "DFPolicy"
-	logger.Info(fmt.Sprintf("[%s]\t Reconciling DataflowPolicy for [%s]", loggerName, req.Name))
+	logger, ln := log.FromContext(ctx), "DFPolicy"
+	logger.Info(fmt.Sprintf("[%s]\t Reconciling DataflowPolicy for [%s]", ln, req.NamespacedName))
 
-	dfPolicy := &policyv1alpha1.DataflowPolicy{}
-	if err := r.Get(ctx, req.NamespacedName, dfPolicy); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy not found.", loggerName))
+	df := &policyv1alpha1.DataflowPolicy{}
+	if err := r.Get(ctx, req.NamespacedName, df); err != nil {
+		logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy not found.", ln))
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	dfPolicy.SetCondition("Synced", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
-
-	// Append the name of the DataflowPolicy to the skycluster.core.skycluster.io/v1alpha1 object
-	// If the SkyCluster object does not exist, create it and then append the name
-
-	skyCluster := &corev1alpha1.SkyCluster{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: dfPolicy.Namespace,
-		Name:      dfPolicy.Name,
-	}, skyCluster); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t SkyCluster not found. Creating it.", loggerName))
-		skyCluster = &corev1alpha1.SkyCluster{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      dfPolicy.Name,
-				Namespace: dfPolicy.Namespace,
-			},
-			Spec: corev1alpha1.SkyClusterSpec{
-				DataflowPolicyRef: corev1.LocalObjectReference{
-					Name: dfPolicy.Name,
-				},
-			},
-		}
-		// Set the DataflowPolicy as the owner of the SkyCluster
-		if err := ctrl.SetControllerReference(dfPolicy, skyCluster, r.Scheme); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to set owner reference.", loggerName))
+	key := client.ObjectKey{Namespace: df.Namespace, Name: df.Name}
+	ilp := &corev1alpha1.ILPTask{}
+	if err := r.Get(ctx, key, ilp); err != nil {
+		if client.IgnoreNotFound(err) == nil {
+			newILP := &corev1alpha1.ILPTask{
+				ObjectMeta: metav1.ObjectMeta{Name: df.Name, Namespace: df.Namespace},
+				Spec:       corev1alpha1.ILPTaskSpec{DataflowPolicyRef: corev1.LocalObjectReference{Name: df.Name}},
+			}
+			if err := ctrl.SetControllerReference(df, newILP, r.Scheme); err != nil {
+				logger.Error(err, fmt.Sprintf("[%s]\t Failed to set owner reference.", ln))
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, newILP); err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					logger.Info(fmt.Sprintf("[%s]\t ILPTask created concurrently, requeueing.", ln))
+					return ctrl.Result{Requeue: true}, nil
+				}
+				logger.Error(err, fmt.Sprintf("[%s]\t Failed to create ILPTask.", ln))
+				return ctrl.Result{}, err
+			}
+		} else {
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to get ILPTask.", ln))
 			return ctrl.Result{}, err
 		}
-		if err := r.Create(ctx, skyCluster); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to create SkyCluster.", loggerName))
-			// We requeue the request to update the SkyCluster object
-			// This may happen because DPPolicy controller may create the SkyCluster object at the same time
-			return ctrl.Result{Requeue: true}, client.IgnoreAlreadyExists(err)
-		}
-		dfPolicy.SetCondition("Ready", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
-		if err := r.Status().Update(ctx, dfPolicy); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DataflowPolicy status.", loggerName))
-			return ctrl.Result{}, err
-		}
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
-	// The SkyCluster object exists, update it by appending the name of the DataflowPolicy
-	if skyCluster.Spec.DataflowPolicyRef.Name == "" {
-		logger.Info(fmt.Sprintf("[%s]\t Updating SkyCluster.", loggerName))
-		skyCluster.Spec.DataflowPolicyRef.Name = dfPolicy.Name
-		if err := r.Update(ctx, skyCluster); err != nil {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update SkyCluster.", loggerName))
+	} else if ilp.Spec.DataflowPolicyRef.Name == "" {
+		orig := ilp.DeepCopy()
+		ilp.Spec.DataflowPolicyRef.Name = df.Name
+		if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
+			if apierrors.IsConflict(err) {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update ILPTask.", ln))
 			return ctrl.Result{}, err
 		}
 	}
 
-	dfPolicy.SetCondition("Ready", metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
-	if err := r.Status().Update(ctx, dfPolicy); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DataflowPolicy status.", loggerName))
+	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		cur := &policyv1alpha1.DataflowPolicy{}
+		if err := r.Get(ctx, req.NamespacedName, cur); err != nil {
+			return err
+		}
+		cur.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
+		return r.Status().Update(ctx, cur)
+	}); err != nil {
+		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DataflowPolicy status.", ln))
 		return ctrl.Result{}, err
 	}
-	logger.Info(fmt.Sprintf("[%s]\t Reconciled DataflowPolicy for [%s]", loggerName, req.Name))
 
+	logger.Info(fmt.Sprintf("[%s]\t Reconciled DataflowPolicy for [%s]", ln, req.NamespacedName))
 	return ctrl.Result{}, nil
 }
 

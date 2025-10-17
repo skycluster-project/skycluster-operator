@@ -18,7 +18,10 @@ package v1alpha1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 type DataDapendency struct {
@@ -50,6 +53,7 @@ type DataflowPolicyStatus struct {
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status",description="The sync status of the DataflowPolicy"
 
 // DataflowPolicy is the Schema for the dataflowpolicies API.
 type DataflowPolicy struct {
@@ -73,38 +77,12 @@ func init() {
 	SchemeBuilder.Register(&DataflowPolicy{}, &DataflowPolicyList{})
 }
 
-func (in *DataflowPolicy) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	var c *metav1.Condition
-	for i := range in.Status.Conditions {
-		if in.Status.Conditions[i].Type == ctype {
-			c = &in.Status.Conditions[i]
-		}
-	}
-	if c == nil {
-		in.addCondition(ctype, status, reason, message)
-	} else {
-		// check message ?
-		if c.Status == status && c.Reason == reason && c.Message == message {
-			return
-		}
-		now := metav1.Now()
-		if c.Status != status {
-			c.LastTransitionTime = now
-		}
-		c.Status = status
-		c.Reason = reason
-		c.Message = message
-	}
-}
 
-func (in *DataflowPolicy) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	now := metav1.Now()
-	c := metav1.Condition{
-		Type:               ctype,
-		LastTransitionTime: now,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-	}
-	in.Status.Conditions = append(in.Status.Conditions, c)
+func (s *DataflowPolicyStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    string(condition),
+		Status:  status,
+		Reason:  reason,
+		Message: msg,
+	})
 }

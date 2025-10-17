@@ -43,6 +43,7 @@ import (
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
@@ -253,20 +254,20 @@ func main() {
 	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
 	// 	os.Exit(1)
 	// }
-	// if err = (&policycontroller.DataflowPolicyReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
-	// 	os.Exit(1)
-	// }
-	// if err = (&policycontroller.DeploymentPolicyReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
-	// 	os.Exit(1)
-	// }
+	if err = (&policycontroller.DataflowPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
+		os.Exit(1)
+	}
+	if err = (&policycontroller.DeploymentPolicyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
+		os.Exit(1)
+	}
 	if err := (&corecontroller.InstanceTypeReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -345,13 +346,13 @@ func main() {
 	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyCluster")
 	// 	os.Exit(1)
 	// }
-	// if err = (&corecontroller.ILPTaskReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
-	// 	os.Exit(1)
-	// }
+	if err = (&corecontroller.ILPTaskReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
+		os.Exit(1)
+	}
 	// if err = (&svccontroller.SkyAppReconciler{
 	// 	Client: mgr.GetClient(),
 	// 	Scheme: mgr.GetScheme(),

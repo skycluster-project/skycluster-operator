@@ -37,21 +37,15 @@ var (
 )
 
 type LocationConstraint struct {
-	Required  LocationRequiredRuleSet  `json:"required,omitempty"`
-	Permitted LocationPermittedRuleSet `json:"permitted,omitempty"`
+	// Required specifies location sets that must be satisfied (AND logic).
+	Required []LocationCondition `json:"required,omitempty"`
+	// Permitted specifies locations that are allowed (OR logic).
+	Permitted []ProviderRefSpec `json:"permitted,omitempty"`
 }
 
-type LocationPermittedRuleSet struct {
-	AllOf []ProviderRefSpec `json:"allOf,omitempty"`
-}
-
-type LocationRequiredRuleSet struct {
-	AllOf []LocationRule `json:"allOf,omitempty"`
-}
-
-type LocationRule struct {
-	AnyOf       []ProviderRefSpec `json:"anyOf,omitempty"`
-	ProviderRef *ProviderRefSpec  `json:"providerRef,omitempty"`
+// LocationCondition represents a group of alternative location rules (OR logic).
+type LocationCondition struct {
+	AnyOf []ProviderRefSpec `json:"anyOf,omitempty"`
 }
 
 type VirtualService struct {
@@ -88,11 +82,12 @@ type SkyComponent struct {
 }
 
 type ProviderRefSpec struct {
-	ProviderName        string `json:"providerName,omitempty"`
-	ProviderRegion      string `json:"providerRegion,omitempty"`
-	ProviderRegionAlias string `json:"providerRegionAlias,omitempty"`
-	ProviderType        string `json:"providerType,omitempty"`
-	ProviderZone        string `json:"providerZone,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Platform    string `json:"platform,omitempty"`
+	Type        string `json:"type,omitempty"`
+	Region      string `json:"region,omitempty"`
+	RegionAlias string `json:"regionAlias,omitempty"`
+	Zone        string `json:"zone,omitempty"`
 }
 
 type ConnectionSecret struct {
