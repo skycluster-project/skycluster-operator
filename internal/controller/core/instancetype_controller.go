@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+	http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,7 +13,6 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
 package core
 
 import (
@@ -52,9 +51,10 @@ import (
 // InstanceTypeReconciler reconciles a InstanceType object
 type InstanceTypeReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Logger   logr.Logger
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
+	Logger     logr.Logger
+	KubeClient kubernetes.Interface // cached kube client for logs
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=instancetypes,verbs=get;list;watch;create;update;patch;delete
@@ -87,239 +87,271 @@ Conditions: [Ready, JobRunning, ResyncRequired]
 // Note: if the platform is not one of the cloud providers, we need to triger ProviderProfile controller
 
 func (r *InstanceTypeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger.Info("Reconciler started.", "name", req.Name)
+	logger := r.Logger.WithValues("instancetype", req.NamespacedName.String())
+	logger.Info("Reconcile started")
 
-	// Fetch the InstanceType resource
+	// ensure kube client for logs is initialized (lazy)
+	if r.KubeClient == nil {
+		cfg := ctrl.GetConfigOrDie()
+		kc, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			logger.Error(err, "failed to create kube client for logs")
+			return ctrl.Result{}, err
+		}
+		r.KubeClient = kc
+	}
+
+	// Fetch InstanceType
 	it := &cv1a1.InstanceType{}
 	if err := r.Get(ctx, req.NamespacedName, it); err != nil {
-		r.Logger.Info("unable to fetch InstanceType", "name", req.Name)
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if client.IgnoreNotFound(err) == nil {
+			logger.Info("InstanceType not found, ignoring", "name", req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "unable to fetch InstanceType", "name", req.NamespacedName)
+		return ctrl.Result{}, err
 	}
 
 	// quick exit for deletions
 	if !it.DeletionTimestamp.IsZero() {
-		r.Logger.Info("InstanceType is being deleted, skipping reconciliation", "name", req.Name, "instanceType", it.Name)
+		logger.Info("InstanceType is being deleted, skipping reconciliation", "name", it.Name)
 		return ctrl.Result{}, nil
 	}
 
-	// convenience handles
-	st, now := &it.Status, time.Now()
+	st := &it.Status
+	now := time.Now()
 	specChanged := it.Generation != it.Status.ObservedGeneration
 
 	// Referenced ProviderProfile
 	pf := &cv1a1.ProviderProfile{}
 	if err := r.Get(ctx, client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, pf); err != nil {
-		msg := fmt.Sprintf("failed to get ProviderProfile %s: %s", it.Spec.ProviderRef, err.Error())
-		return ctrl.Result{}, errors.Wrap(err, msg)
+		logger.Error(err, "failed to get ProviderProfile", "providerRef", it.Spec.ProviderRef)
+		return ctrl.Result{}, errors.Wrapf(err, "failed to get ProviderProfile %s", it.Spec.ProviderRef)
 	}
-	if !lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
-		if pf.Annotations == nil { pf.Annotations = make(map[string]string) }
+
+	platform := strings.ToLower(pf.Spec.Platform)
+	isCloud := lo.Contains([]string{"aws", "azure", "gcp"}, platform)
+
+	// If not a cloud provider, annotate/update PF, copy spec to status and return early.
+	if !isCloud {
+		if pf.Annotations == nil {
+			pf.Annotations = map[string]string{}
+		}
 		pf.Annotations["skycluster.io/instancetype-ref"] = it.Name
 		if err := r.Patch(ctx, pf, client.MergeFrom(pf.DeepCopy())); err != nil {
-			// we need to ensure the PF is updated, so if there is an error here, we requeue
-			msg := fmt.Sprintf("failed to patch ProviderProfile %s", pf.Name)
-			r.Logger.Error(err, "failed to patch ProviderProfile", "name", req.Name, "instanceType", it.Name)
-			r.Recorder.Event(it, corev1.EventTypeWarning, "ProviderProfileUpdateFailed", msg)
+			logger.Error(err, "failed to patch ProviderProfile", "provider", pf.Name, "instancetype", it.Name)
+			r.Recorder.Event(it, corev1.EventTypeWarning, "ProviderProfileUpdateFailed", fmt.Sprintf("failed to patch ProviderProfile %s: %v", pf.Name, err))
 			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
 		}
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "image does not require fetching data.")
-		st.Offerings = it.Spec.Offerings // copy spec to status
-	}
-	
-	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
-	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
-	// lastUpdateTime, err := GetTimeAnnotation(it, "skycluster.io/last-update-time")
-	// withinThreshold := false
-	// if err == nil && lastUpdateTime != nil {
-	// 	withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
-	// }
-	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
-	
-	if !specChanged && withinThreshold && !jobRunning && !reconcileRequired {
-		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "instanceType", it.Name, "lastUpdateTime", st.LastUpdateTime.Time)
-		return ctrl.Result{RequeueAfter: hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
-	}
-
-	st.Region = pf.Spec.Region // static status
-
-	if !lo.Contains([]string{"aws", "azure", "gcp"}, pf.Spec.Platform) {
-		// we trigger ProviderProfile by adding an annotation
-		err := r.updateProviderProfile(ctx, pf, it)
-		if err != nil {
-			r.Logger.Error(err, "failed to update ProviderProfile", "name", req.Name, "instanceType", it.Name)
+		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "InstanceType does not require fetching data.")
+		st.Offerings = it.Spec.Offerings
+		st.Region = pf.Spec.Region
+		st.ObservedGeneration = it.GetGeneration()
+		if err := r.Status().Update(ctx, it); err != nil {
+			logger.Error(err, "failed to update InstanceType status", "instancetype", it.Name)
 			return ctrl.Result{RequeueAfter: 2 * time.Second}, err
 		}
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "InstanceType does not required fetching data.")
-		err = r.Status().Update(ctx, it)
-		if err != nil {
-			r.Logger.Error(err, "failed to update InstanceType status", "name", req.Name, "instanceType", it.Name)
-			return ctrl.Result{RequeueAfter: 2 * time.Second}, err
-		}
-		r.Logger.Info("InstanceType does not require fetching data, requeuing without action", "name", req.Name, "instanceType", it.Name)
+		logger.Info("Non-cloud provider - nothing to fetch", "instancetype", it.Name, "provider", pf.Name)
 		return ctrl.Result{}, nil
 	}
 
-	// change detected && in-flight job ==> Requeue: set a NeedsRerun flag
+	// compute flags
+	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
+	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
+	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
+
+	// Fast path: nothing to do
+	if !specChanged && !jobRunning && !reconcileRequired && withinThreshold {
+		requeueAfter := hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)
+		logger.V(1).Info("No changes detected; requeuing", "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	// static status
+	st.Region = pf.Spec.Region
+
+	// spec changed while job running -> mark for re-run
 	if specChanged && jobRunning {
-		r.Logger.Info("Spec changed while a Pod is running", "name", req.Name, "instanceType", it.Name)
+		logger.Info("Spec changed while a job is running; marking for re-run", "instancetype", it.Name)
 		st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "SpecChanged", "Spec changed while a Pod is running")
-		if !reconcileRequired { // if re-run is already set, do not set it again, just requeue
+		if !reconcileRequired {
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "SpecChanged", "Spec changed while a Pod is running")
-			_ = r.Status().Update(ctx, it) // best effort update
+			_ = r.Status().Update(ctx, it) // best effort
 		}
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
-
-
+	// Start a new run if requested
 	if reconcileRequired {
-		
-		// create the Pod for the current spec
+		logger.Info("Resync required - creating runner job", "instancetype", it.Name)
+
 		jsonData, err := r.generateJSON(it.Spec.Offerings)
 		if err != nil {
-			r.Logger.Error(err, "failed to generate JSON for runner Pod", "name", req.Name, "instanceType", it.Name)
+			logger.Error(err, "failed to generate JSON for runner job")
 			r.Recorder.Event(it, corev1.EventTypeWarning, "GenerateJSONFailed", err.Error())
 			return ctrl.Result{}, err
 		}
-		
+
 		job, err := r.buildRunner(it, pf, jsonData)
 		if err != nil {
-			r.Logger.Error(err, "failed to build runner Job for runner", "name", req.Name, "instanceType", it.Name)
+			logger.Error(err, "failed to build runner job")
 			r.Recorder.Event(it, corev1.EventTypeWarning, "BuildJobFailed", err.Error())
 			return ctrl.Result{}, err
 		}
 
-		// Check if a job already exists
-		_, err = r.ensureJobRunner(ctx, job, it, pf)
-		if err != nil {
-			r.Logger.Error(err, "failed to ensure runner Job")
+		if _, err := r.ensureJobRunner(ctx, job, it, pf); err != nil {
+			logger.Error(err, "failed to ensure runner job")
 			return ctrl.Result{}, err
 		}
-		r.Logger.Info("Runner job ensured", "name", req.Name, "instanceType", it.Name, "jobName", job.Name)
-		st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "JobCreated", "Runner Job created")
-		st.ObservedGeneration = it.GetGeneration()
 
+		st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "JobCreated", "Runner Job created")
+		st.SetCondition(hv1a1.JobRunning, metav1.ConditionTrue, "JobCreated", "Runner Job is running")
+		st.ObservedGeneration = it.GetGeneration()
 		if err := r.Status().Update(ctx, it); err != nil {
+			logger.Error(err, "failed to update status after creating job")
 			return ctrl.Result{}, err
 		}
-		// start polling for completion
+
+		logger.Info("Runner job ensured; will poll for completion", "jobName", job.Name)
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
-	// JobRunning
+	// JobRunning path: fetch Pod
 	pod, err := r.fetchPod(ctx, pf, it)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			st.SetCondition(hv1a1.JobRunning, metav1.ConditionFalse, "PodNotFound", "Runner Pod not found, will try to create a new one")
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "PodNotFound", "Runner Pod not found, will try to create a new one")
-			r.Logger.Info("Runner Pod not found, will try to create a new one", "name", req.Name, "instanceType", it.Name)
-			if err2 := r.Status().Update(ctx, it); err2 != nil {return ctrl.Result{}, err2}
+			logger.Info("Runner Pod not found; will try to create a new one", "instancetype", it.Name)
+			if err2 := r.Status().Update(ctx, it); err2 != nil {
+				logger.Error(err2, "failed to update status after missing pod")
+				return ctrl.Result{}, err2
+			}
 			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-			} else {
-			r.Logger.Error(err, "failed to fetch Pod for InstanceType", "name", req.Name, "instanceType", it.Name)
-			return ctrl.Result{}, err
 		}
-	} 
+		logger.Error(err, "failed to fetch pod for InstanceType", "instancetype", it.Name)
+		return ctrl.Result{}, err
+	}
 
-	// Pod exists and now check its phase
+	// Log pod status
 	msg := fmt.Sprintf("Runner Pod status [%s]", pod.Status.Phase)
-	r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase)
+	logger.Info(msg, "podName", pod.Name, "phase", pod.Status.Phase)
 	r.Recorder.Event(it, corev1.EventTypeNormal, "RunnerPodStatus", msg)
-	
+
 	switch pod.Status.Phase {
 	case corev1.PodPending, corev1.PodRunning:
-		// keep polling
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-
-	// 4) collect result, update status, clear runner, possibly start another run
-	default:  // corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown:
-
+	default:
+		// Pod finished
 		st.SetCondition(hv1a1.JobRunning, metav1.ConditionFalse, "PodFinished", "Runner Pod finished")
-		// Pod is finished, but if NeedsRerun is set, we ifgnore it and return to start a new run
+
+		// If a re-run was requested meanwhile, clear and requeue to start next run
 		if meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired)) {
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "StartingNewRun", "Starting a new run as requested")
-			if err := r.Status().Update(ctx, it); err != nil {return ctrl.Result{}, err }
-			// requeue quickly to create the next Pod for the new spec
+			if err := r.Status().Update(ctx, it); err != nil {
+				logger.Error(err, "failed to update status when starting new run")
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{RequeueAfter: time.Second}, nil
 		}
 
-		podOutput, err := r.getPodStdOut(ctx, pod.Name, pod.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get logs from runner Pod %s: %s", pod.Name, err.Error())
-			r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
-			r.Recorder.Event(it, corev1.EventTypeWarning, "GetPodLogsFailed", msg)
-			return ctrl.Result{}, err
-		} 
+		// get pod logs (try harvest container first)
+		podOutput, logErr := r.getPodStdOut(ctx, pod.Name, pod.Namespace, "harvest")
+		if logErr != nil {
+			logger.Error(logErr, "failed to get logs from runner Pod", "pod", pod.Name)
+			r.Recorder.Event(it, corev1.EventTypeWarning, "GetPodLogsFailed", fmt.Sprintf("failed to get logs from runner Pod %s: %v", pod.Name, logErr))
 
-		// If the pod termination reason is completed,
-		// we set the Zones based on the POD message
-		success := pod.Status.Phase == corev1.PodSucceeded && pkgpod.ContainerTerminatedReason(pod) == "Completed"
-		if success {
-			if zones, err := r.decodePodLogJSON(podOutput); err != nil {
-				msg := fmt.Sprintf("Failed to decode image offerings from Pod logs: %s", err.Error())
-				r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
-				r.Recorder.Event(it, corev1.EventTypeWarning, "DecodePodLogFailed", msg)
-				return ctrl.Result{}, err
-			} else { it.Status.Offerings = zones }
-
-			// The configMap is also updated by the ProviderProfile,
-			// I update it here to ensure latest update is applied to CM if manual 
-			// changes are made to the InstanceType
-			if err := r.updateConfigMap(ctx, pf, it); err != nil {
-				msg := fmt.Sprintf("Failed to update/create ConfigMap for image offerings: %s", err.Error())
-				r.Recorder.Event(it, corev1.EventTypeWarning, "ConfigMapUpdateFailed", msg)
-				r.Logger.Error(err, msg, "name", req.Name, "instanceType", it.Name)
+			// mark for retry and requeue
+			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "LogFetchFailed", "Unable to retrieve runner pod logs, will retry")
+			if err := r.Status().Update(ctx, it); err != nil {
+				logger.Error(err, "failed to update status after log fetch failure")
 				return ctrl.Result{}, err
 			}
-			// We let the job controller handle the deletion of the job Pod
+			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 		}
 
-		// no more work
+		// success condition: succeeded + container reason Completed
+		success := pod.Status.Phase == corev1.PodSucceeded && pkgpod.ContainerTerminatedReason(pod) == "Completed"
+		if success {
+			zones, err := r.decodePodLogJSON(podOutput)
+			if err != nil {
+				logger.Error(err, "failed to decode pod output into offerings", "pod", pod.Name)
+				r.Recorder.Event(it, corev1.EventTypeWarning, "DecodePodLogFailed", fmt.Sprintf("failed to decode pod log: %v", err))
+
+				st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DecodeFailed", "Failed to decode offerings from runner pod logs")
+				if err := r.Status().Update(ctx, it); err != nil {
+					logger.Error(err, "failed to update status after decode failure")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+			}
+			it.Status.Offerings = zones
+
+			// Update ConfigMap with latest offerings
+			if err := r.updateConfigMap(ctx, pf, it); err != nil {
+				logger.Error(err, "failed to update/create ConfigMap for offerings", "instancetype", it.Name)
+				r.Recorder.Event(it, corev1.EventTypeWarning, "ConfigMapUpdateFailed", fmt.Sprintf("Failed to update/create ConfigMap for offerings: %v", err))
+
+				st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "ConfigMapFailed", "Failed to update offerings ConfigMap")
+				if err := r.Status().Update(ctx, it); err != nil {
+					logger.Error(err, "failed to update status after configmap failure")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+			}
+		}
+
+		// finalize status
 		st.LastUpdateTime = metav1.NewTime(now)
-		// SetTimeAnnotation(it, "skycluster.io/last-update-time", metav1.NewTime(now))
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = it.GetGeneration()
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
-		msg := fmt.Sprintf("Runner Pod finished [%s]", pod.Status.Phase)
-		r.Logger.Info(msg, "name", req.Name, "instanceType", it.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
-		
-		// if err := r.Update(ctx, it); err != nil {return ctrl.Result{}, err}
-		if err := r.Status().Update(ctx, it); err != nil { return ctrl.Result{}, err }
+		if success {
+			st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
+			logger.Info("Runner Pod finished successfully", "pod", pod.Name)
+		} else {
+			st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PodFailed", fmt.Sprintf("Runner Pod finished with phase %s", pod.Status.Phase))
+			logger.Info("Runner Pod finished unsuccessfully", "pod", pod.Name, "phase", pod.Status.Phase)
+		}
+
+		if err := r.Status().Update(ctx, it); err != nil {
+			logger.Error(err, "failed to update InstanceType status after pod finished")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 }
 
-
-/*
-
-HELPER FUNCTIONS
-
-*/
-
-
 func (r *InstanceTypeReconciler) updateProviderProfile(ctx context.Context, pf *cv1a1.ProviderProfile, it *cv1a1.InstanceType) error {
+	// refresh pf object
 	if err := r.Get(ctx, client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, pf); err != nil {
 		return err
 	}
 	orig := pf.DeepCopy()
-
-	if pf.Annotations == nil { pf.Annotations = map[string]string{} }
+	if pf.Annotations == nil {
+		pf.Annotations = map[string]string{}
+	}
 	pf.Annotations["instancetype-ref"] = it.Name
-
 	return r.Patch(ctx, pf, client.MergeFrom(orig))
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *InstanceTypeReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// initialize kube client once when manager is available
+	cfg := ctrl.GetConfigOrDie()
+	if r.KubeClient == nil {
+		kc, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return err
+		}
+		r.KubeClient = kc
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cv1a1.InstanceType{}).
 		Named("core-instancetype").
 		Complete(r)
 }
 
-// buildRunner creates a runner that finds images based on the spec.
 func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.ProviderProfile, jsonData string) (*batchv1.Job, error) {
-	// fetch provider credentials from the secret
 	cred, err := r.fetchProviderProfileCred(context.Background(), pf)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch provider credentials")
@@ -349,7 +381,6 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 	labels["skycluster.io/job-type"] = "instance-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
 
-	// Create a job Pod that runs the instance finder
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    it.Namespace,
@@ -366,7 +397,7 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 					InitContainers: []corev1.Container{{
 						Name:            "runner",
 						Image:           "etesami/instance-finder:latest",
-						ImagePullPolicy: "Always",
+						ImagePullPolicy: corev1.PullAlways,
 						Env:             envVars,
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},
@@ -386,49 +417,44 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 					},
 				},
 			},
-			BackoffLimit: lo.ToPtr[int32](0), // no retries
-			TTLSecondsAfterFinished: lo.ToPtr[int32](300), // keep the job for 5 minutes after completion
-			ActiveDeadlineSeconds: lo.ToPtr[int64](600), // Kill the job after 10 minutes
+			BackoffLimit:            lo.ToPtr[int32](0),
+			TTLSecondsAfterFinished: lo.ToPtr[int32](300),
+			ActiveDeadlineSeconds:   lo.ToPtr[int64](600),
 		},
 	}
 
 	if err := ctrl.SetControllerReference(it, job, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set controller reference for Job: %w", err)
 	}
-	
 	return job, nil
 }
 
-func (r *InstanceTypeReconciler) getPodStdOut(ctx context.Context, podName, podNS string) (string, error) {
-	var pod corev1.Pod
-	if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNS}, &pod); err != nil {
-		return "", fmt.Errorf("failed to get Pod %s: %w", podName, err)
-	}
-
-	cfg := ctrl.GetConfigOrDie()
-	kubeClient, err := kubernetes.NewForConfig(cfg)
+// getPodStdOut fetches logs for a specific container from the pod (containerName recommended).
+// Falls back to unspecified container if the named container fails.
+func (r *InstanceTypeReconciler) getPodStdOut(ctx context.Context, podName, podNS, containerName string) (string, error) {
+	// Try with container name first
+	opts := &corev1.PodLogOptions{Container: containerName}
+	streamReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, opts)
+	stream, err := streamReq.Stream(ctx)
 	if err != nil {
-		return "", fmt.Errorf("unable to get runner pod's log, failed to create Kubernetes client: %w", err)
+		// fallback: no container specified
+		fallbackReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
+		stream2, err2 := fallbackReq.Stream(ctx)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to get logs for pod %s (container=%s): %v; fallback error: %v", podName, containerName, err, err2)
+		}
+		stream = stream2
 	}
-
-	// Get the logs from the Pod
-	req := kubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
-	rr, err := req.Stream(ctx)
-	if err != nil {
-		return "", fmt.Errorf("failed to get logs for Pod %s: %w", podName, err)
-	}
-	defer rr.Close()
+	defer stream.Close()
 
 	var logs bytes.Buffer
-	if _, err := io.Copy(&logs, rr); err != nil {
-		return "", fmt.Errorf("failed to copy logs for Pod %s: %w", podName, err)
+	if _, err := io.Copy(&logs, stream); err != nil {
+		return "", fmt.Errorf("failed to read logs for pod %s: %w", podName, err)
 	}
-
 	return logs.String(), nil
 }
 
 func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a1.ProviderProfile) (map[string]string, error) {
-	// Fetch the AWS credentials from the secret
 	secrets := &corev1.SecretList{}
 	ll := map[string]string{
 		"skycluster.io/managed-by":        "skycluster",
@@ -446,45 +472,36 @@ func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, p
 	}
 
 	secret := secrets.Items[0]
-	if secret.Data == nil {
-		return nil, fmt.Errorf("no data found in credentials secret")
-	}
-	if len(secret.Data) == 0 {
+	if secret.Data == nil || len(secret.Data) == 0 {
 		return nil, fmt.Errorf("credentials secret is empty")
 	}
 
-	// Convert the secret data to a map
 	cred := make(map[string]string)
-
 	switch pp.Spec.Platform {
 	case "aws":
-		// AWS credentials are expected to be in the secret
 		if _, ok := secret.Data["aws_access_key_id"]; !ok {
-			return nil, fmt.Errorf("AWS credentials secret does not contain 'aws_access_key_id'")
+			return nil, fmt.Errorf("AWS credentials secret missing 'aws_access_key_id'")
 		}
 		if _, ok := secret.Data["aws_secret_access_key"]; !ok {
-			return nil, fmt.Errorf("AWS credentials secret does not contain 'aws_secret_access_key'")
+			return nil, fmt.Errorf("AWS credentials secret missing 'aws_secret_access_key'")
 		}
 		for k, v := range secret.Data {
 			cred[strings.ToUpper(k)] = string(v)
 		}
 	case "azure":
-		// Azure credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
-			return nil, fmt.Errorf("Azure credentials secret does not contain 'configs'")
+			return nil, fmt.Errorf("Azure credentials secret missing 'configs'")
 		}
 		cred["AZ_CONFIG_JSON"] = string(secret.Data["configs"])
 	case "gcp":
-		// GCP credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
-			return nil, fmt.Errorf("GCP credentials secret does not contain 'configs'")
+			return nil, fmt.Errorf("GCP credentials secret missing 'configs'")
 		}
 		cred["GCP_SA_JSON"] = string(secret.Data["configs"])
-		cred["GOOGLE_CLOUD_PROJECT"] = "dummy" // GCP requires a project, but we don't use it in the runner Pod
+		cred["GOOGLE_CLOUD_PROJECT"] = "dummy"
 	default:
 		return nil, fmt.Errorf("unsupported platform %s for credentials secret", pp.Spec.Platform)
 	}
-
 	return cred, nil
 }
 
@@ -492,18 +509,13 @@ func (r *InstanceTypeReconciler) generateJSON(offerings []cv1a1.ZoneOfferings) (
 	type payload struct {
 		Offerings []cv1a1.ZoneOfferings `json:"offerings"`
 	}
-	// Wrap zones in a payload struct
 	wrapped := payload{Offerings: offerings}
-	// Use the wrapped struct to ensure the correct JSON structure
-	// with "zones" as the top-level key
-	jsonDataByte, err := json.Marshal(wrapped)
+	b, err := json.Marshal(wrapped)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal input JSON: %w", err)
 	}
-	// Convert to string and return
-	return string(jsonDataByte), nil
+	return string(b), nil
 }
-
 
 func (r *InstanceTypeReconciler) decodePodLogJSON(jsonData string) ([]cv1a1.ZoneOfferings, error) {
 	var payload struct {
@@ -522,18 +534,12 @@ func (r *InstanceTypeReconciler) decodePodLogJSON(jsonData string) ([]cv1a1.Zone
 // You MUST create this PVC in the namespace where your Pod will run.
 func (r *InstanceTypeReconciler) buildPVCForPV(pvcNS, pvcName string) (*corev1.PersistentVolumeClaim, error) {
 	// Get the default SkyCluster PV
-	var pv *corev1.PersistentVolume
-	if err := r.Get(context.TODO(), types.NamespacedName{Name: hint.SKYCLUSTER_PV_NAME}, pv); err != nil {
+	var pv corev1.PersistentVolume
+	if err := r.Get(context.TODO(), types.NamespacedName{Name: hint.SKYCLUSTER_PV_NAME}, &pv); err != nil {
 		return nil, fmt.Errorf("failed to get default PV: %w", err)
 	}
-	// Ensure the PV is not nil
-	if pv == nil {
-		return nil, fmt.Errorf("default PV %s not found", hint.SKYCLUSTER_PV_NAME)
-	}
 
-	// Derive request size from PV capacity (must be <= PV capacity)
 	reqQty := pv.Spec.Capacity[corev1.ResourceStorage]
-	// Copy access modes (use a subset if you want stricter)
 	am := make([]corev1.PersistentVolumeAccessMode, len(pv.Spec.AccessModes))
 	copy(am, pv.Spec.AccessModes)
 
@@ -566,65 +572,59 @@ func (r *InstanceTypeReconciler) buildPVCForPV(pvcNS, pvcName string) (*corev1.P
 	}, nil
 }
 
-// create the job if does not exist
 func (r *InstanceTypeReconciler) ensureJobRunner(ctx context.Context, job *batchv1.Job, it *cv1a1.InstanceType, pf *cv1a1.ProviderProfile) (*batchv1.Job, error) {
 	existings := &batchv1.JobList{}
 	labels := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	labels["skycluster.io/job-type"] = "instance-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
-	err := r.List(ctx, existings, client.InNamespace(it.Namespace), client.MatchingLabels(labels))
+	if err := r.List(ctx, existings, client.InNamespace(it.Namespace), client.MatchingLabels(labels)); err != nil {
+		return nil, fmt.Errorf("failed to list existing jobs: %w", err)
+	}
+	if len(existings.Items) > 0 {
+		return &existings.Items[0], nil
+	}
 
-	if err == nil && len(existings.Items) > 0 {
-		// already exists, no need to create a new one
-		theJob := &existings.Items[0]
-		return theJob, nil
-	} 
-
-	// set the owner reference for the job
 	if err := ctrl.SetControllerReference(it, job, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set controller reference for Job: %w", err)
 	}
 
-	// does not exist, create a new one
 	if err := r.Create(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("failed to create runner Job: %w", err)
 	}
-	
 	return job, nil
 }
 
 func (r *InstanceTypeReconciler) fetchPod(ctx context.Context, pf *cv1a1.ProviderProfile, it *cv1a1.InstanceType) (*corev1.Pod, error) {
-	var pod corev1.PodList
+	var podList corev1.PodList
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/job-type"] = "instance-finder"
 	ll["skycluster.io/provider-profile"] = pf.Name
 
-	if err := r.List(ctx, &pod, client.InNamespace(it.Namespace), client.MatchingLabels(ll)); err != nil {
+	if err := r.List(ctx, &podList, client.InNamespace(it.Namespace), client.MatchingLabels(ll)); err != nil {
 		return nil, fmt.Errorf("failed to list Pods for InstanceType %s: %w", it.Name, err)
 	}
-	if len(pod.Items) == 0 {
+	if len(podList.Items) == 0 {
 		return nil, apierrors.NewNotFound(corev1.Resource("pod"), fmt.Sprintf("no Pod found for InstanceType %s", it.Name))
 	}
-	if len(pod.Items) > 1 {
+	if len(podList.Items) > 1 {
 		return nil, fmt.Errorf("multiple Pods found for InstanceType %s, expected only one", it.Name)
 	}
-	// return the single Pod found
-	return &pod.Items[0], nil
+	return &podList.Items[0], nil
 }
 
- // If any of the input data is not nil, it will update the ConfigMap with the data.
 func (r *InstanceTypeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, it *cv1a1.InstanceType) error {
-	// early return if both are nil
-	if it == nil { return nil }
+	if it == nil {
+		return nil
+	}
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
 
 	cmList := &corev1.ConfigMapList{}
 	if err := r.List(ctx, cmList, client.MatchingLabels(ll), client.InNamespace(hint.SKYCLUSTER_NAMESPACE)); err != nil {
-		return fmt.Errorf("unable to list ConfigMaps for images: %w", err)
+		return fmt.Errorf("unable to list ConfigMaps for offerings: %w", err)
 	}
 	if len(cmList.Items) != 1 {
-		return fmt.Errorf("error listing ConfigMaps for images: expected 1, got %d", len(cmList.Items))
+		return fmt.Errorf("error listing ConfigMaps for offerings: expected 1, got %d", len(cmList.Items))
 	}
 	cm := cmList.Items[0]
 
@@ -632,12 +632,13 @@ func (r *InstanceTypeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.
 		cm.Data = make(map[string]string)
 	}
 
-	itYamlData, err2 := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
-
-	if err2 == nil {cm.Data["flavors.yaml"] = itYamlData}
+	itYamlData, err := pkgenc.EncodeObjectToYAML(it.Status.Offerings)
+	if err == nil {
+		cm.Data["flavors.yaml"] = itYamlData
+	}
 
 	if err := r.Update(ctx, &cm); err != nil {
-		return fmt.Errorf("failed to update ConfigMap for images: %w", err)
+		return fmt.Errorf("failed to update ConfigMap for offerings: %w", err)
 	}
 	return nil
 }

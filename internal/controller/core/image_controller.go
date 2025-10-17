@@ -33,7 +33,6 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -51,9 +50,10 @@ import (
 // ImageReconciler reconciles a Image object
 type ImageReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Logger   logr.Logger
+	Scheme     *runtime.Scheme
+	Recorder   record.EventRecorder
+	Logger     logr.Logger
+	KubeClient kubernetes.Interface // cached kube client for getting logs efficiently
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=images,verbs=get;list;watch;create;update;patch;delete
@@ -71,231 +71,269 @@ Conditions: [Ready, JobRunning, ResyncRequired]
 - Set static status: st.region
 - If not a cloud provider, copy spec to status, [Ready Y] and trigger ProviderProfile controller
 
-- Changes Detected && JobRunning: [conflict] set [N Ready, Y ResyncRequired], requeue 
-- ResyncRequired: 
+- Changes Detected && JobRunning: [conflict] set [N Ready, Y ResyncRequired], requeue
+- ResyncRequired:
     create a new Job, requeue, [N Ready, Y JobRunning, N ResyncRequired]
-- JobRunning: 
-    - not finished: requeue, 
-		- failed: return
-		- finished:	[N JobRunning, N ResyncRequired]
-			- Failed: return error
-    	- Succeeded: update status and requeue: 12 hours [Y JobSucceeded]
+- JobRunning:
+    - not finished: requeue,
+        - failed: return
+        - finished: [N JobRunning, N ResyncRequired]
+            - Failed: return error
+        - Succeeded: update status and requeue: 12 hours [Y JobSucceeded]
 */
 
-// Note: if the platform is not one of the cloud providers, we need to triger ProviderProfile controller
-
 func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger.Info("Reconciler started.", "name", req.Name)
+	logger := r.Logger.WithValues("image", req.NamespacedName.String())
+	logger.Info("Reconcile started")
 
-	// Fetch the Images resource
+	// lazy-init kube client for logs (cached on reconciler)
+	if r.KubeClient == nil {
+		cfg := ctrl.GetConfigOrDie()
+		kc, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			logger.Error(err, "failed to create kubernetes client for logs")
+			return ctrl.Result{}, err
+		}
+		r.KubeClient = kc
+	}
+
+	// Fetch the Image resource
 	img := &cv1a1.Image{}
 	if err := r.Get(ctx, req.NamespacedName, img); err != nil {
-		r.Logger.Info("unable to fetch Image")
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-	// quick exit for deletions
-	if !img.DeletionTimestamp.IsZero() {
-		r.Logger.Info("Image is being deleted, skipping reconciliation", "name", img.Name)
-		return ctrl.Result{}, nil
-	}
-
-	// convenience handles
-	st, now := &img.Status, time.Now()
-	specChanged := img.Generation != img.Status.ObservedGeneration
-
-	// Referenced ProviderProfile
-	pf := &cv1a1.ProviderProfile{}
-	if err := r.Get(ctx, client.ObjectKey{Name: img.Spec.ProviderRef, Namespace: img.Namespace}, pf); err != nil {
-		err := fmt.Errorf("unable to fetch ProviderProfile for image: %s", img.Spec.ProviderRef)
+		if client.IgnoreNotFound(err) == nil {
+			logger.Info("Image not found, ignoring", "name", req.NamespacedName)
+			return ctrl.Result{}, nil
+		}
+		logger.Error(err, "unable to fetch Image", "name", req.NamespacedName)
 		return ctrl.Result{}, err
 	}
 
-	if !lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
-		if pf.Annotations == nil { pf.Annotations = make(map[string]string) }
-		pf.Annotations["skycluster.io/image-ref"] = img.Name
-		if err := r.Patch(ctx, pf, client.MergeFrom(pf.DeepCopy())); err != nil {
-			// we need to ensure the PF is updated, so if there is an error here, we requeue
-			msg := fmt.Sprintf("failed to patch ProviderProfile %s", pf.Name)
-			r.Logger.Error(err, "failed to patch ProviderProfile", "name", req.Name, "image", img.Name)
-			r.Recorder.Event(img, corev1.EventTypeWarning, "ProviderProfileUpdateFailed", msg)
-			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
-		}
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "image does not require fetching data.")
-		st.Images = img.Spec.Images // copy spec to status
-	}
-
-	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
-	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
-	// lastUpdateTime, err := GetTimeAnnotation(img, "skycluster.io/last-update-time")
-	// withinThreshold := false
-	// if err == nil && lastUpdateTime != nil {
-	// 	withinThreshold = now.Sub(lastUpdateTime.Time) < hint.NormalUpdateThreshold
-	// }
-	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
-
-	if !specChanged && withinThreshold && !jobRunning && !reconcileRequired {
-		r.Logger.Info("No changes detected, requeuing without action", "name", req.Name, "image", img.Name, "lastUpdateTime", st.LastUpdateTime.Time)
-		return ctrl.Result{RequeueAfter: hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)}, nil
-	}
-
-	st.Region = pf.Spec.Region // static status
-
-	if !lo.Contains([]string{"aws", "azure", "gcp"}, pf.Spec.Platform) {
-		// we trigger ProviderProfile by adding an annotation
-		err := r.updateProviderProfile(ctx, pf, img)
-		if err != nil {
-			r.Logger.Error(err, "failed to update ProviderProfile", "name", req.Name, "image", img.Name)
-			return ctrl.Result{RequeueAfter: 2 * time.Second}, err
-		}
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "image does not required fetching data.")
-		err = r.Status().Update(ctx, img)
-		if err != nil {
-			r.Logger.Error(err, "failed to update image status", "name", req.Name, "image", img.Name)
-			return ctrl.Result{RequeueAfter: 2 * time.Second}, err
-		}
-		r.Logger.Info("image does not require fetching data, requeuing without action", "name", req.Name, "image", img.Name)
+	// Quick exit for deletions
+	if !img.DeletionTimestamp.IsZero() {
+		logger.Info("Image is being deleted, skipping reconciliation", "name", img.Name)
 		return ctrl.Result{}, nil
 	}
 
+	st := &img.Status
+	now := time.Now()
+	specChanged := img.Generation != img.Status.ObservedGeneration
 
-	// change detected && in-flight job ==> Requeue: set a NeedsRerun flag
+	// Fetch ProviderProfile referenced by the image
+	pf := &cv1a1.ProviderProfile{}
+	if err := r.Get(ctx, client.ObjectKey{Name: img.Spec.ProviderRef, Namespace: img.Namespace}, pf); err != nil {
+		logger.Error(err, "unable to fetch ProviderProfile", "providerRef", img.Spec.ProviderRef, "image", img.Name)
+		return ctrl.Result{}, fmt.Errorf("unable to fetch ProviderProfile for image %s: %w", img.Spec.ProviderRef, err)
+	}
+
+	platform := strings.ToLower(pf.Spec.Platform)
+	isCloud := lo.Contains([]string{"aws", "azure", "gcp"}, platform)
+
+	// If provider is not a cloud platform, annotate PF and copy spec to status then return
+	if !isCloud {
+		if pf.Annotations == nil {
+			pf.Annotations = map[string]string{}
+		}
+		pf.Annotations["skycluster.io/image-ref"] = img.Name
+		if err := r.Patch(ctx, pf, client.MergeFrom(pf.DeepCopy())); err != nil {
+			logger.Error(err, "failed to patch ProviderProfile", "provider", pf.Name, "image", img.Name)
+			r.Recorder.Event(img, corev1.EventTypeWarning, "ProviderProfileUpdateFailed", fmt.Sprintf("failed to patch ProviderProfile %s: %v", pf.Name, err))
+			return ctrl.Result{RequeueAfter: 1 * time.Second}, err
+		}
+		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "HybridEdgeCloud", "image does not require fetching data.")
+		st.Images = img.Spec.Images
+		st.Region = pf.Spec.Region
+		st.ObservedGeneration = img.GetGeneration()
+		if err := r.Status().Update(ctx, img); err != nil {
+			logger.Error(err, "failed to update image status", "image", img.Name)
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, err
+		}
+		logger.Info("Non-cloud provider - nothing to fetch", "image", img.Name, "provider", pf.Name)
+		return ctrl.Result{}, nil
+	}
+
+	// compute current flags
+	jobRunning := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.JobRunning))
+	reconcileRequired := meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired))
+	withinThreshold := !st.LastUpdateTime.IsZero() && now.Sub(st.LastUpdateTime.Time) < hint.NormalUpdateThreshold
+
+	// No changes and within threshold - fast requeue
+	if !specChanged && !jobRunning && !reconcileRequired && withinThreshold {
+		requeueAfter := hint.NormalUpdateThreshold - now.Sub(st.LastUpdateTime.Time)
+		logger.V(1).Info("No changes detected; requeuing", "requeueAfter", requeueAfter)
+		return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	}
+
+	// update static region
+	st.Region = pf.Spec.Region
+
+	// If spec changed while job running, mark for resync and requeue
 	if specChanged && jobRunning {
-		r.Logger.Info("Spec changed while a Pod is running", "name", req.Name, "image", img.Name)
+		logger.Info("Spec changed while job running - marking for re-run", "image", img.Name)
 		st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "SpecChanged", "Spec changed while a Pod is running")
-		if !reconcileRequired { // if re-run is already set, do not set it again, just requeue
-			r.Logger.Info("Image spec changed, marking for re-run and returning")
+		if !reconcileRequired {
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "SpecChanged", "Spec changed while a Pod is running")
-			_ = r.Status().Update(ctx, img) // best effort update
+			_ = r.Status().Update(ctx, img) // best-effort
 		}
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
-
+	// If we need to start a new run, create the job and return
 	if reconcileRequired {
-		
-		// create the Pod for the current spec
+		logger.Info("Resync required - creating runner job", "image", img.Name, "providerProfile", pf.Name)
+
 		jsonData, err := r.generateJSON(pf.Spec.Zones, img.Spec.Images)
 		if err != nil {
-			r.Logger.Error(err, "failed to generate input JSON for image-finder Pod")
+			logger.Error(err, "failed to generate input JSON for image-finder Pod")
 			r.Recorder.Event(img, corev1.EventTypeWarning, "GenerateJSONFailed", err.Error())
 			return ctrl.Result{}, err
 		}
 
 		job, err := r.buildRunner(img, pf, jsonData)
 		if err != nil {
-			r.Logger.Error(err, "failed to build runner Pod for image-finder")
+			logger.Error(err, "failed to build runner job")
 			r.Recorder.Event(img, corev1.EventTypeWarning, "BuildJobFailed", err.Error())
 			return ctrl.Result{}, err
 		}
 
-		// Check if a job already exists
-		_, err = r.ensureJobRunner(ctx, job, img, pf)
-		if err != nil {
-			r.Logger.Error(err, "failed to ensure runner Job")
+		if _, err := r.ensureJobRunner(ctx, job, img, pf); err != nil {
+			logger.Error(err, "failed to ensure runner job exists")
 			return ctrl.Result{}, err
 		}
-		r.Logger.Info("Runner job ensured", "name", req.Name, "image", img.Name, "jobName", job.Name)
-		st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "JobCreated", "Runner Job created")
-		st.ObservedGeneration = img.GetGeneration()
 
+		// mark that a job was created
+		st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "JobCreated", "Runner Job created")
+		st.SetCondition(hv1a1.JobRunning, metav1.ConditionTrue, "JobCreated", "Runner Job is running")
+		st.ObservedGeneration = img.GetGeneration()
 		if err := r.Status().Update(ctx, img); err != nil {
+			logger.Error(err, "failed to update image status after creating job")
 			return ctrl.Result{}, err
 		}
-		// start polling for completion
-		r.Logger.Info("Runner Pod created, starting polling for completion", "podName", job.Name)
+
+		logger.Info("Runner job ensured, will poll for completion", "jobName", job.Name)
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 	}
 
-	// JobRunning
+	// Otherwise assume job is running or we need to check pod(s)
 	pod, err := r.fetchPod(ctx, pf, img)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
+			logger.Info("Runner pod not found; marking for resync", "image", img.Name)
 			st.SetCondition(hv1a1.JobRunning, metav1.ConditionFalse, "PodNotFound", "Runner Pod not found, will try to create a new one")
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "PodNotFound", "Runner Pod not found, will try to create a new one")
-			r.Logger.Info("Runner Pod not found, will try to create a new one", "name", req.Name, "image", img.Name)
-			if err2 := r.Status().Update(ctx, img); err2 != nil {return ctrl.Result{}, err2}
+			if err2 := r.Status().Update(ctx, img); err2 != nil {
+				logger.Error(err2, "failed to update status after missing pod")
+				return ctrl.Result{}, err2
+			}
 			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-			} else {
-			r.Logger.Error(err, "failed to fetch Pod for Image", "name", req.Name, "image", img.Name)
-			return ctrl.Result{}, err
 		}
-	} 
+		logger.Error(err, "failed to list pods for image", "image", img.Name)
+		return ctrl.Result{}, err
+	}
 
-	// Pod exists and now check its phase
+	// Announce status
 	msg := fmt.Sprintf("Runner Pod status [%s]", pod.Status.Phase)
-	r.Logger.Info(msg, "name", req.Name, "image", img.Name, "podName", pod.Name)
+	logger.Info(msg, "podName", pod.Name, "phase", pod.Status.Phase)
 	r.Recorder.Event(img, corev1.EventTypeNormal, "RunnerPodStatus", msg)
 
 	switch pod.Status.Phase {
 	case corev1.PodPending, corev1.PodRunning:
-		// keep polling
+		// Still running, poll again later
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
-
-	// 4) collect result, update status, clear runner, possibly start another run
-	default: // corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown
-		
+	default:
+		// Pod finished (Succeeded/Failed/Unknown)
 		st.SetCondition(hv1a1.JobRunning, metav1.ConditionFalse, "PodFinished", "Runner Pod finished")
-		// Pod is finished, but if NeedsRerun is set, we ifgnore it and return to start a new run
+
+		// If a new run was requested meanwhile, clear resync and quickly requeue
 		if meta.IsStatusConditionTrue(st.Conditions, string(hv1a1.ResyncRequired)) {
 			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionFalse, "StartingNewRun", "Starting a new run as requested")
-			if err := r.Status().Update(ctx, img); err != nil {return ctrl.Result{}, err }
-			// requeue quickly to create the next Pod for the new spec
+			if err := r.Status().Update(ctx, img); err != nil {
+				logger.Error(err, "failed to update status when starting new run")
+				return ctrl.Result{}, err
+			}
 			return ctrl.Result{RequeueAfter: time.Second}, nil
 		}
 
-		podOutput, err := r.getPodStdOut(ctx, pod.Name, pod.Namespace)
-		if err != nil {
-			msg := fmt.Sprintf("failed to get logs from runner Pod %s: %s", pod.Name, err.Error())
-			r.Logger.Error(err, msg, "name", req.Name, "image", img.Name)
-			r.Recorder.Event(img, corev1.EventTypeWarning, "GetPodLogsFailed", msg)
-			return ctrl.Result{}, err
-		} 
+		// Attempt to retrieve logs from the "harvest" container (the container that prints the output)
+		podOutput, logErr := r.getPodStdOut(ctx, pod.Name, pod.Namespace, "harvest")
+		if logErr != nil {
+			// Do not fail reconciliation permanently due to transient log retrieval errors.
+			// Mark for re-run and requeue to try again shortly.
+			logger.Error(logErr, "failed to get logs from runner Pod", "pod", pod.Name)
+			r.Recorder.Event(img, corev1.EventTypeWarning, "GetPodLogsFailed", fmt.Sprintf("failed to get logs from runner Pod %s: %v", pod.Name, logErr))
 
-		// If the pod termination reason is completed,
-		// we set the Zones based on the POD message
-		success := pod.Status.Phase == corev1.PodSucceeded && pkgpod.ContainerTerminatedReason(pod) == "Completed"
-		if success {
-			if zones, err := r.decodeJSONToImageOffering(podOutput); err != nil {
-				r.Logger.Error(err, msg, "name", req.Name, "image", img.Name)
-				r.Recorder.Event(img, corev1.EventTypeWarning, "DecodePodLogFailed", msg)
-				return ctrl.Result{}, err
-			} else { img.Status.Images = zones }
-			
-	
-			// The configMap is also updated by the ProviderProfile,
-			// I update it here to ensure latest update is applied to CM if manual 
-			// changes are made to the image
-			if err := r.updateConfigMap(ctx, pf, img); err != nil {
-				msg := fmt.Sprintf("Failed to update/create ConfigMap for image offerings: %s", err.Error())
-				r.Recorder.Event(img, corev1.EventTypeWarning, "ConfigMapUpdateFailed", msg)
-				r.Logger.Error(err, msg, "name", req.Name, "image", img.Name)
+			// mark for retry so we can pick up the logs on the next reconcile loop
+			st.SetCondition(hv1a1.ResyncRequired, metav1.ConditionTrue, "LogFetchFailed", "Unable to retrieve runner pod logs, will retry")
+			if err := r.Status().Update(ctx, img); err != nil {
+				logger.Error(err, "failed to update status after log fetch failure")
 				return ctrl.Result{}, err
 			}
-			// We let the job controller handle the deletion of the job Pod
+			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 		}
 
-		// no more work
+		// Determine success based on pod phase and termination reason
+		success := pod.Status.Phase == corev1.PodSucceeded && pkgpod.ContainerTerminatedReason(pod) == "Completed"
+		if success {
+			zones, err := r.decodeJSONToImageOffering(podOutput)
+			if err != nil {
+				logger.Error(err, "failed to decode pod output into image offerings", "pod", pod.Name)
+				r.Recorder.Event(img, corev1.EventTypeWarning, "DecodePodLogFailed", fmt.Sprintf("failed to decode pod log: %v", err))
+				// mark as failed and requeue
+				st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "DecodeFailed", "Failed to decode image offerings from runner pod logs")
+				if err := r.Status().Update(ctx, img); err != nil {
+					logger.Error(err, "failed to update status after decode failure")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+			}
+
+			// Persist results to status
+			img.Status.Images = zones
+
+			// Update ConfigMap with latest images (best-effort to fail early)
+			if err := r.updateConfigMap(ctx, pf, img); err != nil {
+				logger.Error(err, "failed to update/create ConfigMap for image offerings", "image", img.Name)
+				r.Recorder.Event(img, corev1.EventTypeWarning, "ConfigMapUpdateFailed", fmt.Sprintf("Failed to update/create ConfigMap for image offerings: %v", err))
+				// do not abort reconcile permanently; mark NotReady and requeue
+				st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "ConfigMapFailed", "Failed to update images ConfigMap")
+				if err := r.Status().Update(ctx, img); err != nil {
+					logger.Error(err, "failed to update status after configmap failure")
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
+			}
+		}
+
+		// finalize status: update timestamps and readiness depending on success
 		st.LastUpdateTime = metav1.NewTime(now)
-		// SetTimeAnnotation(img, "skycluster.io/last-update-time", metav1.NewTime(now))
 		st.Region = pf.Spec.Region
 		st.ObservedGeneration = img.GetGeneration()
-		st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
-		r.Logger.Info("Runner Pod finished", "name", req.Name, "image", img.Name, "podName", pod.Name, "podPhase", pod.Status.Phase, "terminationReason", pkgpod.ContainerTerminatedReason(pod))
+		if success {
+			st.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "PodFinished", "Runner Pod finished successfully")
+			logger.Info("Runner Pod finished successfully", "pod", pod.Name)
+		} else {
+			st.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PodFailed", fmt.Sprintf("Runner Pod finished with phase %s", pod.Status.Phase))
+			logger.Info("Runner Pod finished unsuccessfully", "pod", pod.Name, "phase", pod.Status.Phase)
+		}
 
-		// if err := r.Update(ctx, img); err != nil {return ctrl.Result{}, err}
-		if err := r.Status().Update(ctx, img); err != nil { return ctrl.Result{}, err }
+		if err := r.Status().Update(ctx, img); err != nil {
+			logger.Error(err, "failed to update image status after pod finished")
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 }
 
-/*
-
-HELPER FUNCTIONS
-
-*/
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *ImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	// Initialize kube client once when manager is available
+	cfg := ctrl.GetConfigOrDie()
+	if r.KubeClient == nil {
+		kc, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return err
+		}
+		r.KubeClient = kc
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cv1a1.Image{}).
 		Named("core-image").
@@ -313,9 +351,9 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 
 	outputPath := fmt.Sprintf("/data/%s-%s.yaml", img.Name, pf.Spec.Platform)
 	mapVars := lo.Assign(cred, map[string]string{
-		"PROVIDER":   pf.Spec.Platform,
-		"REGION":     pf.Spec.Region,
-		"INPUT_JSON": jsonData,
+		"PROVIDER":    pf.Spec.Platform,
+		"REGION":      pf.Spec.Region,
+		"INPUT_JSON":  jsonData,
 		"OUTPUT_PATH": outputPath,
 	})
 	envVars := make([]corev1.EnvVar, 0, len(mapVars))
@@ -325,7 +363,7 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 			Value: v,
 		})
 	}
-	
+
 	labels := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	labels["skycluster.io/job-type"] = "image-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
@@ -341,7 +379,7 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: labels,
 				},
-				Spec: corev1.PodSpec{	
+				Spec: corev1.PodSpec{
 					RestartPolicy: corev1.RestartPolicyNever,
 					InitContainers: []corev1.Container{{
 						Name:  "runner",
@@ -365,21 +403,21 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 					},
 				},
 			},
-			BackoffLimit: lo.ToPtr[int32](0), // no retries
+			BackoffLimit:            lo.ToPtr[int32](0),   // no retries
 			TTLSecondsAfterFinished: lo.ToPtr[int32](300), // keep the job for 5 minutes after completion
-			ActiveDeadlineSeconds: lo.ToPtr[int64](600), // Kill the job after 10 minutes
+			ActiveDeadlineSeconds:   lo.ToPtr[int64](600), // Kill the job after 10 minutes
 		},
 	}
 
 	// Set owner reference to the Image
 	if err := ctrl.SetControllerReference(img, job, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set owner reference for job: %w", err)
-	}	
+	}
 	return job, nil
 }
 
 func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a1.ProviderProfile) (map[string]string, error) {
-	// Fetch the AWS credentials from the secret
+	// Fetch the provider credentials from the secret
 	secrets := &corev1.SecretList{}
 	ll := map[string]string{
 		"skycluster.io/managed-by":        "skycluster",
@@ -397,19 +435,13 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 	}
 
 	secret := secrets.Items[0]
-	if secret.Data == nil {
-		return nil, fmt.Errorf("no data found in credentials secret")
-	}
-	if len(secret.Data) == 0 {
+	if secret.Data == nil || len(secret.Data) == 0 {
 		return nil, fmt.Errorf("credentials secret is empty")
 	}
 
-	// Convert the secret data to a map
 	cred := make(map[string]string)
-
 	switch pp.Spec.Platform {
 	case "aws":
-		// AWS credentials are expected to be in the secret
 		if _, ok := secret.Data["aws_access_key_id"]; !ok {
 			return nil, fmt.Errorf("AWS credentials secret does not contain 'aws_access_key_id'")
 		}
@@ -420,18 +452,16 @@ func (r *ImageReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a
 			cred[strings.ToUpper(k)] = string(v)
 		}
 	case "azure":
-		// Azure credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
 			return nil, fmt.Errorf("Azure credentials secret does not contain 'configs'")
 		}
 		cred["AZ_CONFIG_JSON"] = string(secret.Data["configs"])
 	case "gcp":
-		// GCP credentials are expected to be in the secret
 		if _, ok := secret.Data["configs"]; !ok {
 			return nil, fmt.Errorf("GCP credentials secret does not contain 'configs'")
 		}
 		cred["SERVICE_ACCOUNT_JSON"] = string(secret.Data["configs"])
-		cred["GOOGLE_CLOUD_PROJECT"] = "dummy" // GCP requires a project, but we don't use it in the image-finder Pod
+		cred["GOOGLE_CLOUD_PROJECT"] = "dummy"
 	default:
 		return nil, fmt.Errorf("unsupported platform %s for credentials secret", pp.Spec.Platform)
 	}
@@ -461,15 +491,11 @@ func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []cv1
 		}
 	}
 
-	// Wrap zones in a payload struct
 	wrapped := payload{Images: imgOfferings}
-	// Use the wrapped struct to ensure the correct JSON structure
-	// with "zones" as the top-level key
 	jsonDataByte, err := json.Marshal(wrapped)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal input JSON: %w", err)
 	}
-	// Convert to string and return
 	return string(jsonDataByte), nil
 }
 
@@ -481,55 +507,63 @@ func (r *ImageReconciler) decodeJSONToImageOffering(jsonData string) ([]cv1a1.Im
 		return nil, err
 	}
 	if payload.Zones == nil {
-		return nil, fmt.Errorf("missing or invalid zones field")
+		return nil, fmt.Errorf("missing or invalid images field")
 	}
 	return payload.Zones, nil
 }
 
 func (r *ImageReconciler) updateProviderProfile(ctx context.Context, pf *cv1a1.ProviderProfile, img *cv1a1.Image) error {
-	if err := r.Get(ctx, client.ObjectKey{Name: img.Spec.ProviderRef, Namespace: img.Namespace}, pf); err != nil {
-		return err
-	}
+	// operate on provided object (already fetched by caller)
 	orig := pf.DeepCopy()
-
-	if pf.Annotations == nil { pf.Annotations = map[string]string{} }
+	if pf.Annotations == nil {
+		pf.Annotations = map[string]string{}
+	}
 	pf.Annotations["instancetype-ref"] = img.Name
-
 	return r.Patch(ctx, pf, client.MergeFrom(orig))
 }
 
-func (r *ImageReconciler) getPodStdOut(ctx context.Context, podName, podNS string) (string, error) {
-	var pod corev1.Pod
-	if err := r.Get(ctx, types.NamespacedName{Name: podName, Namespace: podNS}, &pod); err != nil {
-		return "", fmt.Errorf("failed to get Pod %s: %w", podName, err)
+// getPodStdOut fetches logs for a specific container from the pod (containerName recommended).
+// It retries with no container specified if the first attempt fails.
+func (r *ImageReconciler) getPodStdOut(ctx context.Context, podName, podNS, containerName string) (string, error) {
+	// Validate kube client
+	if r.KubeClient == nil {
+		cfg := ctrl.GetConfigOrDie()
+		kc, err := kubernetes.NewForConfig(cfg)
+		if err != nil {
+			return "", fmt.Errorf("failed to create kube client for logs: %w", err)
+		}
+		r.KubeClient = kc
 	}
 
-	cfg := ctrl.GetConfigOrDie()
-	kubeClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		return "", fmt.Errorf("unable to get runner pod's log, failed to create Kubernetes client: %w", err)
+	// Try to stream logs from the specific container first (more deterministic)
+	opts := &corev1.PodLogOptions{
+		Container: containerName,
 	}
-
-	// Get the logs from the Pod
-	req := kubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
-	rr, err := req.Stream(ctx)
+	streamReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, opts)
+	stream, err := streamReq.Stream(ctx)
 	if err != nil {
-		return "", fmt.Errorf("failed to get logs for Pod %s: %w", podName, err)
+		// Fallback: try without specifying container (in case container name differs)
+		fallbackReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
+		stream2, err2 := fallbackReq.Stream(ctx)
+		if err2 != nil {
+			return "", fmt.Errorf("failed to get logs for pod %s (container=%s): %v; fallback error: %v", podName, containerName, err, err2)
+		}
+		stream = stream2
 	}
-	defer rr.Close()
+	defer stream.Close()
 
 	var logs bytes.Buffer
-	if _, err := io.Copy(&logs, rr); err != nil {
-		return "", fmt.Errorf("failed to copy logs for Pod %s: %w", podName, err)
+	if _, err := io.Copy(&logs, stream); err != nil {
+		return "", fmt.Errorf("failed to read logs for pod %s: %w", podName, err)
 	}
-
 	return logs.String(), nil
 }
 
 // If any of the input data is not nil, it will update the ConfigMap with the data.
 func (r *ImageReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, img *cv1a1.Image) error {
-	// early return if both are nil
-	if img == nil { return nil }
+	if img == nil {
+		return nil
+	}
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/provider-profile"] = pf.Name
 
@@ -546,9 +580,10 @@ func (r *ImageReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.Provide
 		cm.Data = make(map[string]string)
 	}
 
-	imgYamlData, err2 := pkgenc.EncodeObjectToYAML(img.Status.Images)
-
-	if err2 == nil {cm.Data["images.yaml"] = imgYamlData}
+	imgYamlData, err := pkgenc.EncodeObjectToYAML(img.Status.Images)
+	if err == nil {
+		cm.Data["images.yaml"] = imgYamlData
+	}
 
 	if err := r.Update(ctx, &cm); err != nil {
 		return fmt.Errorf("failed to update ConfigMap for images: %w", err)
@@ -562,42 +597,40 @@ func (r *ImageReconciler) ensureJobRunner(ctx context.Context, job *batchv1.Job,
 	labels := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	labels["skycluster.io/job-type"] = "image-finder"
 	labels["skycluster.io/provider-profile"] = pf.Name
-	err := r.List(ctx, existings, client.InNamespace(img.Namespace), client.MatchingLabels(labels))
-
-	if err == nil && len(existings.Items) > 0 {
-		// already exists, no need to create a new one
-		theJob := &existings.Items[0]
-		return theJob, nil
-	} 
+	if err := r.List(ctx, existings, client.InNamespace(img.Namespace), client.MatchingLabels(labels)); err != nil {
+		return nil, fmt.Errorf("failed to list existing jobs: %w", err)
+	}
+	if len(existings.Items) > 0 {
+		// already exists, return it
+		return &existings.Items[0], nil
+	}
 
 	// set the owner reference for the job
 	if err := ctrl.SetControllerReference(img, job, r.Scheme); err != nil {
 		return nil, fmt.Errorf("failed to set controller reference for Job: %w", err)
 	}
 
-	// does not exist, create a new one
+	// create a new one
 	if err := r.Create(ctx, job); err != nil && !apierrors.IsAlreadyExists(err) {
 		return nil, fmt.Errorf("failed to create runner Job: %w", err)
 	}
-	
 	return job, nil
 }
 
 func (r *ImageReconciler) fetchPod(ctx context.Context, pf *cv1a1.ProviderProfile, img *cv1a1.Image) (*corev1.Pod, error) {
-	var pod corev1.PodList
+	var podList corev1.PodList
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
 	ll["skycluster.io/job-type"] = "image-finder"
 	ll["skycluster.io/provider-profile"] = pf.Name
 
-	if err := r.List(ctx, &pod, client.InNamespace(img.Namespace), client.MatchingLabels(ll)); err != nil {
+	if err := r.List(ctx, &podList, client.InNamespace(img.Namespace), client.MatchingLabels(ll)); err != nil {
 		return nil, fmt.Errorf("failed to list Pods for Image %s: %w", img.Name, err)
 	}
-	if len(pod.Items) == 0 {
+	if len(podList.Items) == 0 {
 		return nil, apierrors.NewNotFound(corev1.Resource("pod"), fmt.Sprintf("no Pod found for Image %s", img.Name))
 	}
-	if len(pod.Items) > 1 {
+	if len(podList.Items) > 1 {
 		return nil, fmt.Errorf("multiple Pods found for Image %s, expected only one", img.Name)
 	}
-	// return the single Pod found
-	return &pod.Items[0], nil
+	return &podList.Items[0], nil
 }
