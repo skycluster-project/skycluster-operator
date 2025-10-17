@@ -14,7 +14,12 @@ spec:
     singular: dataflowpolicy
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The sync status of the DataflowPolicy
+      jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: Synced
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: DataflowPolicy is the Schema for the dataflowpolicies API.

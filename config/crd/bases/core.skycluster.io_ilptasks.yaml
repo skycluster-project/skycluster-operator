@@ -14,7 +14,16 @@ spec:
     singular: ilptask
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The status of the ILP Task
+      jsonPath: .status.optimization.status
+      name: Status
+      type: string
+    - description: The result of the ILP Task
+      jsonPath: .status.optimization.result
+      name: Result
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: ILPTask is the Schema for the ilptasks API.
@@ -39,145 +48,38 @@ spec:
           spec:
             description: ILPTaskSpec defines the desired state of ILPTask.
             properties:
-              skyComponents:
-                items:
-                  properties:
-                    component:
-                      description: ObjectReference contains enough information to
-                        let you inspect or modify the referred object.
-                      properties:
-                        apiVersion:
-                          description: API version of the referent.
-                          type: string
-                        fieldPath:
-                          description: |-
-                            If referring to a piece of an object instead of an entire object, this string
-                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
-                            For example, if the object reference is to a container within a pod, this would take on a value like:
-                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
-                            the event) or if no container name is specified "spec.containers[2]" (container with
-                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
-                            referencing a part of an object.
-                          type: string
-                        kind:
-                          description: |-
-                            Kind of the referent.
-                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
-                          type: string
-                        name:
-                          description: |-
-                            Name of the referent.
-                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                          type: string
-                        namespace:
-                          description: |-
-                            Namespace of the referent.
-                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
-                          type: string
-                        resourceVersion:
-                          description: |-
-                            Specific resourceVersion to which this reference is made, if any.
-                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
-                          type: string
-                        uid:
-                          description: |-
-                            UID of the referent.
-                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
-                          type: string
-                      type: object
-                      x-kubernetes-map-type: atomic
-                    locationConstraint:
-                      description: |-
-                        LocationConstraints specifies the location constraints for the SkyComponent
-                        It declartively specifies the provider and region where the SkyComponent should be deployed
-                      properties:
-                        permitted:
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  providerName:
-                                    type: string
-                                  providerRegion:
-                                    type: string
-                                  providerRegionAlias:
-                                    type: string
-                                  providerType:
-                                    type: string
-                                  providerZone:
-                                    type: string
-                                type: object
-                              type: array
-                          type: object
-                        required:
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  anyOf:
-                                    items:
-                                      properties:
-                                        providerName:
-                                          type: string
-                                        providerRegion:
-                                          type: string
-                                        providerRegionAlias:
-                                          type: string
-                                        providerType:
-                                          type: string
-                                        providerZone:
-                                          type: string
-                                      type: object
-                                    type: array
-                                  providerRef:
-                                    properties:
-                                      providerName:
-                                        type: string
-                                      providerRegion:
-                                        type: string
-                                      providerRegionAlias:
-                                        type: string
-                                      providerType:
-                                        type: string
-                                      providerZone:
-                                        type: string
-                                    type: object
-                                type: object
-                              type: array
-                          type: object
-                      type: object
-                    provider:
-                      properties:
-                        providerName:
-                          type: string
-                        providerRegion:
-                          type: string
-                        providerRegionAlias:
-                          type: string
-                        providerType:
-                          type: string
-                        providerZone:
-                          type: string
-                      type: object
-                    virtualServices:
-                      description: VirtualServices specifies the virtual services
-                        that are required by the SkyComponent
-                      items:
-                        properties:
-                          name:
-                            type: string
-                          type:
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      type: array
-                  required:
-                  - component
-                  type: object
-                type: array
-            required:
-            - skyComponents
+              dataflowPolicyRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              deploymentPlanRef:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
             type: object
           status:
             description: ILPTaskStatus defines the observed state of ILPTask.
@@ -367,15 +269,17 @@ spec:
                               type: string
                             providerRef:
                               properties:
-                                providerName:
+                                name:
                                   type: string
-                                providerRegion:
+                                platform:
                                   type: string
-                                providerRegionAlias:
+                                region:
                                   type: string
-                                providerType:
+                                regionAlias:
                                   type: string
-                                providerZone:
+                                type:
+                                  type: string
+                                zone:
                                   type: string
                               type: object
                           required:
@@ -493,15 +397,17 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
-                                    providerName:
+                                    name:
                                       type: string
-                                    providerRegion:
+                                    platform:
                                       type: string
-                                    providerRegionAlias:
+                                    region:
                                       type: string
-                                    providerType:
+                                    regionAlias:
                                       type: string
-                                    providerZone:
+                                    type:
+                                      type: string
+                                    zone:
                                       type: string
                                   type: object
                               required:
@@ -617,15 +523,17 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
-                                    providerName:
+                                    name:
                                       type: string
-                                    providerRegion:
+                                    platform:
                                       type: string
-                                    providerRegionAlias:
+                                    region:
                                       type: string
-                                    providerType:
+                                    regionAlias:
                                       type: string
-                                    providerZone:
+                                    type:
+                                      type: string
+                                    zone:
                                       type: string
                                   type: object
                               required:

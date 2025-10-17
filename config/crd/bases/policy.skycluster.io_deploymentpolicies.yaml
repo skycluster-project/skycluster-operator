@@ -14,7 +14,12 @@ spec:
     singular: deploymentpolicy
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: The sync status of the DeploymentPolicy
+      jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: Synced
+      type: string
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: DeploymentPolicy is the Schema for the deploymentpolicies API.
@@ -90,63 +95,50 @@ spec:
                         the component
                       properties:
                         permitted:
-                          description: Permitted is the list of locations that are
-                            permitted
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  providerName:
-                                    type: string
-                                  providerRegion:
-                                    type: string
-                                  providerRegionAlias:
-                                    type: string
-                                  providerType:
-                                    type: string
-                                  providerZone:
-                                    type: string
-                                type: object
-                              type: array
-                          type: object
+                          description: Permitted specifies locations that are allowed
+                            (OR logic).
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              platform:
+                                type: string
+                              region:
+                                type: string
+                              regionAlias:
+                                type: string
+                              type:
+                                type: string
+                              zone:
+                                type: string
+                            type: object
+                          type: array
                         required:
-                          description: Required is the list of locations that are
-                            required for deployment
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  anyOf:
-                                    items:
-                                      properties:
-                                        providerName:
-                                          type: string
-                                        providerRegion:
-                                          type: string
-                                        providerRegionAlias:
-                                          type: string
-                                        providerType:
-                                          type: string
-                                        providerZone:
-                                          type: string
-                                      type: object
-                                    type: array
-                                  providerRef:
-                                    properties:
-                                      providerName:
-                                        type: string
-                                      providerRegion:
-                                        type: string
-                                      providerRegionAlias:
-                                        type: string
-                                      providerType:
-                                        type: string
-                                      providerZone:
-                                        type: string
-                                    type: object
-                                type: object
-                              type: array
-                          type: object
+                          description: Required specifies location sets that must
+                            be satisfied (AND logic).
+                          items:
+                            description: LocationCondition represents a group of alternative
+                              location rules (OR logic).
+                            properties:
+                              anyOf:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                    platform:
+                                      type: string
+                                    region:
+                                      type: string
+                                    regionAlias:
+                                      type: string
+                                    type:
+                                      type: string
+                                    zone:
+                                      type: string
+                                  type: object
+                                type: array
+                            type: object
+                          type: array
                       type: object
                     performanceConstraint:
                       description: PerformanceConstraint is the performance constraint

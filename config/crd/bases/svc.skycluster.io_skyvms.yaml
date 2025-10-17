@@ -53,15 +53,17 @@ spec:
                 description: ProviderRef is the reference to the provider that this
                   VM should be deployed to
                 properties:
-                  providerName:
+                  name:
                     type: string
-                  providerRegion:
+                  platform:
                     type: string
-                  providerRegionAlias:
+                  region:
                     type: string
-                  providerType:
+                  regionAlias:
                     type: string
-                  providerZone:
+                  type:
+                    type: string
+                  zone:
                     type: string
                 type: object
               publicIp:

@@ -149,15 +149,17 @@ spec:
                       type: string
                     providerRef:
                       properties:
-                        providerName:
+                        name:
                           type: string
-                        providerRegion:
+                        platform:
                           type: string
-                        providerRegionAlias:
+                        region:
                           type: string
-                        providerType:
+                        regionAlias:
                           type: string
-                        providerZone:
+                        type:
+                          type: string
+                        zone:
                           type: string
                       type: object
                   required:
@@ -335,15 +337,17 @@ spec:
                       type: string
                     providerRef:
                       properties:
-                        providerName:
+                        name:
                           type: string
-                        providerRegion:
+                        platform:
                           type: string
-                        providerRegionAlias:
+                        region:
                           type: string
-                        providerType:
+                        regionAlias:
                           type: string
-                        providerZone:
+                        type:
+                          type: string
+                        zone:
                           type: string
                       type: object
                   required:

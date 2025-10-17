@@ -129,71 +129,64 @@ spec:
                         It declartively specifies the provider and region where the SkyComponent should be deployed
                       properties:
                         permitted:
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  providerName:
-                                    type: string
-                                  providerRegion:
-                                    type: string
-                                  providerRegionAlias:
-                                    type: string
-                                  providerType:
-                                    type: string
-                                  providerZone:
-                                    type: string
-                                type: object
-                              type: array
-                          type: object
+                          description: Permitted specifies locations that are allowed
+                            (OR logic).
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              platform:
+                                type: string
+                              region:
+                                type: string
+                              regionAlias:
+                                type: string
+                              type:
+                                type: string
+                              zone:
+                                type: string
+                            type: object
+                          type: array
                         required:
-                          properties:
-                            allOf:
-                              items:
-                                properties:
-                                  anyOf:
-                                    items:
-                                      properties:
-                                        providerName:
-                                          type: string
-                                        providerRegion:
-                                          type: string
-                                        providerRegionAlias:
-                                          type: string
-                                        providerType:
-                                          type: string
-                                        providerZone:
-                                          type: string
-                                      type: object
-                                    type: array
-                                  providerRef:
-                                    properties:
-                                      providerName:
-                                        type: string
-                                      providerRegion:
-                                        type: string
-                                      providerRegionAlias:
-                                        type: string
-                                      providerType:
-                                        type: string
-                                      providerZone:
-                                        type: string
-                                    type: object
-                                type: object
-                              type: array
-                          type: object
+                          description: Required specifies location sets that must
+                            be satisfied (AND logic).
+                          items:
+                            description: LocationCondition represents a group of alternative
+                              location rules (OR logic).
+                            properties:
+                              anyOf:
+                                items:
+                                  properties:
+                                    name:
+                                      type: string
+                                    platform:
+                                      type: string
+                                    region:
+                                      type: string
+                                    regionAlias:
+                                      type: string
+                                    type:
+                                      type: string
+                                    zone:
+                                      type: string
+                                  type: object
+                                type: array
+                            type: object
+                          type: array
                       type: object
                     provider:
                       properties:
-                        providerName:
+                        name:
                           type: string
-                        providerRegion:
+                        platform:
                           type: string
-                        providerRegionAlias:
+                        region:
                           type: string
-                        providerType:
+                        regionAlias:
                           type: string
-                        providerZone:
+                        type:
+                          type: string
+                        zone:
                           type: string
                       type: object
                     virtualServices:
@@ -219,15 +212,17 @@ spec:
                   This list should be populated when the optimizer is executed
                 items:
                   properties:
-                    providerName:
+                    name:
                       type: string
-                    providerRegion:
+                    platform:
                       type: string
-                    providerRegionAlias:
+                    region:
                       type: string
-                    providerType:
+                    regionAlias:
                       type: string
-                    providerZone:
+                    type:
+                      type: string
+                    zone:
                       type: string
                   type: object
                 type: array
@@ -421,15 +416,17 @@ spec:
                               type: string
                             providerRef:
                               properties:
-                                providerName:
+                                name:
                                   type: string
-                                providerRegion:
+                                platform:
                                   type: string
-                                providerRegionAlias:
+                                region:
                                   type: string
-                                providerType:
+                                regionAlias:
                                   type: string
-                                providerZone:
+                                type:
+                                  type: string
+                                zone:
                                   type: string
                               type: object
                           required:
@@ -547,15 +544,17 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
-                                    providerName:
+                                    name:
                                       type: string
-                                    providerRegion:
+                                    platform:
                                       type: string
-                                    providerRegionAlias:
+                                    region:
                                       type: string
-                                    providerType:
+                                    regionAlias:
                                       type: string
-                                    providerZone:
+                                    type:
+                                      type: string
+                                    zone:
                                       type: string
                                   type: object
                               required:
@@ -671,15 +670,17 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
-                                    providerName:
+                                    name:
                                       type: string
-                                    providerRegion:
+                                    platform:
                                       type: string
-                                    providerRegionAlias:
+                                    region:
                                       type: string
-                                    providerType:
+                                    regionAlias:
                                       type: string
-                                    providerZone:
+                                    type:
+                                      type: string
+                                    zone:
                                       type: string
                                   type: object
                               required:
