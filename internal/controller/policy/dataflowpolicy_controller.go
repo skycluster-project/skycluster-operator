@@ -28,7 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
@@ -54,12 +54,17 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	key := client.ObjectKey{Namespace: df.Namespace, Name: df.Name}
-	ilp := &corev1alpha1.ILPTask{}
+	ilp := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, key, ilp); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			newILP := &corev1alpha1.ILPTask{
+			newILP := &cv1a1.ILPTask{
 				ObjectMeta: metav1.ObjectMeta{Name: df.Name, Namespace: df.Namespace},
-				Spec:       corev1alpha1.ILPTaskSpec{DataflowPolicyRef: corev1.LocalObjectReference{Name: df.Name}},
+				Spec:       cv1a1.ILPTaskSpec{
+					DataflowPolicyRef: cv1a1.DataflowPolicyRef{
+						LocalObjectReference: corev1.LocalObjectReference{Name: df.Name},
+						DataflowResourceVersion: df.GetResourceVersion(), // to trigger ILPTask reconciliation
+					},
+				},
 			}
 			if err := ctrl.SetControllerReference(df, newILP, r.Scheme); err != nil {
 				r.Logger.Error(err, "Failed to set owner reference.")
@@ -79,7 +84,7 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		}
 	} else {
 		// make sure ILPTask references the correct DataflowPolicy
-		if err := r.updateILPTaskRef(ctx, ilp, df.Name); err != nil {
+		if err := r.updateILPTaskRef(ctx, ilp, df.Name, df.GetResourceVersion()); err != nil {
 			r.Logger.Error(err, "Failed to update ILPTask's DataflowPolicyRef.")
 			return ctrl.Result{}, err
 		}
@@ -100,9 +105,12 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *DataflowPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string) error {
+func (r *DataflowPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *cv1a1.ILPTask, name string, ver string) error {
 	orig := ilp.DeepCopy()
-	ilp.Spec.DataflowPolicyRef.Name = name
+	ilp.Spec.DataflowPolicyRef = cv1a1.DataflowPolicyRef{
+		LocalObjectReference: corev1.LocalObjectReference{Name: name},
+		DataflowResourceVersion: ver,
+	}
 	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
 		if apierrors.IsConflict(err) {return nil}
 		return err

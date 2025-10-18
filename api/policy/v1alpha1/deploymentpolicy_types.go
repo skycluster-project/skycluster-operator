@@ -52,6 +52,7 @@ type VirtualServiceConstraint struct {
 
 type VirtualServiceSelector struct {
 	hv1a1.VirtualService `json:",inline"`
+	// +kubebuilder:default=1
 	Count          int   `json:"count,omitempty"`
 }
 

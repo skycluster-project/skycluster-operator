@@ -59,7 +59,12 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if client.IgnoreNotFound(err) == nil {
 			newILP := &corev1alpha1.ILPTask{
 				ObjectMeta: metav1.ObjectMeta{Name: dp.Name, Namespace: dp.Namespace},
-				Spec:       corev1alpha1.ILPTaskSpec{DeploymentPlanRef: corev1.LocalObjectReference{Name: dp.Name}},
+				Spec:       corev1alpha1.ILPTaskSpec{
+					DeploymentPlanRef: corev1alpha1.DeploymentPlanRef{
+						LocalObjectReference: corev1.LocalObjectReference{Name: dp.Name},
+						DeploymentPlanResourceVersion: dp.GetResourceVersion(), // to trigger ILPTask reconciliation
+					},
+				},
 			}
 			if err := ctrl.SetControllerReference(dp, newILP, r.Scheme); err != nil {
 				r.Logger.Error(err, "Failed to set owner reference.")
@@ -79,7 +84,7 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 	} else {
 		// make sure ILPTask references the correct DeploymentPolicy
-		if err := r.updateILPTaskRef(ctx, ilp, dp.Name); err != nil {
+		if err := r.updateILPTaskRef(ctx, ilp, dp.Name, dp.GetResourceVersion()); err != nil {
 			r.Logger.Error(err, "Failed to update ILPTask's DeploymentPlanRef.")
 			return ctrl.Result{}, err
 		}
@@ -109,9 +114,12 @@ func (r *DeploymentPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string) error {
+func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string, ver string) error {
 	orig := ilp.DeepCopy()
-	ilp.Spec.DeploymentPlanRef.Name = name
+	ilp.Spec.DeploymentPlanRef = corev1alpha1.DeploymentPlanRef{
+		LocalObjectReference: corev1.LocalObjectReference{Name: name},
+		DeploymentPlanResourceVersion: ver,
+	}
 	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
 		if apierrors.IsConflict(err) {return nil}
 		return err
