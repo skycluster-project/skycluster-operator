@@ -49,9 +49,6 @@ spec:
             description: ILPTaskSpec defines the desired state of ILPTask.
             properties:
               dataflowPolicyRef:
-                description: |-
-                  LocalObjectReference contains enough information to let you locate the
-                  referenced object inside the same namespace.
                 properties:
                   name:
                     default: ""
@@ -62,12 +59,11 @@ spec:
                       almost certainly wrong.
                       More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                     type: string
+                  resourceVersion:
+                    type: string
                 type: object
                 x-kubernetes-map-type: atomic
               deploymentPlanRef:
-                description: |-
-                  LocalObjectReference contains enough information to let you locate the
-                  referenced object inside the same namespace.
                 properties:
                   name:
                     default: ""
@@ -77,6 +73,8 @@ spec:
                       allowed to be empty. Instances of this type with an empty value here are
                       almost certainly wrong.
                       More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic

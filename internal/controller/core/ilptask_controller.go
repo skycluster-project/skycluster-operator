@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -174,19 +175,23 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						return ctrl.Result{}, errors.Wrap(err, "failed to unmarshal deploy plan")
 					}
 					task.Status.Optimization.DeployMap = deployPlan
-					task.Status.Optimization.Status = "Succeeded"
-					task.Status.Optimization.Result = "Success"
-					// If the optimization result is "Optimal" and status is "Succeeded",
-					// We have the deployment plan and we can update the SkyCluster object. (trigger deployment)
-					// skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
-					// instance.SetCondition("Ready", metav1.ConditionTrue, "ILPTaskCompleted", "ILPTask completed successfully.")
-					// if err != nil {
-					// 	logger.Info(fmt.Sprintf("[%s]\t Failed to get SkyCluster upon updating with ILPTask results.", loggerName))
-					// 	return ctrl.Result{}, err
-					// }
+					if len(deployPlan.Component) > 0 && len(deployPlan.Edges) > 0 {
+						// If the optimization result is "Optimal" and status is "Succeeded",
+						// We have the deployment plan and we can update the SkyCluster object. (trigger deployment)
+						// skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
+						task.Status.Optimization.Status = "Succeeded"
+						task.Status.Optimization.Result = "Success"
+						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
+
+						// generate skyXRD object
+						if err = r.ensureSkyXRD(task, deployPlan); err != nil {
+							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
+						}
+					}
 				} else {
 					task.Status.Optimization.Status = "Failed"
 					task.Status.Optimization.Result = "Infeasible"
+					task.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "OptimizationFailed", "ILPTask optimization failed")
 				} 
 				
 				// update stored resource versions to current so we won't rerun unnecessarily
@@ -214,18 +219,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 	return ctrl.Result{}, nil
-	
-	// // Update status to reflect new pod and clear previous result so optimization runs fresh
-	// task.Status.Optimization.Status = "Pending"
-	// task.Status.Optimization.Result = ""
-	// task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: newPod.Name}
-	// // do not yet update resource version fields; they'll be updated when pod completes
-	// if err := r.Status().Update(ctx, task); err != nil {
-	// 	logger.Error(err, "failed to update ILPTask status after creating pod")
-	// 	return ctrl.Result{}, err
-	// }
-	// logger.Info("Optimization pod created", "pod", newPod.Name)
-	// return ctrl.Result{RequeueAfter: 5 * 1e9}, nil
 }
 
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
@@ -802,4 +795,46 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			RateLimiter: newCustomRateLimiter(),
 		}).
 		Complete(r)
+}
+
+
+func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.DeployMap) error {
+	obj := &cv1a1.SkyXRD{}
+	err := r.Get(context.TODO(), client.ObjectKey{
+		Namespace: task.Namespace,
+		Name:      task.Name,
+	}, obj)
+	if err == nil {
+		// already exists, update if necessary
+		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
+			r.Logger.Info("Updating existing SkyXRD with new deployment plan", "SkyXRD", obj.Name)
+			obj.Spec.DeployMap = deployPlan
+			obj.Spec.Approve = false
+			if err := r.Update(context.TODO(), obj); err != nil {
+				return errors.Wrapf(err, "failed to update SkyXRD for ILPTask %s", task.Name)
+			}
+			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "SkyXRD pending approval")
+			if err := r.Status().Update(context.TODO(), obj); err != nil {
+				return errors.Wrapf(err, "failed to update SkyXRD status for ILPTask %s", task.Name)
+			}
+		}
+		return nil
+	} else { // try to create
+		r.Logger.Info("Creating new SkyXRD for deployment plan", "ILPTask", task.Name)
+		obj := &cv1a1.SkyXRD{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: task.Name,
+				Namespace:    task.Namespace,
+			},
+			Spec: cv1a1.SkyXRDSpec{
+				Approve: false,
+				DeployMap: deployPlan,
+			},
+		}
+		if err := r.Create(context.TODO(), obj); err != nil {
+			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)
+		}
+	}
+
+	return nil
 }

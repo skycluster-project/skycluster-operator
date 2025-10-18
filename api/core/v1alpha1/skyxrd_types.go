@@ -17,20 +17,25 @@ limitations under the License.
 package v1alpha1
 
 import (
+	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	h "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 // SkyXRDSpec defines the desired state of SkyXRD.
 type SkyXRDSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
-	Manifests []h.SkyService `json:"manifests,omitempty"`
+	Approve bool `json:"approve"`
+	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
+	Manifests []hv1a1.SkyService `json:"manifests,omitempty"`
 }
 
 // SkyXRDStatus defines the observed state of SkyXRD.
 type SkyXRDStatus struct {
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Ready      bool                `json:"ready"`
+	Synced     bool                `json:"synced"`
 }
 
 // +kubebuilder:object:root=true
@@ -58,42 +63,12 @@ func init() {
 	SchemeBuilder.Register(&SkyXRD{}, &SkyXRDList{})
 }
 
-func (in *SkyXRD) SetConditionReady() {
-	in.SetCondition("Ready", metav1.ConditionTrue, "Available", "SkyCluster is ready.")
-}
-
-func (in *SkyXRD) SetCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	var c *metav1.Condition
-	for i := range in.Status.Conditions {
-		if in.Status.Conditions[i].Type == ctype {
-			c = &in.Status.Conditions[i]
-		}
-	}
-	if c == nil {
-		in.addCondition(ctype, status, reason, message)
-	} else {
-		// check message ?
-		if c.Status == status && c.Reason == reason && c.Message == message {
-			return
-		}
-		now := metav1.Now()
-		if c.Status != status {
-			c.LastTransitionTime = now
-		}
-		c.Status = status
-		c.Reason = reason
-		c.Message = message
-	}
-}
-
-func (in *SkyXRD) addCondition(ctype string, status metav1.ConditionStatus, reason, message string) {
-	now := metav1.Now()
-	c := metav1.Condition{
-		Type:               ctype,
-		LastTransitionTime: now,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-	}
-	in.Status.Conditions = append(in.Status.Conditions, c)
+// helper to set a condition
+func (s *SkyXRDStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
+		Type:    string(condition),
+		Status:  status,
+		Reason:  reason,
+		Message: msg,
+	})
 }

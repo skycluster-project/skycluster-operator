@@ -17,11 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"errors"
-	"math"
-	"math/rand/v2"
-	"strings"
-
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -81,91 +76,3 @@ func init() {
 	SchemeBuilder.Register(&Latency{}, &LatencyList{})
 }
 
-
-// generateLatency returns latency in ms rounded to 2 decimals.
-func generateLatency(srcRegion, dstRegion, srcType, dstType string, rng *rand.Rand) (float64, error) {
-	// helper: sample from lognormal given desired mean and std (of the lognormal)
-	lognormal := func(mean, std float64) float64 {
-		if mean <= 0 {
-			return 0
-		}
-		mu := math.Log((mean*mean) / math.Sqrt(std*std+mean*mean))
-		sigma := math.Sqrt(math.Log(1 + (std/mean)*(std/mean)))
-
-		// sample standard normal via Box-Muller
-		u1 := rng.Float64()
-		u2 := rng.Float64()
-		z := math.Sqrt(-2*math.Log(u1)) * math.Cos(2*math.Pi*u2)
-
-		return math.Exp(mu + sigma*z)
-	}
-
-	cloudCloudLatency := func(sameContinent bool) float64 {
-		if sameContinent {
-			return lognormal(100, 10)
-		}
-		return lognormal(200, 50)
-	}
-	cloudEdgeLatency := func() float64 {
-		return lognormal(15.44, 7)
-	}
-	cloudNteLatency := func() float64 {
-		return lognormal(25, 15)
-	}
-	edgeEdgeLatency := func() float64 {
-		return lognormal(6, 4)
-	}
-	nteNteLatency := func() float64 {
-		return lognormal(10, 1)
-	}
-	nteEdgeLatency := func() float64 {
-		return lognormal(8, 3)
-	}
-
-	// Extract continent from region (part before first '-')
-	srcContinent := srcRegion
-	if parts := strings.SplitN(srcRegion, "-", 2); len(parts) >= 1 {
-		srcContinent = parts[0]
-	}
-	dstContinent := dstRegion
-	if parts := strings.SplitN(dstRegion, "-", 2); len(parts) >= 1 {
-		dstContinent = parts[0]
-	}
-
-	sameRegion := srcRegion == dstRegion
-	sameContinent := srcContinent == dstContinent
-
-	var totalLatency float64
-
-	switch {
-	case srcType == "cloud" && dstType == "cloud":
-		totalLatency = cloudCloudLatency(sameContinent)
-
-	case (srcType == "cloud" && dstType == "nte") || (srcType == "nte" && dstType == "cloud"):
-		totalLatency = cloudNteLatency()
-
-	case (srcType == "cloud" && dstType == "edge") || (srcType == "edge" && dstType == "cloud"):
-		totalLatency = cloudEdgeLatency()
-
-	case srcType == "edge" && dstType == "edge":
-		// optionally you could check sameRegion or sameContinent if needed
-		totalLatency = edgeEdgeLatency()
-
-	case srcType == "nte" && dstType == "nte":
-		// only supported for same region / zone in the original; keep same behavior if needed:
-		if !sameRegion {
-			return 0, errors.New("nte-nte communication only supported within same region/zone")
-		}
-		totalLatency = nteNteLatency()
-
-	case (srcType == "nte" && dstType == "edge") || (srcType == "edge" && dstType == "nte"):
-		totalLatency = nteEdgeLatency()
-
-	default:
-		return 0, errors.New("unsupported communication type")
-	}
-
-	// round to 2 decimals
-	rounded := math.Round(totalLatency*100) / 100
-	return rounded, nil
-}

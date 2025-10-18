@@ -176,6 +176,7 @@ spec:
                                     More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
                                   type: string
                                 count:
+                                  default: 1
                                   type: integer
                                 kind:
                                   description: |-
