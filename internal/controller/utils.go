@@ -3,7 +3,11 @@ package controller
 import (
 	"context"
 	"fmt"
+	"math"
+	"math/rand/v2"
 	"reflect"
+	"sort"
+	"strings"
 
 	"encoding/json"
 
@@ -516,4 +520,132 @@ func RemoveNestedListItem(obj map[string]any, idx int, fields ...string) error {
 		return errors.New(fmt.Sprintf("field %s not found in the object or its not a list", field))
 	}
 	return nil
+}
+
+func CanonicalPair(a, b string) (string, string) {
+	ns := []string{a, b}
+	sort.Strings(ns)
+	return ns[0], ns[1]
+}
+	
+func SanitizeName(s string) string {
+	s = strings.ToLower(s)
+	out := make([]rune, 0, len(s))
+	for _, r := range s {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			out = append(out, r)
+		} else {
+			out = append(out, '-')
+		}
+	}
+	return string(out)
+}
+
+// computeFixedLatency is a stub: replace with lookup using regions/zones mapping you have.
+func ComputeFixedLatency(r1, r2 string) int {
+	if r1 == "" || r2 == "" {
+		return 100 // unknown default
+	}
+	if r1 == r2 {
+		return 5
+	}
+	// simple deterministic pseudo values for example
+	if r1 > r2 {
+		r1, r2 = r2, r1
+	}
+	// small heuristic: length difference
+	diff := len(r2) - len(r1)
+	if diff < 0 {
+		diff = -diff
+	}
+	return 20 + diff*5
+}
+
+
+// GenerateSyntheticLatency returns latency in ms rounded to 2 decimals.
+func GenerateSyntheticLatency(srcRegion, dstRegion, srcType, dstType string) (float64, error) {
+	// helper: sample from lognormal given desired mean and std (of the lognormal)
+	lognormal := func(mean, std float64) float64 {
+		if mean <= 0 {
+			return 0
+		}
+		mu := math.Log((mean*mean) / math.Sqrt(std*std+mean*mean))
+		sigma := math.Sqrt(math.Log(1 + (std/mean)*(std/mean)))
+
+		// sample standard normal via Box-Muller
+		u1 := rand.Float64()
+		u2 := rand.Float64()
+		z := math.Sqrt(-2*math.Log(u1)) * math.Cos(2*math.Pi*u2)
+
+		return math.Exp(mu + sigma*z)
+	}
+
+	cloudCloudLatency := func(sameContinent bool) float64 {
+		if sameContinent {
+			return lognormal(100, 10)
+		}
+		return lognormal(200, 50)
+	}
+	cloudEdgeLatency := func() float64 {
+		return lognormal(15.44, 7)
+	}
+	cloudNteLatency := func() float64 {
+		return lognormal(25, 15)
+	}
+	edgeEdgeLatency := func() float64 {
+		return lognormal(6, 4)
+	}
+	nteNteLatency := func() float64 {
+		return lognormal(10, 1)
+	}
+	nteEdgeLatency := func() float64 {
+		return lognormal(8, 3)
+	}
+
+	// Extract continent from region (part before first '-')
+	srcContinent := srcRegion
+	if parts := strings.SplitN(srcRegion, "-", 2); len(parts) >= 1 {
+		srcContinent = parts[0]
+	}
+	dstContinent := dstRegion
+	if parts := strings.SplitN(dstRegion, "-", 2); len(parts) >= 1 {
+		dstContinent = parts[0]
+	}
+
+	sameRegion := srcRegion == dstRegion
+	sameContinent := srcContinent == dstContinent
+
+	var totalLatency float64
+
+	switch {
+	case srcType == "cloud" && dstType == "cloud":
+		totalLatency = cloudCloudLatency(sameContinent)
+
+	case (srcType == "cloud" && dstType == "nte") || (srcType == "nte" && dstType == "cloud"):
+		totalLatency = cloudNteLatency()
+
+	case (srcType == "cloud" && dstType == "edge") || (srcType == "edge" && dstType == "cloud"):
+		totalLatency = cloudEdgeLatency()
+
+	case srcType == "edge" && dstType == "edge":
+		// optionally you could check sameRegion or sameContinent if needed
+		totalLatency = edgeEdgeLatency()
+
+	case srcType == "nte" && dstType == "nte":
+		// only supported for same region / zone in the original; keep same behavior if needed:
+		if !sameRegion {
+			return 0, errors.New("nte-nte communication only supported within same region/zone")
+		}
+		totalLatency = nteNteLatency()
+
+	case (srcType == "nte" && dstType == "edge") || (srcType == "edge" && dstType == "nte"):
+		totalLatency = nteEdgeLatency()
+
+	default:
+		return 0, errors.New("unsupported communication type")
+	}
+
+	// round to 2 decimals
+	rounded := math.Round(totalLatency*100) / 100
+	return rounded, nil
 }

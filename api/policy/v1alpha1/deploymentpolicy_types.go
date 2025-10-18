@@ -39,10 +39,20 @@ type PerformanceConstraint struct {
 type DeploymentPolicyItem struct {
 	// ComponentRef is the reference to the component
 	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	VirtualServiceConstraint []VirtualServiceConstraint `json:"virtualServiceConstraint,omitempty"`
 	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
 	// LocationConstraint is the location constraint for the component
 	LocationConstraint hv1a1.LocationConstraint `json:"locationConstraint,omitempty"`
+}
+
+type VirtualServiceConstraint struct {
+	AnyOf []VirtualServiceSelector `json:"anyOf"`
+}
+
+type VirtualServiceSelector struct {
+	hv1a1.VirtualService `json:",inline"`
+	Count          int   `json:"count,omitempty"`
 }
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.

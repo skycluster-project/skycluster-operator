@@ -29,5 +29,6 @@ SkyCluster
 .github
 config/webhook/manifests-local.yaml
 
-config
+# config/rbac
+config/webhook-local
 *.notindexed.*

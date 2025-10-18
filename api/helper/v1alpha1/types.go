@@ -50,7 +50,8 @@ type LocationCondition struct {
 
 type VirtualService struct {
 	Name string `json:"name"`
-	Type string `json:"type,omitempty"`
+	Kind string `json:"kind,omitempty"`
+	APIVersion string `json:"apiVersion,omitempty"`
 }
 
 type DeployMapEdge struct {

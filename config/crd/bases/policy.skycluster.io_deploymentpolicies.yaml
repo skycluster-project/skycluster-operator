@@ -162,6 +162,28 @@ spec:
                         responseTime:
                           type: string
                       type: object
+                    virtualServiceConstraint:
+                      items:
+                        properties:
+                          anyOf:
+                            items:
+                              properties:
+                                apiVersion:
+                                  type: string
+                                count:
+                                  type: integer
+                                kind:
+                                  type: string
+                                name:
+                                  type: string
+                              required:
+                              - name
+                              type: object
+                            type: array
+                        required:
+                        - anyOf
+                        type: object
+                      type: array
                   required:
                   - componentRef
                   type: object

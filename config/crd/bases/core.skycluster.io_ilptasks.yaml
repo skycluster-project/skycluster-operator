@@ -158,6 +158,8 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  dataflowResourceVersion:
+                    type: string
                   deployMap:
                     properties:
                       components:
@@ -545,6 +547,8 @@ spec:
                           type: object
                         type: array
                     type: object
+                  deploymentPlanResourceVersion:
+                    type: string
                   podRef:
                     description: |-
                       LocalObjectReference contains enough information to let you locate the

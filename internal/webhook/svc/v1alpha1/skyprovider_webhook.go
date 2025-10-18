@@ -63,13 +63,13 @@ func (v *SkyProviderCustomValidator) ValidateCreate(ctx context.Context, obj run
 		return nil, fmt.Errorf("VpcCidr must be specified")
 	}
 
-	pr := skyprovider.Spec.ProviderRef
-	if pr.ProviderName == "" &&
-		pr.ProviderType == "" &&
-		pr.ProviderRegion == "" &&
-		pr.ProviderZone == "" {
-		return nil, fmt.Errorf("ProviderRef must be specified")
-	}
+	// pr := skyprovider.Spec.ProviderRef
+	// if pr.ProviderName == "" &&
+	// 	pr.ProviderType == "" &&
+	// 	pr.ProviderRegion == "" &&
+	// 	pr.ProviderZone == "" {
+	// 	return nil, fmt.Errorf("ProviderRef must be specified")
+	// }
 
 	return nil, nil
 }

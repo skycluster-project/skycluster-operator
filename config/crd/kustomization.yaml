@@ -18,6 +18,7 @@ resources:
 - bases/core.skycluster.io_devicenodes.yaml
 # - ../webhook
 - ../webhook-local
+- bases/core.skycluster.io_latencies.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

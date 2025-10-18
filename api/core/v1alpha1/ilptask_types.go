@@ -31,6 +31,8 @@ type OptimizationSpec struct {
 	DeployMap    hv1a1.DeployMap                 `json:"deployMap,omitempty"`
 	ConfigMapRef corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 	PodRef       corev1.LocalObjectReference `json:"podRef,omitempty"`
+	DataflowResourceVersion        string    `json:"dataflowResourceVersion,omitempty"`
+	DeploymentPlanResourceVersion  string    `json:"deploymentPlanResourceVersion,omitempty"`
 }
 
 // ILPTaskSpec defines the desired state of ILPTask.

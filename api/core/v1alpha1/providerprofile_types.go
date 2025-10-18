@@ -24,6 +24,19 @@ import (
 	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
 
+type EgressTier struct {
+	FromGB    float64  `json:"fromGb"`              // inclusive lower bound in GB
+	ToGB      *float64 `json:"toGb,omitempty"`      // exclusive upper bound in GB, nil = infinity
+	PricePerGB float64 `json:"pricePerGb"`          // price for each GB within this tier
+}
+
+type EgressCostSpec struct {
+	Type        string      `json:"type"`        // e.g. "internet", "inter-region", "intra-region"
+	Destination string      `json:"destination,omitempty"` // optional specific destination/region
+	Unit        string      `json:"unit,omitempty"`        // e.g. "GB"
+	Tiers      []EgressTier `json:"tiers,omitempty"`      // list of egress tiers
+}
+
 // ProviderProfileSpec defines the desired state of ProviderProfile
 type ProviderProfileSpec struct {
 	Platform    string      `json:"platform"`
@@ -32,6 +45,7 @@ type ProviderProfileSpec struct {
 	Continent   string      `json:"continent,omitempty"`
 	Enabled     bool        `json:"enabled"`
 	Zones       []ZoneSpec  `json:"zones"`
+	EgressCosts []EgressCostSpec `json:"egressCosts,omitempty"`
 }
 
 type GatewaySpec struct {
@@ -52,6 +66,7 @@ type ProviderProfileStatus struct {
 	Platform                  string     `json:"platform,omitempty"`
 	Region                    string     `json:"region,omitempty"`
 	Zones                     []ZoneSpec `json:"zones,omitempty"`
+	EgressCostSpecs          []EgressCostSpec `json:"egressCosts,omitempty"`
 	ObservedGeneration        int64      `json:"observedGeneration,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`

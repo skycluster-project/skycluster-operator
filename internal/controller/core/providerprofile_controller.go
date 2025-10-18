@@ -158,6 +158,12 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
+		err = r.ensureEgressCosts(ctx, pf)
+		if err != nil {
+			r.Logger.Error(err, "unable to ensure EgressCosts for ProviderProfile")
+			return ctrl.Result{}, err
+		}
+
 		pf.Status.ObservedGeneration = pf.Generation
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "FreshReconcile", "Fresh reconcile: ConfigMap and dependencies ensured")
 		r.Logger.Info("ProviderProfile spec changed, ConfigMap and dependencies ensured", "name", req.Name, "ProviderProfile", pf.Name)
@@ -339,6 +345,25 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 func makeLatencyName(a, b string) string {
 	// sanitize names to be DNS-1123 compatible: lowercase, replace invalids with '-'
 	return "latency-" + utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
+}
+
+// Set default values for EgressCostSpec Tiers if not provided
+func (r *ProviderProfileReconciler) ensureEgressCosts(ctx context.Context, pf *cv1a1.ProviderProfile) error {
+	// Create EgressCost objects for this provider if not exists
+	pf.Status.EgressCostSpecs = []cv1a1.EgressCostSpec{}
+	for _, cost := range pf.Spec.EgressCosts {
+		pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+			Type:        cost.Type,
+			Destination: cost.Destination,
+			Unit:       cost.Unit,
+			Tiers:      cost.Tiers,
+		})
+	}
+	
+	if len(pf.Stauts.EgressCostSpecs) 
+
+
+	return nil
 }
 
 func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1a1.ProviderProfile) (error) {

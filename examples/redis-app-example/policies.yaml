@@ -1,0 +1,106 @@
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: redis-app-policies
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: gateway
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 30ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: backend
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 30ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: worker
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 30ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: redis-app-policies
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: gateway
+      virtualServices:
+        - name: managed-clusters
+          # count is not applicable for this service
+          # count: 1 
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+        # required: 
+        #   - region: scinet
+        #     zone: zone-26
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: worker
+      virtualServices:
+        - name: managed-clusters
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: backend # name must uniquely identify the component
+      virtualServiceConstraint:
+        - anyOf:
+            kind: ComputeProfile
+            # Other fields
+            # name: <name>
+            # apiVersion: <apiVersion>
+            # count: <count>
+        - kind: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      virtualServices:
+        - name: managed-clusters
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+---

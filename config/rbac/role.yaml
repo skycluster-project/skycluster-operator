@@ -34,10 +34,10 @@ rules:
   - core.skycluster.io
   resources:
   - devicenodes
-  - egresscosts
   - ilptasks
   - images
   - instancetypes
+  - latencies
   - providerprofiles
   - skyclusters
   verbs:
@@ -52,10 +52,10 @@ rules:
   - core.skycluster.io
   resources:
   - devicenodes/finalizers
-  - egresscosts/finalizers
   - ilptasks/finalizers
   - images/finalizers
   - instancetypes/finalizers
+  - latencies/finalizers
   - providerprofiles/finalizers
   - skyclusters/finalizers
   verbs:
@@ -64,10 +64,10 @@ rules:
   - core.skycluster.io
   resources:
   - devicenodes/status
-  - egresscosts/status
   - ilptasks/status
   - images/status
   - instancetypes/status
+  - latencies/status
   - providerprofiles/status
   - skyclusters/status
   verbs:
