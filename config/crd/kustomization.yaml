@@ -14,7 +14,6 @@ resources:
 - bases/core.skycluster.io_images.yaml
 - bases/core.skycluster.io_instancetypes.yaml
 - bases/core.skycluster.io_providerprofiles.yaml
-- bases/core.skycluster.io_egresscosts.yaml
 - bases/core.skycluster.io_devicenodes.yaml
 # - ../webhook
 - ../webhook-local

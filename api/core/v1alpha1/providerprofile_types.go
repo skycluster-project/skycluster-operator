@@ -25,9 +25,9 @@ import (
 )
 
 type EgressTier struct {
-	FromGB    float64  `json:"fromGb"`              // inclusive lower bound in GB
-	ToGB      *float64 `json:"toGb,omitempty"`      // exclusive upper bound in GB, nil = infinity
-	PricePerGB float64 `json:"pricePerGb"`          // price for each GB within this tier
+	FromGB    int  `json:"fromGb"`              // inclusive lower bound in GB
+	ToGB      int  `json:"toGb,omitempty"`      // upper bound in GB, omit for no upper bound
+	PricePerGB string `json:"pricePerGb"`          // price for each GB within this tier
 }
 
 type EgressCostSpec struct {

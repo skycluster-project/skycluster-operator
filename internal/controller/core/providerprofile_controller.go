@@ -158,7 +158,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			return ctrl.Result{}, err
 		}
 
-		err = r.ensureEgressCosts(ctx, pf)
+		err = r.ensureEgressCosts(pf)
 		if err != nil {
 			r.Logger.Error(err, "unable to ensure EgressCosts for ProviderProfile")
 			return ctrl.Result{}, err
@@ -313,7 +313,7 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 		return nil, fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
 	}
 
-	it := &cv1a1.InstanceType{
+	it := &cv1a1.InstanceType {
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    pf.Namespace,
 			GenerateName: fmt.Sprintf("%s-", pf.Name),
@@ -348,7 +348,7 @@ func makeLatencyName(a, b string) string {
 }
 
 // Set default values for EgressCostSpec Tiers if not provided
-func (r *ProviderProfileReconciler) ensureEgressCosts(ctx context.Context, pf *cv1a1.ProviderProfile) error {
+func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile) error {
 	// Create EgressCost objects for this provider if not exists
 	pf.Status.EgressCostSpecs = []cv1a1.EgressCostSpec{}
 	for _, cost := range pf.Spec.EgressCosts {
@@ -360,9 +360,31 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(ctx context.Context, pf *c
 		})
 	}
 	
-	if len(pf.Stauts.EgressCostSpecs) 
-
-
+	if len(pf.Status.EgressCostSpecs) == 0 {
+		// set default egress costs based on platform
+		plt := pf.Spec.Platform
+		// set costs for public clouds only
+		switch strings.ToLower(plt) {
+		case "aws":
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:        "internet",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"}},
+			})
+		case "azure":
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:        "internet",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.087"}},
+			})
+		case "gcp":
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:        "internet",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.12"}},
+			})
+		}
+	}
 	return nil
 }
 

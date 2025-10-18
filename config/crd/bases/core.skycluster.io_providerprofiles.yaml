@@ -51,6 +51,33 @@ spec:
             properties:
               continent:
                 type: string
+              egressCosts:
+                items:
+                  properties:
+                    destination:
+                      type: string
+                    tiers:
+                      items:
+                        properties:
+                          fromGb:
+                            type: integer
+                          pricePerGb:
+                            type: string
+                          toGb:
+                            type: integer
+                        required:
+                        - fromGb
+                        - pricePerGb
+                        type: object
+                      type: array
+                    type:
+                      type: string
+                    unit:
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
               enabled:
                 type: boolean
               platform:
@@ -161,6 +188,33 @@ spec:
                   required:
                   - kind
                   - name
+                  type: object
+                type: array
+              egressCosts:
+                items:
+                  properties:
+                    destination:
+                      type: string
+                    tiers:
+                      items:
+                        properties:
+                          fromGb:
+                            type: integer
+                          pricePerGb:
+                            type: string
+                          toGb:
+                            type: integer
+                        required:
+                        - fromGb
+                        - pricePerGb
+                        type: object
+                      type: array
+                    type:
+                      type: string
+                    unit:
+                      type: string
+                  required:
+                  - type
                   type: object
                 type: array
               observedGeneration:
