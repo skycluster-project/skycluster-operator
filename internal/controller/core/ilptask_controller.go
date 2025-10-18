@@ -133,10 +133,12 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 	// Otherwise create or ensure optimization pod
 	podName := task.Status.Optimization.PodRef.Name
+
 	if podName == "" { // not yet created
+
 		// Pod not found -> create one to run optimization
 		r.Logger.Info("Creating optimization pod for ILPTask")
-		newPodName, err := r.prepareandBuildOptimizationPod(df, dp, task)
+		newPodName, err := r.prepareAndBuildOptimizationPod(df, dp, task)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -146,37 +148,34 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 		r.Logger.Info("Optimization pod created", "pod", newPodName)
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-	} else {
+		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
+
+	} else { // pod already created - check status
+		
 		r.Logger.Info("Fetching optimization pod for ILPTask", "podName", podName)
 		pod := &corev1.Pod{}
 		err := r.Get(ctx, types.NamespacedName{Namespace: hv1a1.SKYCLUSTER_NAMESPACE, Name: podName}, pod)
+
 		if err == nil { // pod exists - check phase
-			// podStatus, optResult, optDeployPlan, err := getPodStatusAndResult(ctx, r)
-			r.Logger.Info("Optimization pod found", "phase", pod.Status.Phase)
+			r.Logger.Info("Optimization pod found")
 			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 				// Pod completed - read result from a ConfigMap or pod logs in real implementation.
 				// For now, we set Result based on PodSucceeded/Failed.
-
-				// instance.Status.Optimization.ConfigMapRef = corev1.LocalObjectReference{
-				// 	Name: OPTMIZATION_POD_NAME,
-				// }
-				// instance.Status.Optimization.PodRef = corev1.LocalObjectReference{
-				// 	Name: OPTMIZATION_POD_NAME,
-				// }
-
+				
 				if pod.Status.Phase == corev1.PodSucceeded {
+					optDeployPlan, err := r.getPodStatusAndResult(podName)
+					if err != nil {
+						return ctrl.Result{}, errors.Wrap(err, "failed to get pod status and result")
+					}
+					
+					// if the result is optimal we set the deployment plan
+					deployPlan := hv1a1.DeployMap{}
+					if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
+						return ctrl.Result{}, errors.Wrap(err, "failed to unmarshal deploy plan")
+					}
+					task.Status.Optimization.DeployMap = deployPlan
 					task.Status.Optimization.Status = "Succeeded"
 					task.Status.Optimization.Result = "Success"
-
-					// if the result is optimal we set the deployment plan
-					// 			deployPlan := hv1a1.DeployMap{}
-					// if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
-					// 	logger.Info(fmt.Sprintf("[%s]\t Failed to unmarshal deploy plan", loggerName))
-					// 	return ctrl.Result{}, err
-					// }
-					// instance.Status.Optimization.DeployMap = deployPlan
-
 					// If the optimization result is "Optimal" and status is "Succeeded",
 					// We have the deployment plan and we can update the SkyCluster object. (trigger deployment)
 					// skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
@@ -185,35 +184,26 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					// 	logger.Info(fmt.Sprintf("[%s]\t Failed to get SkyCluster upon updating with ILPTask results.", loggerName))
 					// 	return ctrl.Result{}, err
 					// }
-
+				} else {
+					task.Status.Optimization.Status = "Failed"
+					task.Status.Optimization.Result = "Infeasible"
 				} 
-				// else {
-				// 	task.Status.Optimization.Status = "Failed"
-				// 	task.Status.Optimization.Result = "Infeasible"
-				// }
+				
 				// update stored resource versions to current so we won't rerun unnecessarily
 				task.Status.Optimization.DataflowResourceVersion = currDFRV
 				task.Status.Optimization.DeploymentPlanResourceVersion = currDPRV
+
 				task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: pod.Name}
 				if err := r.Status().Update(ctx, task); err != nil {
-					r.Logger.Error(err, "failed to update ILPTask status after pod completion")
-					return ctrl.Result{}, err
+					return ctrl.Result{}, errors.Wrap(err, "failed to update ILPTask status after pod completion")
 				}
 				r.Logger.Info("Optimization pod completed; status updated", "phase", pod.Status.Phase)
 				return ctrl.Result{}, nil
-			} else {
-				// Pod still running; ensure status records it (how about failed status?)
-				// 	task.Status.Optimization.Status = "Running"
-				// 	task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: pod.Name}
-				// 	if err := r.Status().Update(ctx, task); err != nil {
-				// 		logger.Error(err, "failed to update status with running pod info")
-				// 		return ctrl.Result{}, err
-				// 	}
-				// 	logger.Info("Optimization pod already running")
-				// 	return ctrl.Result{RequeueAfter: 10 * 1e9}, nil // requeue in 10s
-				// }
+			} else { // Pod still running
+				r.Logger.Info("Optimization pod already running")
+				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil // requeue in 3s
 			}
-		} else {
+		} else { // error fetching pod
 			r.Logger.Error(err, "failed to get optimization pod", "podName", podName)
 			// remove pod name
 			task.Status.Optimization.PodRef = corev1.LocalObjectReference{}
@@ -238,7 +228,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// return ctrl.Result{RequeueAfter: 5 * 1e9}, nil
 }
 
-func (r *ILPTaskReconciler) prepareandBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
+func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
 	tasksJson, err := generateTasksJson(dp)
 	if err != nil {
@@ -711,9 +701,9 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 					Image: "etesami/optimizer-engine:latest",
 					ImagePullPolicy: corev1.PullAlways,
 					Command: []string{
-						"python",
+						"/bin/bash", "-c",
 					},
-					Args: []string{"/scripts/call_optimization.py"},
+					Args: []string{"chmod +x /scripts/start.sh && /scripts/start.sh"},
 					VolumeMounts: []corev1.VolumeMount{
 						{
 							Name:      "shared",
@@ -746,10 +736,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	}
 	// The pod is in skycluster namespace
 	// The ilptask is in the default namespace, and cross namespace reference is not allowed
-	// The pod is removed when the ILPTask is not found (deleted).
-	// if err := ctrl.SetControllerReference(taskMeta, pod, r.Scheme); err != nil {
-	// 	return "", err
-	// }
+	
 	r.Logger.Info("Creating optimization pod", "podName", pod.Name)
 	if err := r.Create(context.TODO(), pod); err != nil { return "", err }
 	return pod.Name, nil
@@ -781,29 +768,29 @@ func (r *ILPTaskReconciler) getOptimizationConfigMaps() (map[string]string, erro
 // - optimizationStatus: The status of the optimization process.
 // - deploymentPlan: The deployment plan details.
 // - error: An error object if an error occurred, otherwise nil.
-func getPodStatusAndResult(ctx context.Context, r *ILPTaskReconciler) (podStatus string, optmizationStatus string, deployPlan string, err error) {
+func (r *ILPTaskReconciler) getPodStatusAndResult(podName string) (deployPlan string, err error) {
 	pod := &corev1.Pod{}
-	if err := r.Get(ctx, client.ObjectKey{
+	if err := r.Get(context.TODO(), client.ObjectKey{
 		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
-		Name:      "OPTMIZATION_POD_NAME",
+		Name:      podName,
 	}, pod); err != nil {
-		return "", "", "", err
+		return "", err
 	}
 	if pod.Status.Phase == corev1.PodSucceeded {
 		// get the result from the configmap
 		configMap := &corev1.ConfigMap{}
-		if err := r.Get(ctx, client.ObjectKey{
+		if err := r.Get(context.TODO(), client.ObjectKey{
 			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
-			Name:      "OPTMIZATION_POD_NAME",
+			Name:      "deploy-plan-config",
 		}, configMap); err != nil {
-			return "", "", "", err
+			return "", err
 		}
 		// The result of the optimization could be Optimal or Infeasible
-		return string(pod.Status.Phase), configMap.Data["result"], configMap.Data["deploy-plan"], nil
+		return configMap.Data["deploy-plan.json"], nil
 	}
 	// When the pod is not completed yet or not succeeded
 	// there is no result to return except the pod status
-	return string(pod.Status.Phase), "", "", nil
+	return "", nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
