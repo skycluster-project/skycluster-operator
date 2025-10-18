@@ -18,8 +18,8 @@ package policy
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,7 +27,6 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
@@ -38,6 +37,7 @@ import (
 type DataflowPolicyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Logger logr.Logger
 }
 
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=dataflowpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -45,12 +45,11 @@ type DataflowPolicyReconciler struct {
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=dataflowpolicies/finalizers,verbs=update
 
 func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger, ln := log.FromContext(ctx), "DFPolicy"
-	logger.Info(fmt.Sprintf("[%s]\t Reconciling DataflowPolicy for [%s]", ln, req.NamespacedName))
+	r.Logger.Info("Reconciling DataflowPolicy started")
 
 	df := &policyv1alpha1.DataflowPolicy{}
 	if err := r.Get(ctx, req.NamespacedName, df); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t DataflowPolicy not found.", ln))
+		r.Logger.Info("DataflowPolicy not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -63,29 +62,25 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				Spec:       corev1alpha1.ILPTaskSpec{DataflowPolicyRef: corev1.LocalObjectReference{Name: df.Name}},
 			}
 			if err := ctrl.SetControllerReference(df, newILP, r.Scheme); err != nil {
-				logger.Error(err, fmt.Sprintf("[%s]\t Failed to set owner reference.", ln))
+				r.Logger.Error(err, "Failed to set owner reference.")
 				return ctrl.Result{}, err
 			}
 			if err := r.Create(ctx, newILP); err != nil {
 				if apierrors.IsAlreadyExists(err) {
-					logger.Info(fmt.Sprintf("[%s]\t ILPTask created concurrently, requeueing.", ln))
+					r.Logger.Info("ILPTask created concurrently, requeueing.")
 					return ctrl.Result{Requeue: true}, nil
 				}
-				logger.Error(err, fmt.Sprintf("[%s]\t Failed to create ILPTask.", ln))
+				r.Logger.Error(err, "Failed to create ILPTask.")
 				return ctrl.Result{}, err
 			}
 		} else {
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to get ILPTask.", ln))
+			r.Logger.Error(err, "Failed to get ILPTask.")
 			return ctrl.Result{}, err
 		}
-	} else if ilp.Spec.DataflowPolicyRef.Name == "" {
-		orig := ilp.DeepCopy()
-		ilp.Spec.DataflowPolicyRef.Name = df.Name
-		if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
-			if apierrors.IsConflict(err) {
-				return ctrl.Result{Requeue: true}, nil
-			}
-			logger.Error(err, fmt.Sprintf("[%s]\t Failed to update ILPTask.", ln))
+	} else {
+		// make sure ILPTask references the correct DataflowPolicy
+		if err := r.updateILPTaskRef(ctx, ilp, df.Name); err != nil {
+			r.Logger.Error(err, "Failed to update ILPTask's DataflowPolicyRef.")
 			return ctrl.Result{}, err
 		}
 	}
@@ -98,12 +93,21 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		cur.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
 		return r.Status().Update(ctx, cur)
 	}); err != nil {
-		logger.Error(err, fmt.Sprintf("[%s]\t Failed to update DataflowPolicy status.", ln))
+		r.Logger.Error(err, "Failed to update DataflowPolicy status.")
 		return ctrl.Result{}, err
 	}
 
-	logger.Info(fmt.Sprintf("[%s]\t Reconciled DataflowPolicy for [%s]", ln, req.NamespacedName))
 	return ctrl.Result{}, nil
+}
+
+func (r *DataflowPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string) error {
+	orig := ilp.DeepCopy()
+	ilp.Spec.DataflowPolicyRef.Name = name
+	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
+		if apierrors.IsConflict(err) {return nil}
+		return err
+	}
+	return nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

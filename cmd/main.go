@@ -259,6 +259,7 @@ func main() {
 	if err = (&policycontroller.DataflowPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[DeploymentPolicy]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
 		os.Exit(1)
@@ -266,6 +267,7 @@ func main() {
 	if err = (&policycontroller.DeploymentPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[DeploymentPolicy]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
 		os.Exit(1)
