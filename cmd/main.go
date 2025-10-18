@@ -287,13 +287,6 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DeviceNode")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.EgressCostReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "EgressCost")
-		os.Exit(1)
-	}
 	if err := (&corecontroller.ImageReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
