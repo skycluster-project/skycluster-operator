@@ -38,6 +38,8 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"time"
 
 	// "time"
 
@@ -133,23 +135,25 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	podName := task.Status.Optimization.PodRef.Name
 	if podName == "" { // not yet created
 		// Pod not found -> create one to run optimization
-		if err := r.buildOptimizationPod(df, dp, task, podName, req.Namespace); err != nil {
+		r.Logger.Info("Creating optimization pod for ILPTask")
+		newPodName, err := r.prepareandBuildOptimizationPod(df, dp, task)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{}, nil
-		// if err := ctrl.SetControllerReference(task, newPod, r.Scheme); err != nil {
-		// 	logger.Error(err, "unable to set owner reference on pod")
-		// 	return ctrl.Result{}, err
-		// }
-		// if err := r.Create(ctx, newPod); err != nil {
-		// 	logger.Error(err, "failed to create optimization pod")
-		// 	return ctrl.Result{}, err
-		// }
+		task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: newPodName}
+		if err := r.Status().Update(ctx, task); err != nil {
+			r.Logger.Error(err, "failed to update ILPTask status after pod creation")
+			return ctrl.Result{}, err
+		}
+		r.Logger.Info("Optimization pod created", "pod", newPodName)
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	} else {
+		r.Logger.Info("Fetching optimization pod for ILPTask", "podName", podName)
 		pod := &corev1.Pod{}
-		err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: podName}, pod)
+		err := r.Get(ctx, types.NamespacedName{Namespace: hv1a1.SKYCLUSTER_NAMESPACE, Name: podName}, pod)
 		if err == nil { // pod exists - check phase
 			// podStatus, optResult, optDeployPlan, err := getPodStatusAndResult(ctx, r)
+			r.Logger.Info("Optimization pod found", "phase", pod.Status.Phase)
 			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
 				// Pod completed - read result from a ConfigMap or pod logs in real implementation.
 				// For now, we set Result based on PodSucceeded/Failed.
@@ -209,7 +213,15 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				// 	return ctrl.Result{RequeueAfter: 10 * 1e9}, nil // requeue in 10s
 				// }
 			}
-		} 
+		} else {
+			r.Logger.Error(err, "failed to get optimization pod", "podName", podName)
+			// remove pod name
+			task.Status.Optimization.PodRef = corev1.LocalObjectReference{}
+			if err := r.Status().Update(ctx, task); err != nil {
+				r.Logger.Error(err, "failed to update ILPTask status after pod removal")
+				return ctrl.Result{RequeueAfter: 2 * time.Second}, err
+			}
+		}
 	}
 	return ctrl.Result{}, nil
 	
@@ -226,62 +238,61 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// return ctrl.Result{RequeueAfter: 5 * 1e9}, nil
 }
 
-func (r *ILPTaskReconciler) buildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask, podName string, ns string) error {
+func (r *ILPTaskReconciler) prepareandBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
 	tasksJson, err := generateTasksJson(dp)
 	if err != nil {
-		return err
+		return "", err
 	}
 	// Creating tasks-edges.csv
 	tasksEdges, err := generateTasksEdgesJson(df)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	providers, err := r.generateProvidersJson()
 	if err != nil {
-		return err
+		return "", err
 	}
-	providersAttr, err := r.generateProvidersAttrJson(ns)
+	providersAttr, err := r.generateProvidersAttrJson(task.Namespace)
 	if err != nil {
-		return err
+		return "", err
 	}
 	virtualServices, err := r.generateVServicesJson()
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	// dataMap := map[string]string{
-	// 	"tasks.json":         tasksJson,
-	// 	"tasks-edges.json":   tasksEdges,
-	// 	"providers.json":     providers,
-	// 	"providers-attr.json": providersAttr,
-	// 	"virtual-services.json": virtualServices,
-	// }
+	dataMap := map[string]string{
+		"tasks.json":         tasksJson,
+		"tasks-edges.json":   tasksEdges,
+		"providers.json":     providers,
+		"providers-attr.json": providersAttr,
+		"virtual-services.json": virtualServices,
+	}
 
 	// write all JSON strings to a temporary directory for quick inspection
 	tmpDir, err := os.MkdirTemp("/tmp", "ilp-debug-")
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if err := os.WriteFile(filepath.Join(tmpDir, "tasks.json"), []byte(tasksJson), 0644); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "tasks-edges.json"), []byte(tasksEdges), 0644); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "providers.json"), []byte(providers), 0644); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "providers-attr.json"), []byte(providersAttr), 0644); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(tmpDir, "virtual-services.json"), []byte(virtualServices), 0644); err != nil {
-		return err
+		return "", err
 	}
 
-	
 	// Results
 	//    '/shared/optimization-stats.csv'
 	//    '/shared/deploy-plan.json'
@@ -289,16 +300,17 @@ func (r *ILPTaskReconciler) buildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1
 	// a configmap is created to store the results with label
 	// skycluster.io/config-type: optimization-status
 
-	// scripts, err := r.getOptimizationConfigMaps()
-	// if err != nil { return err }
+	scripts, err := r.getOptimizationConfigMaps()
+	if err != nil { return "", err }
 
-	// // Define Pod
-	// // If they differ the name of SkyCluster should be passed
-	// if err := r.defineOptimizationPod(task.Name, scripts, dataMap); err != nil {
-	// 	return err
-	// }
+	// Define Pod
+	// If they differ the name of SkyCluster should be passed
+	podName, err := r.buildOptimizationPod(task, scripts, dataMap)
+	if err != nil {
+		return "", err
+	}
 
-	return nil
+	return podName, nil
 }
 
 func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan hv1a1.DeployMap, result, status string) (*cv1a1.SkyCluster, error) {
@@ -640,153 +652,127 @@ func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
 	return string(b), nil
 }
 
-func (r *ILPTaskReconciler) defineOptimizationPod(name string, scripts map[string]string, dataMap map[string]string) error {
-	optCfgMap := &corev1.ConfigMap{
+func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, scripts map[string]string, dataMap map[string]string) (string, error) {
+
+	if len(scripts) == 0 || len(dataMap) == 0 {
+		return "", fmt.Errorf("optimization scripts or data configmap is empty")
+	}
+
+	var files []string
+	for file, content := range scripts {
+		// Use a heredoc for safe multiline content
+    heredoc := fmt.Sprintf("cat << 'EOF' > /scripts/%s\n%s\nEOF", file, content)
+    files = append(files, heredoc)
+	}
+	for file, content := range dataMap {
+		// Use a heredoc for safe multiline content
+    heredoc := fmt.Sprintf("cat << 'EOF' > /shared/%s\n%s\nEOF", file, content)
+    files = append(files, heredoc)
+	}
+	// Join all lines with "&&" so they run sequentially
+	initCommand := strings.Join(files, "\n")
+
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "optimization-scripts",
-			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
+			GenerateName: taskMeta.Name,
+			Namespace:    hv1a1.SKYCLUSTER_NAMESPACE,
+			Labels: map[string]string{
+				"skycluster.io/managed-by": "skycluster",
+				"skycluster.io/component":  "optimization",
+			},
 		},
-		Data: scripts,
-	}
-
-	dataCfgMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "optimization-data",
-			Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
+		Spec: corev1.PodSpec{
+			ServiceAccountName: "skycluster-sva",
+			RestartPolicy:      corev1.RestartPolicyNever,
+			InitContainers: []corev1.Container{
+				{
+					Name:  "busybox",
+					Image: "busybox",
+					Command: []string{
+						"/bin/sh",
+						"-c",
+					},
+					Args:    []string{initCommand},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "shared",
+							MountPath: "/shared",
+						},
+						{
+							Name:      "scripts",
+							MountPath: "/scripts",
+						},
+					},
+				},
+			},
+			Containers: []corev1.Container{
+				{
+					Name:  "ubuntu-python",
+					Image: "etesami/optimizer-engine:latest",
+					ImagePullPolicy: corev1.PullAlways,
+					Command: []string{
+						"python",
+					},
+					Args: []string{"/scripts/call_optimization.py"},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "shared",
+							MountPath: "/shared",
+						},
+						{
+							Name:      "scripts",
+							MountPath: "/scripts",
+						},
+					},
+				},
+			},
+			Volumes: []corev1.Volume{
+				{
+					Name: "scripts",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "shared",
+					VolumeSource: corev1.VolumeSource{
+						PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+							ClaimName: "skycluster-pvc",
+						},
+					},
+				},
+			},
 		},
-		Data: dataMap,
 	}
-
-	if len(optCfgMap.Data) == 0 || len(dataCfgMap.Data) == 0 {
-		return fmt.Errorf("optimization scripts or data configmap is empty")
-	}
-
-	// pod := &corev1.Pod{
-	// 	ObjectMeta: metav1.ObjectMeta{
-	// 		Name:      name,
-	// 		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
-	// 		Labels: map[string]string{
-	// 			"skycluster.io/managed-by": "skycluster",
-	// 			"skycluster.io/component":  "optimization",
-	// 		},
-	// 	},
-	// 	Spec: corev1.PodSpec{
-	// 		ServiceAccountName: "skycluster-sva",
-	// 		RestartPolicy:      corev1.RestartPolicyNever,
-	// 		InitContainers: []corev1.Container{
-	// 			{
-	// 				Name: "kubectl",
-	// 				Image: "etesami/kubectl:latest",
-	// 				// Env: []corev1.EnvVar{
-	// 				// 	{Name: "TASKS", Value: tasks},
-	// 				// },
-	// 				Command: []string{
-	// 					"/bin/sh",
-	// 					"-c",
-	// 				},
-	// 				Args: []string{
-	// 					strings.ReplaceAll(
-	// 						scripts["init.sh"],
-	// 						"__SKYCLUSTER__NAME__",
-	// 						skyClusterName),
-	// 				},
-	// 				VolumeMounts: []corev1.VolumeMount{
-	// 					{
-	// 						Name:      "shared",
-	// 						MountPath: "/shared",
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 		Containers: []corev1.Container{
-	// 			{
-	// 				Name:  "ubuntu-python",
-	// 				Image: "registry.skycluster.io/ubuntu-python:3.10",
-	// 				Command: []string{
-	// 					"/bin/sh",
-	// 					"-c",
-	// 				},
-	// 				// Env: []corev1.EnvVar{
-	// 				// 	{Name: "TASKS", Value: tasks},
-	// 				// },
-	// 				Args: []string{
-	// 					strings.ReplaceAll(
-	// 						scripts["main.sh"],
-	// 						"__CONFIG_NAME__",
-	// 						"OPTMIZATION_POD_NAME"),
-	// 				},
-	// 				VolumeMounts: []corev1.VolumeMount{
-	// 					{
-	// 						Name:      "shared",
-	// 						MountPath: "/shared",
-	// 					},
-	// 					{
-	// 						Name:      "data",
-	// 						MountPath: "/data",
-	// 					},
-	// 					{
-	// 						Name:      "scripts",
-	// 						MountPath: "/scripts",
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 		Volumes: []corev1.Volume{
-	// 			{
-	// 				Name: "scripts",
-	// 				VolumeSource: corev1.VolumeSource{
-	// 					ConfigMap: &corev1.ConfigMapVolumeSource{
-	// 						LocalObjectReference: corev1.LocalObjectReference{Name: optCfgMap.Name},
-	// 					},
-	// 				},
-	// 			},
-	// 			{
-	// 				Name: "data",
-	// 				VolumeSource: corev1.VolumeSource{
-	// 					ConfigMap: &corev1.ConfigMapVolumeSource{
-	// 						LocalObjectReference: corev1.LocalObjectReference{Name: dataCfgMap.Name},
-	// 					},
-	// 				},
-	// 			},
-	// 			{
-	// 				Name: "shared",
-	// 				VolumeSource: corev1.VolumeSource{
-	// 					PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-	// 						ClaimName: "skycluster-pvc",
-	// 					},
-	// 				},
-	// 			},
-	// 		},
-	// 	},
+	// The pod is in skycluster namespace
+	// The ilptask is in the default namespace, and cross namespace reference is not allowed
+	// The pod is removed when the ILPTask is not found (deleted).
+	// if err := ctrl.SetControllerReference(taskMeta, pod, r.Scheme); err != nil {
+	// 	return "", err
 	// }
-	// // The pod is in skycluster namespace
-	// // The ilptask is in the default namespace, and cross namespace reference is not allowed
-	// // The pod is removed when the ILPTask is not found (deleted).
-	
-	// if err := r.Create(context.TODO(), pod); err != nil { return err }
-	return nil
+	r.Logger.Info("Creating optimization pod", "podName", pod.Name)
+	if err := r.Create(context.TODO(), pod); err != nil { return "", err }
+	return pod.Name, nil
 }
 
 func (r *ILPTaskReconciler) getOptimizationConfigMaps() (map[string]string, error) {
-	configMapLabels := []string{"optimization-starter", "optimization-scripts"}
 	scripts := make(map[string]string)
-	for _, label := range configMapLabels {
-		var configMapList corev1.ConfigMapList
-		if err := r.List(context.TODO(), &configMapList, client.MatchingLabels{
-			"skycluster.io/managed-by":  "skycluster",
-			hv1a1.SKYCLUSTER_CONFIGTYPE_LABEL: label,
-		}); err != nil { return nil, err }
+	var configMapList corev1.ConfigMapList
+	if err := r.List(context.TODO(), &configMapList, client.MatchingLabels{
+		"skycluster.io/managed-by":  "skycluster",
+		hv1a1.SKYCLUSTER_CONFIGTYPE_LABEL: "optimization-scripts",
+	}); err != nil { return nil, err }
 
-		if len(configMapList.Items) == 0 {
-			return nil, errors.New("no configmap found (optimization-starter)")
-		}
+	if len(configMapList.Items) == 0 {
+		return nil, errors.New("no configmap found (optimization-starter)")
+	}
 
-		for _, cm := range configMapList.Items {
-			for key, val := range cm.Data {
-				scripts[key] = val
-			}
+	for _, cm := range configMapList.Items {
+		for key, val := range cm.Data {
+			scripts[key] = val
 		}
 	}
+	
 	return scripts, nil
 }
 

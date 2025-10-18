@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	SKYCLUSTER_NAMESPACE           = "skycluster"
+	SKYCLUSTER_NAMESPACE           = "skycluster-system"
 	SKYCLUSTER_API                 = "skycluster.io"
 	SKYCLUSTER_COREGROUP           = "core." + SKYCLUSTER_API
 	SKYCLUSTER_XRDsGROUP           = "xrds." + SKYCLUSTER_API
