@@ -367,21 +367,27 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile)
 		switch strings.ToLower(plt) {
 		case "aws":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:        "internet",
+				Type:       "internet",
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"}},
 			})
 		case "azure":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:        "internet",
+				Type:       "internet",
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.087"}},
 			})
 		case "gcp":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:        "internet",
+				Type:       "internet",
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.12"}},
+			})
+		default:
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "internet",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.0"}},
 			})
 		}
 	}
@@ -684,23 +690,24 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 	// add managed cluster (EKS/GKE/AKS generic mapping) service and costs
 	// fixed cost values for common managed control plane offerings and
 	// an estimated overhead cost for a "system" node type (hosting e.g. karpenter).
-	managedClusters := []map[string]any{
-		{
-			"name":               "managedKubernetes",
-			"price":              lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
-			"overheads": []map[string]any{
-				{
-					"instanceType":  lo.If(pf.Spec.Platform == "aws", "m5.large").ElseIf(pf.Spec.Platform == "gcp", "e2-standard-2").Else("Standard_D2s_v3"),
+	// for cloud providers only
+	if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
+		managedClusters := []map[string]any{
+			{
+				"name":    lo.If(pf.Spec.Platform == "aws", "EKS").ElseIf(pf.Spec.Platform == "gcp", "GKE").Else("AKS"),
+				"price":   lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
+				"overhead": map[string]any{
+					"instanceType":  lo.If(pf.Spec.Platform == "aws", "m5.xlarge").ElseIf(pf.Spec.Platform == "gcp", "e2-standard-2").Else("Standard_D2s_v3"),
 					"cost": lo.If(pf.Spec.Platform == "aws", "0.096").ElseIf(pf.Spec.Platform == "gcp", "0.067").Else("0.096"),
 					"count": 1,
 				},
 			},
-		},
-	}
-	managedYaml, err3 := pkgenc.EncodeObjectToYAML(managedClusters)
-	if err3 == nil {
-		cm.Data["managed-clusters.yaml"] = managedYaml
-		updated = true
+		}
+		managedYaml, err3 := pkgenc.EncodeObjectToYAML(managedClusters)
+		if err3 == nil {
+			cm.Data["managed-k8s.yaml"] = managedYaml
+			updated = true
+		}
 	}
 
 	if updated {
@@ -801,7 +808,7 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 	switch platform {
 	case "aws":
 		for _, z := range zoneNames {
-			zo := buildZoneOfferings(z, []string{"t3.", "m5.", "p3."})
+			zo := buildZoneOfferings(z, []string{"t3.", "m5.", "p3.", "p5.", "g5."})
 			zoneOfferings = append(zoneOfferings, zo)
 		}
 		// "m5", "m6g", "c5", "c6g", "r5", "r6g"

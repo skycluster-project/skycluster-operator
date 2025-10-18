@@ -45,7 +45,7 @@ type DeploymentPolicyReconciler struct {
 // +kubebuilder:rbac:groups=policy.skycluster.io,resources=deploymentpolicies/finalizers,verbs=update
 
 func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger, ln := log.FromContext(ctx), "DD"
+	logger, ln := log.FromContext(ctx), "DeployPolicy"
 	logger.Info(fmt.Sprintf("[%s]\t Reconciling DeploymentPolicy for [%s]", ln, req.NamespacedName))
 
 	dd := &policyv1alpha1.DeploymentPolicy{}

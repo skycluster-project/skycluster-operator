@@ -48,42 +48,8 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         name: gateway
-      virtualServices:
-        - name: managed-clusters
-          # count is not applicable for this service
-          # count: 1 
-      performanceConstraint:
-        responseTime: 100ms
-      locationConstraint:
-        permitted:
-          - regionAlias: us-east
-            platform: aws
-        # required: 
-        #   - region: scinet
-        #     zone: zone-26
-    - componentRef:
-        apiVersion: apps/v1
-        kind: Deployment
-        name: worker
-      virtualServices:
-        - name: managed-clusters
-      performanceConstraint:
-        responseTime: 100ms
-      locationConstraint:
-        permitted:
-          - regionAlias: us-east
-            platform: aws
-    - componentRef:
-        apiVersion: apps/v1
-        kind: Deployment
-        name: backend # name must uniquely identify the component
       virtualServiceConstraint:
-        - anyOf:
-            kind: ComputeProfile
-            # Other fields
-            # name: <name>
-            # apiVersion: <apiVersion>
-            # count: <count>
+      - anyOf:
         - kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
@@ -91,12 +57,51 @@ spec:
         permitted:
           - regionAlias: us-east
             platform: aws
+          - regionAlias: toronto
+        # required: 
+        #   - region: scinet
+        #     zone: zone-26
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: worker
+      virtualServiceConstraint:
+      - anyOf:
+        - kind: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+          - regionAlias: toronto
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: backend # name must uniquely identify the component
+      virtualServiceConstraint:
+      - anyOf:
+        - kind: ManagedKubernetes
+          # Other fields
+          # name: <name>
+          # apiVersion: <apiVersion>
+          # count: <count>
+      - anyOf:
+        - kind: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - regionAlias: us-east
+            platform: aws
+          - regionAlias: toronto
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
-      virtualServices:
-        - name: managed-clusters
+      virtualServiceConstraint:
+      - anyOf:
+        - kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:

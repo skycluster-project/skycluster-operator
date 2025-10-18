@@ -35,6 +35,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -42,6 +44,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -56,6 +59,7 @@ import (
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=latencies,verbs=get;list;watch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/finalizers,verbs=update
@@ -127,9 +131,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	return ctrl.Result{}, nil
-	// // Otherwise create or ensure optimization pod
-	// podName := fmt.Sprintf("%s-ilp-opt", task.Name)
+	// Otherwise create or ensure optimization pod
+	podName := fmt.Sprintf("%s-ilp-opt", task.Name)
 	// pod := &corev1.Pod{}
 	// err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: podName}, pod)
 	// if err == nil {
@@ -193,8 +196,13 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// 	return ctrl.Result{RequeueAfter: 10 * 1e9}, nil // requeue in 10s
 	// }
 
-	// // Pod not found -> create one to run optimization
-	// newPod := buildOptimizationPod(dp, task, podName)
+	// Pod not found -> create one to run optimization
+	_, err := r.buildOptimizationPod(df, dp, task, podName, req.Namespace)
+	if err != nil {
+		logger.Error(err, "failed to build optimization pod")
+		return ctrl.Result{}, err
+	}
+	return ctrl.Result{}, nil
 	// if err := ctrl.SetControllerReference(task, newPod, r.Scheme); err != nil {
 	// 	logger.Error(err, "unable to set owner reference on pod")
 	// 	return ctrl.Result{}, err
@@ -216,7 +224,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// return ctrl.Result{RequeueAfter: 5 * 1e9}, nil
 }
 
-func (r *ILPTaskReconciler) buildOptimizationPod(df *pv1a1.DataflowPolicy, dp *pv1a1.DeploymentPolicy, task *cv1a1.ILPTask, podName string) (*corev1.Pod, error) {
+func (r *ILPTaskReconciler) buildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask, podName string, ns string) (*corev1.Pod, error) {
 	// must prepare list of all components (tasks)
 	// that we should include in the optimization process.
 	// We iterate over all components in deployment policy object
@@ -237,7 +245,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(df *pv1a1.DataflowPolicy, dp *p
 	if err != nil {
 		return nil, err
 	}
-	providersAttr, err := r.generateProvidersAttrJson(dp.Namespace)
+	providersAttr, err := r.generateProvidersAttrJson(ns)
 	if err != nil {
 		return nil, err
 	}
@@ -246,6 +254,29 @@ func (r *ILPTaskReconciler) buildOptimizationPod(df *pv1a1.DataflowPolicy, dp *p
 		return nil, err
 	}
 
+	// write all JSON strings to a temporary directory for quick inspection
+	tmpDir, err := os.MkdirTemp("/tmp", "ilp-debug-")
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.WriteFile(filepath.Join(tmpDir, "tasks.json"), []byte(tasksJson), 0644); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "tasks-edges.json"), []byte(tasksEdges), 0644); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "providers.json"), []byte(providers), 0644); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "providers-attr.json"), []byte(providersAttr), 0644); err != nil {
+		return nil, err
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "virtual-services.json"), []byte(virtualServices), 0644); err != nil {
+		return nil, err
+	}
+
+	
 	// Results
 	//    '/shared/optimization-stats.csv'
 	//    '/shared/deploy-plan.json'
@@ -296,7 +327,7 @@ func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Reque
 	return skyCluster, nil
 }
 
-func generateTasksJson(dp *pv1a1.DeploymentPolicy) (string, error) {
+func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 
 	type taskStruct struct {
 		Name 		 string `json:"name,omitempty"`
@@ -386,7 +417,7 @@ func generateTasksJson(dp *pv1a1.DeploymentPolicy) (string, error) {
 	return string(optTasksJson), nil
 }
 
-func generateTasksEdgesJson(df *pv1a1.DataflowPolicy) (string, error) {
+func generateTasksEdgesJson(df pv1a1.DataflowPolicy) (string, error) {
 	type taskEdgeStruct struct {
 		SrcTask          string `json:"srcTask,omitempty"`
 		DstTask          string `json:"dstTask,omitempty"`
@@ -399,7 +430,7 @@ func generateTasksEdgesJson(df *pv1a1.DataflowPolicy) (string, error) {
 			SrcTask:  df.From.Name,
 			DstTask:  df.To.Name,
 			Latency:  df.Latency,
-			DataRate: df.AverageDataRate,
+			DataRate: df.TotalDataTransfer,
 		})
 	}
 	b, err := json.Marshal(taskEdges)
@@ -459,8 +490,8 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 	type providerAttrStruct struct {
 		SrcName 	string  `json:"srcName,omitempty"`
 		DstName 	string  `json:"dstName,omitempty"`
-		Latency 	string `json:"latency,omitempty"`
-		EgressCostDataRate string `json:"egressCost_dataRate,omitempty"`
+		Latency 	float64 `json:"latency"`
+		EgressCostDataRate float64 `json:"egressCost_dataRate"`
 	}
 
 	var providerList []providerAttrStruct
@@ -471,40 +502,134 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 			}
 			a, b := utils.CanonicalPair(p.Name, p2.Name)
 			latName := "latency-" + utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
+			
 			// assuming we are within the first tier of egress cost specs
 			// and it is for internet
 			egressCost := p.Status.EgressCostSpecs[0].Tiers[0].PricePerGB
-			var latencyValue string
 			
-			var latency cv1a1.Latency
+			var latencyValue string
+			lt := &cv1a1.Latency{}
 			err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns,
 				Name:      latName,
-			}, &latency)
+			}, lt)
 			if err != nil {
-				latencyValue = "100000" // indicating no link, error
+				return "", errors.Wrapf(err, "failed to get latency object %s, ns: %s", latName, ns)
 			} else {
-				if latency.Status.P95 != "" {
-					latencyValue = latency.Status.P95
-				} else if latency.Status.P99 != "" {
-					latencyValue = latency.Status.P99
-				} else if latency.Status.LastMeasuredMs != "" {
-					latencyValue = latency.Status.LastMeasuredMs
+				if lt.Status.P95 != "" {
+					latencyValue = lt.Status.P95
+				} else if lt.Status.P99 != "" {
+					latencyValue = lt.Status.P99
+				} else if lt.Status.LastMeasuredMs != "" {
+					latencyValue = lt.Status.LastMeasuredMs
 				} else {
-					latencyValue = "100000" // indicating no link, error
+					return "", fmt.Errorf("no latency value found in latency object %s", latName)
 				}
 			}
+			latencyValueFloat, err1 := strconv.ParseFloat(latencyValue, 64)
+			egressCostFloat, err2 := strconv.ParseFloat(egressCost, 64)
+			if err1 != nil || err2 != nil {
+				return "", fmt.Errorf("failed to parse latency or egress cost to float for providers %s and %s", p.Name, p2.Name)
+			}
+
 			providerList = append(providerList, providerAttrStruct{
 				SrcName: 	p.Name,
 				DstName: 	p2.Name,
-				Latency: 	latencyValue,
-				EgressCostDataRate: egressCost,
+				Latency: 	latencyValueFloat,
+				EgressCostDataRate: egressCostFloat,
 			})
 		}
 	}
 	b, err := json.Marshal(providerList)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal providers: %v", err)
+	}
+	return string(b), nil
+}
+
+func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
+	// Virtual Services are defined manually for now
+	// Available virtual services:
+	// ComputeProfile "flavors.yaml"
+	// ManagedKubernetes "managed-k8s.yaml"
+
+	// List all config maps by labels
+	var configMaps corev1.ConfigMapList
+	if err := r.List(context.Background(), &configMaps, client.MatchingLabels{
+		"skycluster.io/config-type": "provider-profile",
+		"skycluster.io/managed-by": "skycluster",
+	}); err != nil {
+		return "", err
+	}
+
+
+	type vServiceStruct struct {
+		VServiceName 	string  `json:"vservice_name,omitempty"`
+		VServiceKind 	string  `json:"vservice_kind,omitempty"`
+		ProviderName 	string  `json:"provider_name,omitempty"`
+		ProviderPlatform string  `json:"provider_platform,omitempty"`
+		ProviderRegion 	string  `json:"provider_region,omitempty"`
+		ProviderZone 	string  `json:"provider_zone,omitempty"`
+		DeployCost  	float64 `json:"deploy_cost,omitempty"`
+		Availability 	int     `json:"availability,omitempty"`
+	}
+	var vServicesList []vServiceStruct
+
+	for _, cm := range configMaps.Items {
+		pName := cm.Labels["skycluster.io/provider-profile"]
+		pPlatform := cm.Labels["skycluster.io/provider-platform"]
+		pRegion := cm.Labels["skycluster.io/provider-region"]
+		
+		cmData, ok := cm.Data["flavors.yaml"]
+		if ok {
+			var zoneOfferings []cv1a1.ZoneOfferings
+			if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
+				for _, zo := range zoneOfferings {
+					for _, of := range zo.Offerings{
+						priceFloat, err := strconv.ParseFloat(of.Price, 64)
+						if err != nil {continue}
+						vServicesList = append(vServicesList, vServiceStruct{
+							VServiceName:   of.NameLabel,
+							VServiceKind:   "ComputeProfile",
+							ProviderName:   pName,
+							ProviderPlatform: pPlatform,
+							ProviderRegion: pRegion,
+							ProviderZone:   zo.Zone,
+							DeployCost:     priceFloat,
+							Availability:   10000, // assuming always available
+						})
+					}
+				}
+			}
+		}
+
+		cmData, ok = cm.Data["managed-k8s.yaml"]
+		if !ok { continue }
+		var managedK8s []hv1a1.ManagedK8s
+		if err := yaml.Unmarshal([]byte(cmData), &managedK8s); err != nil {
+			return "", fmt.Errorf("failed to unmarshal managed k8s config map: %v", err)
+		}
+		for _, mk8s := range managedK8s {
+			// I expect only one offering
+			priceFloat, err1 := strconv.ParseFloat(mk8s.Price, 64)
+			priceOverheadFloat, err2 := strconv.ParseFloat(mk8s.Overhead.Cost, 64)
+			if err1 != nil || err2 != nil {
+				return "", fmt.Errorf("failed to parse price or overhead for managed k8s vservice %s: price error: %v; overhead error: %v", mk8s.Name, err1, err2)
+			}
+			vServicesList = append(vServicesList, vServiceStruct{
+				VServiceName:   mk8s.Name,
+				VServiceKind:   "ManagedKubernetes",
+				ProviderName:   pName,
+				ProviderPlatform: pPlatform,
+				ProviderRegion: pRegion,
+				DeployCost:     priceFloat + priceOverheadFloat,
+				Availability:   10000, // assuming always available
+			})
+		}
+	}
+	b, err := json.Marshal(vServicesList)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal virtual services: %v", err)
 	}
 	return string(b), nil
 }
