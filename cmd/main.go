@@ -46,6 +46,7 @@ import (
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 
+	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	wbhkcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
@@ -71,6 +72,7 @@ func init() {
 	utilruntime.Must(cv1a1.AddToScheme(scheme))
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(svcv1alpha1.AddToScheme(scheme))
+	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -349,8 +351,17 @@ func main() {
 	if err = (&corecontroller.ILPTaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
+		os.Exit(1)
+	}
+	if err := (&corecontroller.LatencyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Latency")
 		os.Exit(1)
 	}
 	// if err = (&svccontroller.SkyAppReconciler{

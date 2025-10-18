@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,6 +41,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
 	pkgenc "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/encoding"
 )
@@ -52,6 +54,7 @@ type ProviderProfileReconciler struct {
 	Logger   logr.Logger
 }
 
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=latencies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/finalizers,verbs=update
@@ -146,6 +149,13 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 			}
 			pf.Status.DependencyManager.SetDependency(img.Name, "Image", pf.Namespace)
 			pf.Status.DependencyManager.SetDependency(instanceType.Name, "InstanceType", pf.Namespace)
+		}
+
+		// ensure latencies
+		err = r.ensureLatencies(ctx, pf)
+		if err != nil {
+			r.Logger.Error(err, "unable to ensure Latencies for ProviderProfile")
+			return ctrl.Result{}, err
 		}
 
 		pf.Status.ObservedGeneration = pf.Generation
@@ -326,6 +336,62 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 	return it, nil
 }
 
+func makeLatencyName(a, b string) string {
+	// sanitize names to be DNS-1123 compatible: lowercase, replace invalids with '-'
+	return "latency-" + utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
+}
+
+func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1a1.ProviderProfile) (error) {
+	// Create Latency objects between this provider and all other providers if not exists
+	var provList cv1a1.ProviderProfileList
+	if err := r.List(ctx, &provList, client.InNamespace(pf.Namespace)); err != nil {
+		return err
+	}
+	for _, other := range provList.Items {
+		if other.Name == pf.Name {
+			continue
+		}
+		a, b := utils.CanonicalPair(pf.Name, other.Name)
+		latName := makeLatencyName(a, b)
+		var lat cv1a1.Latency
+		err := r.Get(ctx, types.NamespacedName{Namespace: pf.Namespace, Name: latName}, &lat)
+		if errors.IsNotFound(err) {
+			// create
+			z, ok1 := lo.Find(pf.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+			o, ok2 := lo.Find(other.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+			if !ok1 || !ok2 {
+				continue
+			}
+			fixedMs, err := utils.GenerateSyntheticLatency(pf.Spec.Region, other.Spec.Region, z.Type, o.Type)
+			if err != nil {
+				continue
+			}
+			newLat := cv1a1.Latency{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: pf.Namespace,
+					Name:      latName,
+					Labels: map[string]string{
+						"skycluster.io/provider-pair": utils.SanitizeName(a) + "-" + utils.SanitizeName(b),
+					},
+				},
+				Spec: cv1a1.LatencySpec{
+					ProviderRefA:  corev1.LocalObjectReference{Name: a},
+					ProviderRefB:  corev1.LocalObjectReference{Name: b},
+					FixedLatencyMs: fmt.Sprintf("%.2f", fixedMs),
+				},
+			}
+			if err := r.Create(ctx, &newLat); err != nil {return err}
+		} else if err != nil {
+			return err
+		} else {
+			// exists - optionally ensure Spec.ProviderA/B set correctly; update fixed value if desired
+			// (skip updates here to keep it compact)
+			_ = lat
+		}
+	}
+	return nil
+}
+
 // create or update
 func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.ProviderProfile) (*cv1a1.Image, error) {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
@@ -413,6 +479,39 @@ func (r *ProviderProfileReconciler) ensureConfigMap(ctx context.Context, pf *cv1
 	return cm, nil
 }
 
+func (r *ProviderProfileReconciler) cleanUpLatencyData(ctx context.Context, pf *cv1a1.ProviderProfile) error {
+	// Get all providerprofiles objects and build the labels
+	var labels []string
+	var provList cv1a1.ProviderProfileList
+	if err := r.List(ctx, &provList, client.InNamespace(pf.Namespace)); err != nil {
+		return err
+	}
+	for _, other := range provList.Items {
+		if other.Name == pf.Name {
+			continue
+		}
+		a, b := utils.CanonicalPair(pf.Name, other.Name)
+		latName := utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
+		labels = append(labels, latName)
+	}
+
+	sel, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+			MatchExpressions: []metav1.LabelSelectorRequirement{{
+			Key:      "skycluster.io/provider-pair",
+			Operator: metav1.LabelSelectorOpIn,
+			Values:   labels,
+		}},
+	})
+	if err != nil { return err }
+
+	if err := r.DeleteAllOf(ctx, &cv1a1.Latency{},
+		client.InNamespace(pf.Namespace),
+		client.MatchingLabelsSelector{Selector: sel},
+	); err != nil {return err}
+
+	return nil
+}
+
 func (r *ProviderProfileReconciler) cleanUpInstanceTypes(ctx context.Context, pf *cv1a1.ProviderProfile) error {
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "instance-types")
 	its := &cv1a1.InstanceTypeList{}
@@ -486,9 +585,10 @@ func (r *ProviderProfileReconciler) cleanUp(ctx context.Context, pf *cv1a1.Provi
 	err1 := r.cleanUpConfigMap(ctx, pf)
 	err2 := r.cleanUpImages(ctx, pf)
 	err3 := r.cleanUpInstanceTypes(ctx, pf)
+	err4 := r.cleanUpLatencyData(ctx, pf)
 
-	if err1 != nil || err2 != nil || err3 != nil {
-		return fmt.Errorf("failed to clean up resources for ProviderProfile %s", pf.Name)
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
+		return fmt.Errorf("failed to clean up resources for ProviderProfile %s, %v", pf.Name, err4)
 	}
 
 	return nil
