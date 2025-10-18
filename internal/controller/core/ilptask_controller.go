@@ -53,6 +53,7 @@ import (
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks,verbs=get;list;watch;create;update;patch;delete
@@ -215,35 +216,35 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// return ctrl.Result{RequeueAfter: 5 * 1e9}, nil
 }
 
-func buildOptimizationPod(df *pv1a1.DataflowPolicy, dp *pv1a1.DeploymentPolicy, task *cv1a1.ILPTask, podName string) (*corev1.Pod, error) {
+func (r *ILPTaskReconciler) buildOptimizationPod(df *pv1a1.DataflowPolicy, dp *pv1a1.DeploymentPolicy, task *cv1a1.ILPTask, podName string) (*corev1.Pod, error) {
 	// must prepare list of all components (tasks)
 	// that we should include in the optimization process.
 	// We iterate over all components in deployment policy object
 	// and create corresponding tasks for optimization problem.
 
 	// Creating tasks.csv
-	// tasksJson, err := generateTasksJson(dp)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// // Creating tasks-edges.csv
-	// tasksEdges, err := generateTasksEdgesJson(df)
-	// if err != nil {
-	// 	return nil, err
-	// }
+	tasksJson, err := generateTasksJson(dp)
+	if err != nil {
+		return nil, err
+	}
+	// Creating tasks-edges.csv
+	tasksEdges, err := generateTasksEdgesJson(df)
+	if err != nil {
+		return nil, err
+	}
 
-	// providers, err := r.generateProvidersJson()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// providersAttr, err := r.generateProvidersAttrJson()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// virtualServices, err := r.generateVServicesJson()
-	// if err != nil {
-	// 	return nil, err
-	// }
+	providers, err := r.generateProvidersJson()
+	if err != nil {
+		return nil, err
+	}
+	providersAttr, err := r.generateProvidersAttrJson(dp.Namespace)
+	if err != nil {
+		return nil, err
+	}
+	virtualServices, err := r.generateVServicesJson()
+	if err != nil {
+		return nil, err
+	}
 
 	// Results
 	//    '/shared/optimization-stats.csv'
@@ -447,7 +448,7 @@ func (r *ILPTaskReconciler) generateProvidersJson() (string, error) {
 	return string(b), nil
 }
 
-func (r *ILPTaskReconciler) generateProvidersAttrJson() (string, error) {
+func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error) {
 	// fetch all providerprofiles objects
 	// and generate the providers.json file
 	var providers cv1a1.ProviderProfileList
@@ -458,24 +459,47 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson() (string, error) {
 	type providerAttrStruct struct {
 		SrcName 	string  `json:"srcName,omitempty"`
 		DstName 	string  `json:"dstName,omitempty"`
-		Latency 	float64 `json:"latency,omitempty"`
-		EgressCostDataRate float64 `json:"egressCost_dataRate,omitempty"`
+		Latency 	string `json:"latency,omitempty"`
+		EgressCostDataRate string `json:"egressCost_dataRate,omitempty"`
 	}
 
 	var providerList []providerAttrStruct
 	for _, p := range providers.Items {
-		for _, zone := range p.Spec.Zones {
-			if !zone.Enabled {
+		for _, p2 := range providers.Items {
+			if p.Name == p2.Name {
 				continue
 			}
-			// providerList = append(providerList, providerStruct{
-			// 	Name:        p.Name,
-			// 	Platform:    p.Spec.Platform,
-			// 	PType:      zone.Type,
-			// 	RegionAlias: p.Spec.RegionAlias,
-			// 	Region:     p.Spec.Region,
-			// 	Zone:       zone.Name,
-			// })
+			a, b := utils.CanonicalPair(p.Name, p2.Name)
+			latName := "latency-" + utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
+			// assuming we are within the first tier of egress cost specs
+			// and it is for internet
+			egressCost := p.Status.EgressCostSpecs[0].Tiers[0].PricePerGB
+			var latencyValue string
+			
+			var latency cv1a1.Latency
+			err := r.Get(context.TODO(), client.ObjectKey{
+				Namespace: ns,
+				Name:      latName,
+			}, &latency)
+			if err != nil {
+				latencyValue = "100000" // indicating no link, error
+			} else {
+				if latency.Status.P95 != "" {
+					latencyValue = latency.Status.P95
+				} else if latency.Status.P99 != "" {
+					latencyValue = latency.Status.P99
+				} else if latency.Status.LastMeasuredMs != "" {
+					latencyValue = latency.Status.LastMeasuredMs
+				} else {
+					latencyValue = "100000" // indicating no link, error
+				}
+			}
+			providerList = append(providerList, providerAttrStruct{
+				SrcName: 	p.Name,
+				DstName: 	p2.Name,
+				Latency: 	latencyValue,
+				EgressCostDataRate: egressCost,
+			})
 		}
 	}
 	b, err := json.Marshal(providerList)

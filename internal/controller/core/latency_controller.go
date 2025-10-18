@@ -51,6 +51,8 @@ func (r *LatencyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Update status with last measured values
 	if lat.Status.LastMeasuredMs == "" {
 		lat.Status.LastMeasuredMs = lat.Spec.FixedLatencyMs
+		lat.Status.P95 = lat.Spec.FixedLatencyMs
+		lat.Status.P99 = lat.Spec.FixedLatencyMs
 	}
 	err := r.Status().Update(ctx, &lat)
 	if err != nil {
