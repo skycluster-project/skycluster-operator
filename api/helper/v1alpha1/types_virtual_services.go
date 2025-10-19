@@ -12,3 +12,7 @@ type ManagedK8sOverhead struct {
 	Count int 						 `json:"count,omitempty"`
 	InstanceType string 			 `json:"instanceType,omitempty"`
 }
+
+// ComputeProfile is defined as InstanceOffering in InstanceType
+// type ComputeProfile struct {
+// }

@@ -50,7 +50,8 @@ spec:
         name: gateway
       virtualServiceConstraint:
       - anyOf:
-        - kind: ManagedKubernetes
+        - name: EKS
+          kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
@@ -67,7 +68,8 @@ spec:
         name: worker
       virtualServiceConstraint:
       - anyOf:
-        - kind: ManagedKubernetes
+        - name: EKS
+          kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
@@ -81,13 +83,11 @@ spec:
         name: backend # name must uniquely identify the component
       virtualServiceConstraint:
       - anyOf:
-        - kind: ManagedKubernetes
+        - name: EKS
+          kind: ManagedKubernetes
           # Other fields
-          # name: <name>
           # apiVersion: <apiVersion>
           # count: <count>
-      - anyOf:
-        - kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
@@ -101,7 +101,8 @@ spec:
         name: redis
       virtualServiceConstraint:
       - anyOf:
-        - kind: ManagedKubernetes
+        - name: EKS
+          kind: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:

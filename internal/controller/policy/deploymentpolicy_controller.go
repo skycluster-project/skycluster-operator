@@ -60,7 +60,7 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			newILP := &corev1alpha1.ILPTask{
 				ObjectMeta: metav1.ObjectMeta{Name: dp.Name, Namespace: dp.Namespace},
 				Spec:       corev1alpha1.ILPTaskSpec{
-					DeploymentPlanRef: corev1alpha1.DeploymentPlanRef{
+					DeploymentPolicyRef: corev1alpha1.DeploymentPolicyRef{
 						LocalObjectReference: corev1.LocalObjectReference{Name: dp.Name},
 						DeploymentPlanResourceVersion: dp.GetResourceVersion(), // to trigger ILPTask reconciliation
 					},
@@ -116,7 +116,7 @@ func (r *DeploymentPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string, ver string) error {
 	orig := ilp.DeepCopy()
-	ilp.Spec.DeploymentPlanRef = corev1alpha1.DeploymentPlanRef{
+	ilp.Spec.DeploymentPolicyRef = corev1alpha1.DeploymentPolicyRef{
 		LocalObjectReference: corev1.LocalObjectReference{Name: name},
 		DeploymentPlanResourceVersion: ver,
 	}

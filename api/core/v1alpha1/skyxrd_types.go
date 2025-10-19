@@ -27,6 +27,8 @@ import (
 type SkyXRDSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
 	Approve bool `json:"approve"`
+	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
+	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
 }
 

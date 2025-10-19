@@ -73,22 +73,6 @@ type ILPTaskReconciler struct {
 	Logger logr.Logger
 }
 
-
-func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, req ctrl.Request) error{
-	// Delete the optimization pod best effort
-	pod := &corev1.Pod{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
-		Name:      req.Name,
-	}, pod); err != nil {
-		return err
-	}
-	if err := r.Delete(ctx, pod); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciling ILPTask started", "namespace", req.Namespace, "name", req.Name)
 	
@@ -101,7 +85,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	dfName := task.Spec.DataflowPolicyRef.Name
-	dpName := task.Spec.DeploymentPlanRef.Name
+	dpName := task.Spec.DeploymentPolicyRef.Name
 	if dfName == "" || dpName == "" {
 		r.Logger.Info("ILPTask references are incomplete; skipping optimization", "DataflowPolicyRef", dfName, "DeploymentPlanRef", dpName)
 		return ctrl.Result{}, nil
@@ -830,7 +814,7 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 			Spec: cv1a1.SkyXRDSpec{
 				Approve: false,
 				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
-				DeploymentPlanRef:  task.Spec.DeploymentPlanRef,
+				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
 				DeployMap: deployPlan,
 			},
 		}
@@ -839,5 +823,21 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 		}
 	}
 
+	return nil
+}
+
+
+func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, req ctrl.Request) error{
+	// Delete the optimization pod best effort
+	pod := &corev1.Pod{}
+	if err := r.Get(ctx, client.ObjectKey{
+		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
+		Name:      req.Name,
+	}, pod); err != nil {
+		return err
+	}
+	if err := r.Delete(ctx, pod); err != nil {
+		return err
+	}
 	return nil
 }

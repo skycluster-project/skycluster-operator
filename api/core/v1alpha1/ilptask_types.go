@@ -38,10 +38,10 @@ type OptimizationSpec struct {
 // ILPTaskSpec defines the desired state of ILPTask.
 type ILPTaskSpec struct {
 	DataflowPolicyRef  DataflowPolicyRef  `json:"dataflowPolicyRef,omitempty"`
-	DeploymentPlanRef  DeploymentPlanRef  `json:"deploymentPlanRef,omitempty"`
+	DeploymentPolicyRef  DeploymentPolicyRef  `json:"deploymentPlanRef,omitempty"`
 }
 
-type DeploymentPlanRef struct {
+type DeploymentPolicyRef struct {
 	corev1.LocalObjectReference `json:",inline"`
 	DeploymentPlanResourceVersion 		 string `json:"resourceVersion,omitempty"`
 }
