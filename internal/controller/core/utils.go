@@ -231,12 +231,19 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 			Name:      deploy.Name,
 			Namespace: deploy.Namespace,
 			Labels:    deploy.Labels,
+			Annotations: deploy.Annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: deploy.Spec.Replicas,
 			Selector: deploy.Spec.Selector,
 			Template: deploy.Spec.Template,
 		},
+	}
+	if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
+		newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)
+	}
+	if newDeploy.Spec.Selector == nil {
+		newDeploy.Spec.Selector = &metav1.LabelSelector{}
 	}
 	return newDeploy
 }
@@ -247,10 +254,19 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 
 	// copy to avoid modifying the original
 	labels := make(map[string]string)
-	maps.Copy(labels, svc.Labels)
+	if svc.Labels != nil {
+		maps.Copy(labels, svc.Labels)
+	} 
+
+	annot := make(map[string]string)
+	if svc.Annotations != nil {
+		maps.Copy(annot, svc.Annotations)
+	} 
 
 	selector := make(map[string]string)
-	maps.Copy(selector, svc.Spec.Selector)
+	if svc.Spec.Selector != nil {
+		maps.Copy(selector, svc.Spec.Selector)
+	}
 
 	newSvc := corev1.Service{
 		TypeMeta: metav1.TypeMeta{
@@ -261,6 +277,7 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 			Name:      svc.Name,
 			Namespace: svc.Namespace,
 			Labels:    labels,
+			Annotations: annot,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: selector,

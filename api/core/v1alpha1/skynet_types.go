@@ -23,17 +23,16 @@ import (
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
-// SkyXRDSpec defines the desired state of SkyXRD.
-type SkyXRDSpec struct {
-	// Manifests is a list of manifests to apply to the cluster
+// SkyNetSpec defines the desired state of SkyNet
+type SkyNetSpec struct {
 	Approve bool `json:"approve"`
 	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
 	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
 }
 
-// SkyXRDStatus defines the observed state of SkyXRD.
-type SkyXRDStatus struct {
+// SkyNetStatus defines the observed state of SkyNet.
+type SkyNetStatus struct {
 	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	Ready      bool                `json:"ready"`
@@ -43,31 +42,40 @@ type SkyXRDStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 
-// SkyXRD is the Schema for the skyxrds API.
-type SkyXRD struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+// SkyNet is the Schema for the skynets API
+type SkyNet struct {
+	metav1.TypeMeta `json:",inline"`
 
-	Spec   SkyXRDSpec   `json:"spec,omitempty"`
-	Status SkyXRDStatus `json:"status,omitempty"`
+	// metadata is a standard object metadata
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
+
+	// spec defines the desired state of SkyNet
+	// +required
+	Spec SkyNetSpec `json:"spec"`
+
+	// status defines the observed state of SkyNet
+	// +optional
+	Status SkyNetStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyXRD is ready"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyNet is ready"
 
-// SkyXRDList contains a list of SkyXRD.
-type SkyXRDList struct {
+// SkyNetList contains a list of SkyNet
+type SkyNetList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SkyXRD `json:"items"`
+	Items           []SkyNet `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SkyXRD{}, &SkyXRDList{})
+	SchemeBuilder.Register(&SkyNet{}, &SkyNetList{})
 }
 
+
 // helper to set a condition
-func (s *SkyXRDStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+func (s *SkyNetStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
 		Type:    string(condition),
 		Status:  status,

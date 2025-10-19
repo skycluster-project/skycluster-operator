@@ -146,20 +146,19 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 		manifests = append(manifests, obj)
 	}
 
-	// // ######### Deployments
+	// ######### Deployments
 	// allDeployments := make([]hv1a1.SkyService, 0)
 	// for _, deployItem := range deployMap.Component {
-	// 	// For each component we check its kind and based on that we decide how to proceed:
-	// 	// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
-	// 	// 	If this is a Deployment, then we need to group the deployments based on the provider
-	// 	// Then using decreasing first fit, we identitfy the number and type of VMs required.
-	// 	// Then we create SkyK8SCluster with a controller and agents specified in previous step.
-	// 	// We also need to annotate deployments carefully and create services and istio resources accordingly.
+		// For each component we check its kind and based on that we decide how to proceed:
+		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
+		// 	If this is a Deployment, then we need to group the deployments based on the provider
+		// Then using decreasing first fit, we identitfy the number and type of VMs required.
+		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
+		// We also need to annotate deployments carefully and create services and istio resources accordingly.
 
-	// 	// based on the type of services we may modify the objects' spec
+	// based on the type of services we may modify the objects' spec
 	// 	switch strings.ToLower(deployItem.ComponentRef.Kind) {
 	// 	case "deployment":
-	// 		// fmt.Printf("[Generate]\t Skipping manifest for Deployment [%s]...\n", deployItem.Component.Name)
 	// 		allDeployments = append(allDeployments, deployItem)
 	// 	case "vm":
 	// 		skyObj, err := r.generateSkyVMManifest(ctx, req, deployItem)
@@ -168,7 +167,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	// 		}
 	// 		manifests = append(manifests, *skyObj)
 	// 	default:
-	// 		// We only support above services for now...
+	//  	 We only support above services for now...
 	// 		return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.ComponentRef.Kind))
 	// 	}
 	// }
@@ -206,7 +205,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 					})
 				}
 			case "ComputeProfile":
-				// Handle ComputeProfile virtual services
+				// TODO: Handle ComputeProfile virtual services
 				r.Logger.Info("ComputeProfile virtual service found. Skipping...", "provider", pName, "service", vs.Name)
 			default:
 				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Kind)
@@ -216,7 +215,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
-	managedK8sManifests, err := r.generateManagedK8SCluster(appId, ns, managedK8sSvcs)
+	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, ns, managedK8sSvcs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
 	}
@@ -224,28 +223,13 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 		manifests = append(manifests, obj)
 	}
 
-	// // ######### Handle Virtual Services: ManagedKubernetes
-	// skyK8SObj, err := r.generateManagedK8SCluster(ctx, req, allDeployments)
+	// Handle unmanaged K8S Cluster (using VMs)
+	// skyK8SObj, err := r.generateSkyK8SCluster(ctx, req, allDeployments)
 	// if err != nil {
 	// 	return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
 	// }
 	// manifests = append(manifests, *skyK8SObj)
-	// // skyK8SObj, err := r.generateSkyK8SCluster(ctx, req, allDeployments)
-	// // if err != nil {
-	// // 	return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
-	// // }
-	// // manifests = append(manifests, *skyK8SObj)
 
-	// // In addition to K8S cluster manfiests, we also generate application manifests
-	// // (i.e. deployments, services, istio configurations, etc.) and
-	// // submit them to the remote cluster using Kubernetes Provider (object)
-	// // We create manifest and submit it to the SkyAPP controller for further processing
-	// appManifests, err := r.generateSkyAppManifests(deployMap)
-	// if err != nil {
-	// 	return nil, nil, errors.Wrap(err, "Error generating SkyApp manifests.")
-	// }
-
-	// return manifests, appManifests, nil
 	return manifests, nil, nil
 }
 
@@ -371,7 +355,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	return manifests, nil
 }
 
-func (r *SkyXRDReconciler) generateManagedK8SCluster(appId string, ns string, svcList map[string][]pv1a1.VirtualServiceSelector) (map[string]hv1a1.SkyService, error) {
+func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svcList map[string][]pv1a1.VirtualServiceSelector) (map[string]hv1a1.SkyService, error) {
 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 	// The optimization has decided that for requested workload, this provider is the best fit.
@@ -501,7 +485,6 @@ func (r *SkyXRDReconciler) generateManagedK8SCluster(appId string, ns string, sv
 	
 	return manifests, nil
 }
-
 
 // dpRef is the deployment plan reference from SkyXRD spec
 func (r *SkyXRDReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.DeploymentPolicyRef) (*pv1a1.DeploymentPolicy, error) {

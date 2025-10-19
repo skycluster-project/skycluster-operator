@@ -171,6 +171,9 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						if err = r.ensureSkyXRD(task, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
 						}
+						if err = r.ensureSkyNet(task, deployPlan); err != nil {
+							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
+						}
 					}
 				} else {
 					task.Status.Optimization.Status = "Failed"
@@ -782,6 +785,49 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+
+func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, deployPlan hv1a1.DeployMap) error {
+	obj := &cv1a1.SkyNet{}
+	err := r.Get(context.TODO(), client.ObjectKey{
+		Namespace: task.Namespace,
+		Name:      task.Name,
+	}, obj)
+	if err == nil {
+		// already exists, update if necessary
+		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
+			r.Logger.Info("Updating existing SkyNet with new deployment plan", "SkyNet", obj.Name)
+			obj.Spec.DeployMap = deployPlan
+			obj.Spec.Approve = false
+			if err := r.Update(context.TODO(), obj); err != nil {
+				return errors.Wrapf(err, "failed to update SkyNet for ILPTask %s", task.Name)
+			}
+			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "SkyNet pending approval")
+			if err := r.Status().Update(context.TODO(), obj); err != nil {
+				return errors.Wrapf(err, "failed to update SkyNet status for ILPTask %s", task.Name)
+			}
+		}
+		return nil
+	} else { // try to create
+		r.Logger.Info("Creating new SkyNet for deployment plan", "ILPTask", task.Name)
+		obj := &cv1a1.SkyNet{
+			ObjectMeta: metav1.ObjectMeta{
+				GenerateName: task.Name + "-",
+				Namespace:    task.Namespace,
+			},
+			Spec: cv1a1.SkyNetSpec{
+				Approve: false,
+				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
+				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
+				DeployMap: deployPlan,
+			},
+		}
+		if err := r.Create(context.TODO(), obj); err != nil {
+			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)
+		}
+	}
+
+	return nil
+}
 
 func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.DeployMap) error {
 	obj := &cv1a1.SkyXRD{}
