@@ -101,7 +101,7 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 			deploy := &appsv1.Deployment{}
 			if err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns, Name: deployItem.ComponentRef.Name,
-			}, deploy); err != nil {return nil, errors.Wrap(err, "Error getting Deployment.")}
+			}, deploy); err != nil {return nil, errors.Wrap(err, "error getting Deployment.")}
 
 			// Create a replicated deployment with node selector, labels, annotations
 			// Discard all other fields that are not necessary

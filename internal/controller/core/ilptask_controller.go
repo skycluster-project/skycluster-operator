@@ -224,7 +224,7 @@ func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPoli
 	if err != nil {
 		return "", err
 	}
-	providersAttr, err := r.generateProvidersAttrJson(task.Namespace)
+	providersAttr, err := r.generateProvidersAttrJson(hv1a1.SKYCLUSTER_NAMESPACE)
 	if err != nil {
 		return "", err
 	}
@@ -629,19 +629,57 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 		return "", fmt.Errorf("optimization scripts or data configmap is empty")
 	}
 
-	var files []string
+	scriptFiles := make([]string, 0)
 	for file, content := range scripts {
 		// Use a heredoc for safe multiline content
     heredoc := fmt.Sprintf("cat << 'EOF' > /scripts/%s\n%s\nEOF", file, content)
-    files = append(files, heredoc)
+    scriptFiles = append(scriptFiles, heredoc)
 	}
+	initCommandForScripts := strings.Join(scriptFiles, "\n")
+	
+	// Split into separate init containers since some files may be large
+	filesMap := make(map[string]string)
 	for file, content := range dataMap {
 		// Use a heredoc for safe multiline content
     heredoc := fmt.Sprintf("cat << 'EOF' > /shared/%s\n%s\nEOF", file, content)
-    files = append(files, heredoc)
+    filesMap[file] = heredoc
 	}
-	// Join all lines with "&&" so they run sequentially
-	initCommand := strings.Join(files, "\n")
+	
+	initContainers := make([]corev1.Container, 0)
+	for file, content := range filesMap {
+		initContainers = append(initContainers, corev1.Container{
+			Name:  "prepare-" + strings.ReplaceAll(file, ".", "-"),
+			Image: "busybox",
+			Command: []string{"/bin/sh", "-c"},
+			Args:    []string{content},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "shared",
+					MountPath: "/shared",
+				},
+				{
+					Name:      "scripts",
+					MountPath: "/scripts",
+				},
+			},
+		})
+	}
+	initContainers = append(initContainers, corev1.Container{
+		Name:  "prepare-scripts",
+		Image: "busybox",
+		Command: []string{"/bin/sh","-c"},
+		Args:    []string{initCommandForScripts},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "shared",
+				MountPath: "/shared",
+			},
+			{
+				Name:      "scripts",
+				MountPath: "/scripts",
+			},
+		},
+	},)
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -655,27 +693,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "skycluster-sva",
 			RestartPolicy:      corev1.RestartPolicyNever,
-			InitContainers: []corev1.Container{
-				{
-					Name:  "busybox",
-					Image: "busybox",
-					Command: []string{
-						"/bin/sh",
-						"-c",
-					},
-					Args:    []string{initCommand},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "shared",
-							MountPath: "/shared",
-						},
-						{
-							Name:      "scripts",
-							MountPath: "/scripts",
-						},
-					},
-				},
-			},
+			InitContainers: 	 initContainers,
 			Containers: []corev1.Container{
 				{
 					Name:  "ubuntu-python",
