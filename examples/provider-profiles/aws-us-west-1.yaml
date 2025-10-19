@@ -15,8 +15,8 @@ spec:
       defaultZone: true
       enabled: true
       type: cloud
-    - name: us-west-1b
-      locationName: us-west-1b
+    - name: us-west-1c
+      locationName: us-west-1c
       defaultZone: false
       enabled: true
       type: cloud

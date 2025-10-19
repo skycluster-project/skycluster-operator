@@ -27,8 +27,6 @@ SkyCluster
 .golangci.yml
 .devcontainer
 .github
-config/webhook/manifests-local.yaml
 
 # config/rbac
-config/webhook-local
 *.notindexed.*
