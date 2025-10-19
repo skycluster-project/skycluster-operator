@@ -26,9 +26,11 @@ import (
 	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -93,11 +95,7 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "error creating manifests.")
 	}
-	
 	skyxrd.Status.Manifests = manifests
-	if err := r.Status().Update(ctx, skyxrd); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status.")
-	}
 	
 	if skyxrd.Spec.Approve {
 		for _, xrd := range manifests {
@@ -111,14 +109,12 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
 			unstrObj.SetKind(xrd.ComponentRef.Kind)
 			unstrObj.SetName(xrd.ComponentRef.Name)
-			if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
-				return ctrl.Result{}, errors.Wrap(err, "error setting controller reference.")
-			}
-	
-			// if err := r.Create(ctx, unstrObj); err != nil {
-			// 	logger.Info(fmt.Sprintf("[%s]\tunable to create object, maybe it already exists?", logName))
-			// 	return ctrl.Result{}, client.IgnoreAlreadyExists(err)
+			// if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
+			// 	return ctrl.Result{}, errors.Wrap(err, "error setting controller reference.")
 			// }
+			if err := r.Create(ctx, unstrObj); err != nil && !apierrors.IsAlreadyExists(err) {
+				return ctrl.Result{}, client.IgnoreAlreadyExists(err)
+			}
 			r.Logger.Info("Created SkyXRD object!", "name", xrd.ComponentRef.Name)
 		}
 	}
@@ -128,6 +124,18 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status after approval.")
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *SkyXRDReconciler) updateStatusManifests(skyxrd *cv1a1.SkyXRD) error {
+	updateErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &cv1a1.SkyXRD{}
+		if err := r.Get(context.TODO(), client.ObjectKey{Namespace: skyxrd.Namespace, Name: skyxrd.Name}, latest); err != nil {
+			return err
+		}
+		latest.Status.Manifests = skyxrd.Status.Manifests // copy prepared status
+		return r.Status().Update(context.TODO(), latest)
+	})
+	return updateErr
 }
 
 func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a1.SkyXRD) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
@@ -261,8 +269,8 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	provLastIdxUsed := make(map[string]int)
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
-		if _, ok := provLastIdxUsed[pName]; !ok {provLastIdxUsed[pName] = 0}
-		idx := provLastIdxUsed[pName]
+		if _, ok := provLastIdxUsed[p.Platform]; !ok {provLastIdxUsed[p.Platform] = 0}
+		idx := provLastIdxUsed[p.Platform]
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -350,7 +358,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 				Zone:   p.Zone,
 			},
 		}
-		provLastIdxUsed[pName] = idx + 1
+		provLastIdxUsed[p.Platform] = idx + 1
 	}
 	return manifests, nil
 }
@@ -371,10 +379,11 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 
 	for pName, computeProfileList := range svcList {
 		// computeProfileList is the list of ComputeProfile virtual services for this provider
-		if _, ok := provLastIdxUsed[pName]; !ok {provLastIdxUsed[pName] = 0}
-		idx := provLastIdxUsed[pName]
-
 		pp := provProfiles[pName]
+		if _, ok := provLastIdxUsed[pp.Spec.Platform]; !ok {provLastIdxUsed[pp.Spec.Platform] = 0}
+		idx := provLastIdxUsed[pp.Spec.Platform]
+
+		r.Logger.Info("Zones:", "provider", pName, "zones", pp.Spec.Zones)
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
@@ -480,7 +489,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				Zone:   znPrimary.Name,
 			},
 		}
-		provLastIdxUsed[pName] = idx + 1
+		provLastIdxUsed[pp.Spec.Platform] = idx + 1
 	}
 	
 	return manifests, nil

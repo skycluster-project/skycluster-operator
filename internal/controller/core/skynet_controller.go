@@ -29,6 +29,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -78,13 +79,13 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
 	if err != nil {
-		_ = r.updateStatus(&skynet) // best effort update
+		_ = r.updateStatusManifests(&skynet) // best effort update
 		return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
 	}
 
 	skynet.Status.Manifests = append(skynet.Status.Manifests, manifestsIstio...)
 
-	if err := r.updateStatus(&skynet); err != nil {
+	if err := r.updateStatusManifests(&skynet); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to update SkyNet status")
 	}
 	return ctrl.Result{}, nil
@@ -133,11 +134,16 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 	return cfgPerProv, nil
 }
 
-func (r *SkyNetReconciler) updateStatus(skynet *cv1a1.SkyNet) error {
-	if err := r.Status().Update(context.TODO(), skynet); err != nil {
-		return errors.Wrap(err, "failed to update SkyNet status with application manifests")
-	}
-	return nil
+func (r *SkyNetReconciler) updateStatusManifests(skynet *cv1a1.SkyNet) error {
+	updateErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		latest := &cv1a1.SkyNet{}
+		if err := r.Get(context.TODO(), client.ObjectKey{Namespace: skynet.Namespace, Name: skynet.Name}, latest); err != nil {
+			return err
+		}
+		latest.Status.Manifests = skynet.Status.Manifests // copy prepared status
+		return r.Status().Update(context.TODO(), latest)
+	})
+	return updateErr
 }
 
 // generateAppManifests generates application manifests based on the deploy plan

@@ -51,6 +51,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -79,9 +80,15 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Fetch the ILPTask instance
 	task := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, task); err != nil {
-		r.Logger.Info("ILPTask not found; remove any existing optimization pod")
-		_ = r.removeOptimizationPod(ctx, req)
+		_ = r.removeOptimizationPod(ctx, task.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// if deleted, clean up optimization pod
+	if !task.ObjectMeta.DeletionTimestamp.IsZero() {
+		r.Logger.Info("ILPTask is being deleted; cleaning up optimization pod", "podName", task.Status.Optimization.PodRef.Name)
+		_ = r.removeOptimizationPod(ctx, task.Name)
+		return ctrl.Result{}, nil
 	}
 
 	dfName := task.Spec.DataflowPolicyRef.Name
@@ -120,19 +127,11 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	podName := task.Status.Optimization.PodRef.Name
 
 	if podName == "" { // not yet created
-
 		// Pod not found -> create one to run optimization
 		r.Logger.Info("Creating optimization pod for ILPTask")
-		newPodName, err := r.prepareAndBuildOptimizationPod(df, dp, task)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: newPodName}
-		if err := r.Status().Update(ctx, task); err != nil {
-			r.Logger.Error(err, "failed to update ILPTask status after pod creation")
-			return ctrl.Result{}, err
-		}
-		r.Logger.Info("Optimization pod created", "pod", newPodName)
+		_, err := r.prepareAndBuildOptimizationPod(df, dp, task)
+		if err != nil { return ctrl.Result{}, err }
+		
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 
 	} else { // pod already created - check status
@@ -143,7 +142,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 		if err == nil { // pod exists - check phase
 			r.Logger.Info("Optimization pod found")
-			if pod.Status.Phase == corev1.PodSucceeded || pod.Status.Phase == corev1.PodFailed {
+			if pod.Status.Phase == corev1.PodSucceeded {
 				// Pod completed - read result from a ConfigMap or pod logs in real implementation.
 				// For now, we set Result based on PodSucceeded/Failed.
 				
@@ -185,7 +184,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				task.Status.Optimization.DataflowResourceVersion = currDFRV
 				task.Status.Optimization.DeploymentPlanResourceVersion = currDPRV
 
-				task.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: pod.Name}
 				if err := r.Status().Update(ctx, task); err != nil {
 					return ctrl.Result{}, errors.Wrap(err, "failed to update ILPTask status after pod completion")
 				}
@@ -199,9 +197,17 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			r.Logger.Error(err, "failed to get optimization pod", "podName", podName)
 			// remove pod name
 			task.Status.Optimization.PodRef = corev1.LocalObjectReference{}
-			if err := r.Status().Update(ctx, task); err != nil {
-				r.Logger.Error(err, "failed to update ILPTask status after pod removal")
-				return ctrl.Result{RequeueAfter: 2 * time.Second}, err
+			// Retry updating status on conflict
+			updateErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+				latest := &cv1a1.ILPTask{}
+				if err := r.Get(ctx, client.ObjectKey{Namespace: task.Namespace, Name: task.Name}, latest); err != nil {
+					return err
+				}
+				latest.Status.Optimization.PodRef = task.Status.Optimization.PodRef // copy prepared status
+				return r.Status().Update(ctx, latest)
+			})
+			if updateErr != nil {
+				r.Logger.Error(updateErr, "failed to update ILPTask status after pod completion")
 			}
 		}
 	}
@@ -683,11 +689,12 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName: taskMeta.Name,
+			GenerateName: taskMeta.Name + "-",
 			Namespace:    hv1a1.SKYCLUSTER_NAMESPACE,
 			Labels: map[string]string{
 				"skycluster.io/managed-by": "skycluster",
 				"skycluster.io/component":  "optimization",
+				"ilptask": taskMeta.Name, 
 			},
 		},
 		Spec: corev1.PodSpec{
@@ -736,8 +743,52 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	// The pod is in skycluster namespace
 	// The ilptask is in the default namespace, and cross namespace reference is not allowed
 	
-	r.Logger.Info("Creating optimization pod", "podName", pod.Name)
+	// 1) Check for any existing optimization pod for this ILPTask (someone else may have created it)
+	var podList corev1.PodList
+	if err := r.List(context.TODO(), &podList,
+		client.InNamespace(hv1a1.SKYCLUSTER_NAMESPACE),
+		client.MatchingLabels{"skycluster.io/component": "optimization", "ilptask": taskMeta.Name},
+	); err == nil {
+		for _, p := range podList.Items {
+			// prefer a pod that is not terminating
+			if p.DeletionTimestamp == nil {
+				r.Logger.Info("Found existing optimization pod for ILPTask; reusing", "pod", p.Name)
+				return p.Name, nil
+			}
+		}
+	}
+	
 	if err := r.Create(context.TODO(), pod); err != nil { return "", err }
+
+	// 3) Attempt to "claim" the pod by patching the ILPTask status (so only one reconcile will succeed)
+	// Fetch the ILPTask as it is on the server
+	orig := &cv1a1.ILPTask{}
+	if err := r.Get(context.TODO(), client.ObjectKey{
+		Namespace: taskMeta.Namespace,
+		Name:      taskMeta.Name,
+	}, orig); err != nil { // Cannot fetch ILPTask to claim; best-effort cleanup created pod
+		_ = r.Delete(context.TODO(), pod)
+		return "", errors.Wrapf(err, "failed to get ILPTask %s/%s to claim pod; deleted created pod", taskMeta.Namespace, taskMeta.Name)
+	}
+
+	if orig.Status.Optimization.PodRef.Name != "" {
+			// Another reconcile already claimed a pod; delete what we created and return the claimed pod
+			r.Logger.Info("ILPTask already has a claimed optimization pod; cleaning up created pod", "claimedPod", orig.Status.Optimization.PodRef.Name, "createdPod", pod.Name)
+			_ = r.Delete(context.TODO(), pod)
+			return orig.Status.Optimization.PodRef.Name, nil
+	}
+
+	// Patch the ILPTask status to set the pod ref using MergeFrom(orig) to detect conflicts
+	updated := orig.DeepCopy()
+	updated.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: pod.Name}
+
+	if err := r.Status().Patch(context.TODO(), updated, client.MergeFrom(orig)); err != nil {
+		// Conflict or other error while claiming; delete created pod and return error
+		_ = r.Delete(context.TODO(), pod)
+		return "", errors.Wrap(err, "conflict while claiming pod and update the status. Deleted created pod")
+	}
+
+	r.Logger.Info("Successfully claimed optimization pod for ILPTask", "pod", pod.Name)
 	return pod.Name, nil
 }
 
@@ -891,17 +942,22 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 }
 
 
-func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, req ctrl.Request) error{
+func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName string) error {
 	// Delete the optimization pod best effort
-	pod := &corev1.Pod{}
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: hv1a1.SKYCLUSTER_NAMESPACE,
-		Name:      req.Name,
-	}, pod); err != nil {
+	pod := &corev1.PodList{}
+	if err := r.List(ctx, pod, client.MatchingLabels{
+		"skycluster.io/component": "optimization",
+		"ilptask": taskName,
+	}); err != nil {
 		return err
 	}
-	if err := r.Delete(ctx, pod); err != nil {
-		return err
+	if len(pod.Items) == 0 {
+		return nil
+	}
+	for _, p := range pod.Items {
+		if err := r.Delete(ctx, &p); err != nil {
+			return err
+		}
 	}
 	return nil
 }
