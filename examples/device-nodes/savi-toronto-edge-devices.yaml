@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-nano1
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -13,7 +14,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
-      gpu: 
+      gpu:
         count: 472
         unit: GFLOPS
         enabled: true
@@ -26,6 +27,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-nano2
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -37,7 +39,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
-      gpu: 
+      gpu:
         count: 472
         unit: GFLOPS
         enabled: true
@@ -50,6 +52,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-nano3
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -61,7 +64,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
-      gpu: 
+      gpu:
         count: 472
         unit: GFLOPS
         enabled: true
@@ -74,6 +77,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-google-edge-tpu1
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -85,7 +89,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
-      gpu: 
+      gpu:
         count: 4
         unit: TOPS
         enabled: true
@@ -97,6 +101,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-google-edge-tpu2
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -108,7 +113,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
-      gpu: 
+      gpu:
         count: 4
         unit: TOPS
         enabled: true
@@ -120,6 +125,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-google-edge-tpu3
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -131,7 +137,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
-      gpu: 
+      gpu:
         count: 4
         unit: TOPS
         enabled: true
@@ -143,6 +149,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-orin1
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -154,7 +161,7 @@ spec:
     configs:
       name: Jetson AGX Orin
       ram: 32GB
-      gpu: 
+      gpu:
         count: 275
         unit: TOPS
         enabled: true
@@ -167,6 +174,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-orin2
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -178,7 +186,7 @@ spec:
     configs:
       name: Jetson AGX Orin
       ram: 32GB
-      gpu: 
+      gpu:
         count: 275
         unit: TOPS
         enabled: true
@@ -191,6 +199,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-nuc11-1
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -202,7 +211,7 @@ spec:
     configs:
       name: Nuc 11
       ram: 6GB
-      gpu: 
+      gpu:
         count: 52
         unit: TOPS
         enabled: true
@@ -215,6 +224,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-nuc11-3
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -226,7 +236,7 @@ spec:
     configs:
       name: Nuc 11
       ram: 6GB
-      gpu: 
+      gpu:
         count: 52
         unit: TOPS
         enabled: true
@@ -239,6 +249,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-agx-xavier1
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -250,7 +261,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
-      gpu: 
+      gpu:
         count: 11
         unit: TFLOPS
         enabled: true
@@ -263,6 +274,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-agx-xavier2
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -274,7 +286,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
-      gpu: 
+      gpu:
         count: 11
         unit: TFLOPS
         enabled: true
@@ -287,6 +299,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-jetson-agx-xavier3
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -298,7 +311,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
-      gpu: 
+      gpu:
         count: 11
         unit: TFLOPS
         enabled: true
@@ -307,22 +320,23 @@ spec:
         model: JetsonAGXXavier
       price: "0"
 ---
-apiVersion: core.skycluster.io/v1alpha1
-kind: DeviceNode
-metadata:
-  name: savi-toronto-edge-geforce-3080-1
-spec:
-  providerRef: savi-toronto-edge
-  deviceSpec:
-    type: worker
-    zone: default
-    configs:
-      name: GeForce 3080
-      ram: 12GB
-      gpu: 
-        count: 1
-        enabled: true
-        manufacturer: NVIDIA
-        memory: 12GB
-        model: GeForce3080
-      price: "0"
+# apiVersion: core.skycluster.io/v1alpha1
+# kind: DeviceNode
+# metadata:
+#   name: savi-toronto-edge-geforce-3080-1
+#   namespace: skycluster-system
+# spec:
+#   providerRef: savi-toronto-edge
+#   deviceSpec:
+#     type: worker
+#     zone: default
+#     configs:
+#       name: GeForce 3080
+#       ram: 12GB
+#       gpu:
+#         count: 1
+#         enabled: true
+#         manufacturer: NVIDIA
+#         memory: 12GB
+#         model: GeForce3080
+#       price: "0"

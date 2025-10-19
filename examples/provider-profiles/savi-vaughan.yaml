@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: ProviderProfile
 metadata:
   name: savi-vaughan-default
+  namespace: skycluster-system
 spec:
   platform: openstack
   region: VAUGHAN

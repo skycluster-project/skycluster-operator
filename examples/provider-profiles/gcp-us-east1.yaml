@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: ProviderProfile
 metadata:
   name: gcp-us-east1
+  namespace: skycluster-system
 spec:
   platform: gcp
   region: us-east1
@@ -20,3 +21,5 @@ spec:
       enabled: true
       type: cloud
 ---
+metadata:
+  namespace: skycluster-system

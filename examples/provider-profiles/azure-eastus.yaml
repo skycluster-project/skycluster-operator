@@ -4,6 +4,7 @@ metadata:
   name: azure-eastus
   labels:
     skycluster.io/dummy: "dummy"
+  namespace: skycluster-system
 spec:
   platform: azure
   region: eastus

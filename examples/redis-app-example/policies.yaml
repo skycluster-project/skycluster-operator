@@ -2,6 +2,7 @@ apiVersion: policy.skycluster.io/v1alpha1
 kind: DataflowPolicy
 metadata:
   name: redis-app-policies
+  namespace: redis-app
 spec:
   dataDependencies:
     - from:
@@ -42,6 +43,7 @@ apiVersion: policy.skycluster.io/v1alpha1
 kind: DeploymentPolicy
 metadata:
   name: redis-app-policies
+  namespace: redis-app
 spec:
   deploymentPolicies:
     - componentRef:

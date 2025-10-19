@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: Image
 metadata:
   name: savi-scinet-default-images
+  namespace: skycluster-system
 spec:
   providerRef: savi-scinet-default
   # Must match the provider profile name in the Provider resource

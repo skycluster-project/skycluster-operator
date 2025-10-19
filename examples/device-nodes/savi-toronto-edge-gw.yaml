@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: DeviceNode
 metadata:
   name: savi-toronto-edge-gw
+  namespace: skycluster-system
 spec:
   providerRef: savi-toronto-edge
   deviceSpec:
@@ -15,7 +16,6 @@ spec:
       username: ubuntu
     type: gateway
     zone: default
----
 # Secret is created separately, for example:
 # apiVersion: v1
 # kind: Secret
@@ -24,3 +24,6 @@ spec:
 # type: Opaque
 # data:
 #   privateKey: | <base64-encoded-private-key>
+---
+metadata:
+  namespace: skycluster-system

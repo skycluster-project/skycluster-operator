@@ -2,6 +2,7 @@ apiVersion: core.skycluster.io/v1alpha1
 kind: ProviderProfile
 metadata:
   name: gcp-us-central1
+  namespace: skycluster-system
 spec:
   platform: gcp
   region: us-central1
