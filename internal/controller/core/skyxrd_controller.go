@@ -69,8 +69,8 @@ type PodCidrSpec struct {
 }
 
 type k8sMetadata struct {
-	ServiceCidr string `yaml:"serviceCidr"`
-	NodeCidr    PodCidrSpec `yaml:"nodeCidr,omitempty"`
+	ServiceCidr string `yaml:"serviceCidr,omitempty"`
+	NodeCidr    string `yaml:"nodeCidr,omitempty"`
 	PodCidr     PodCidrSpec `yaml:"podCidr,omitempty"`
 }
 
@@ -558,11 +558,11 @@ func (r *SkyXRDReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a
 func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
 	
 	// limited number of virtual services are supported: ManagedKubernetes, ComputeProfile
-	switch vs.Name {
+	switch vs.Kind {
 	case "ManagedKubernetes":
 		// cmData["managed-k8s.yaml"]
 		mngK8sList := []hv1a1.ManagedK8s{}
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["managed-k8s.yaml"]), mngK8sList); err != nil {
+		if err := yaml.Unmarshal([]byte(virtualSrvcMap["managed-k8s.yaml"]), &mngK8sList); err != nil {
 			return -1, errors.Wrap(err, "unmarshalling managed-k8s.yaml")
 		}
 		for _, mngK8s := range mngK8sList {
