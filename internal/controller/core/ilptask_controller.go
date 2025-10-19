@@ -823,7 +823,7 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 		r.Logger.Info("Creating new SkyXRD for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.SkyXRD{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: task.Name,
+				GenerateName: task.Name + "-",
 				Namespace:    task.Namespace,
 			},
 			Spec: cv1a1.SkyXRDSpec{

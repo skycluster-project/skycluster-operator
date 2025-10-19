@@ -28,11 +28,11 @@ type SkyXRDSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
 	Approve bool `json:"approve"`
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
-	Manifests []hv1a1.SkyService `json:"manifests,omitempty"`
 }
 
 // SkyXRDStatus defines the observed state of SkyXRD.
 type SkyXRDStatus struct {
+	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 	Ready      bool                `json:"ready"`
 	Synced     bool                `json:"synced"`
