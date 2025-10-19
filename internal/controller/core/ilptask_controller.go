@@ -313,7 +313,7 @@ func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Reque
 }
 
 func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
-	type taskStruct struct {
+	type virtualSvcStruct struct {
 		Name 		 string `json:"name,omitempty"`
 		ApiVersion  string `json:"apiVersion,omitempty"`
 		Kind       string `json:"kind,omitempty"`
@@ -334,7 +334,7 @@ func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 		Kind               string          `json:"kind"`
 		PermittedLocations []locStruct     `json:"permittedLocations"`
 		RequiredLocations  [][]locStruct   `json:"requiredLocations"`
-		RequestedVServices [][]taskStruct  `json:"requestedVServices"`
+		RequestedVServices [][]virtualSvcStruct  `json:"requestedVServices"`
 		MaxReplicas        string          `json:"maxReplicas"`
 	}
 
@@ -346,20 +346,20 @@ func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 		if len(cmpnt.VirtualServiceConstraint) == 0 {
 			return "", fmt.Errorf("no virtual service constraints found for component %s", cmpnt.ComponentRef.Name)
 		}
-		vsList := make([][]taskStruct, 0)
+		vsList := make([][]virtualSvcStruct, 0)
 		for _, vsc := range cmpnt.VirtualServiceConstraint {
 			if len(vsc.AnyOf) == 0 {
 				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
 			}
-			altVSList := make([]taskStruct, 0)
+			altVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
-				newTask := taskStruct{
+				newVS := virtualSvcStruct{
 					ApiVersion:  alternativeVS.APIVersion,
 					Kind:       alternativeVS.Kind,
 					Name:      alternativeVS.Name,
 					Count:  strconv.Itoa(alternativeVS.Count),
 				}
-				altVSList = append(altVSList, newTask)
+				altVSList = append(altVSList, newVS)
 			}
 			if len(altVSList) == 0 {
 				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
@@ -635,6 +635,7 @@ func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
 	return string(b), nil
 }
 
+// dataMap contains the application and provider data (i.e., tasks.json, providers.json, etc.)
 func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, scripts map[string]string, dataMap map[string]string) (string, error) {
 
 	if len(scripts) == 0 || len(dataMap) == 0 {
@@ -828,6 +829,8 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 			},
 			Spec: cv1a1.SkyXRDSpec{
 				Approve: false,
+				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
+				DeploymentPlanRef:  task.Spec.DeploymentPlanRef,
 				DeployMap: deployPlan,
 			},
 		}
