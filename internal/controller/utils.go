@@ -186,6 +186,22 @@ func RemoveFromTypedCondition(list []metav1.Condition, key string) []metav1.Cond
 	return list
 }
 
+// GetNestedString returns the nested value of a map[string]interface{} object as an string
+func GetNestedString(obj map[string]any, fields ...string) (string, error) {
+	f := fields[:len(fields)-1]
+	value, err := GetNestedField(obj, f...)
+	if err != nil {
+		return "", err
+	}
+	if val, ok := value[fields[len(fields)-1]]; ok {
+		if strVal, ok := val.(string); ok {
+			return strVal, nil
+		}
+		return "", fmt.Errorf("field %s is not a string", fields[len(fields)-1])
+	}
+	return "", fmt.Errorf("field %s not found in the object", fields[len(fields)-1])
+}
+
 // GetNestedField retrieves a nested map within a map[string]any structure.
 // It traverses the object using the provided sequence of field names.
 // Example:

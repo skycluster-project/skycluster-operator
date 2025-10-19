@@ -22,15 +22,19 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
 // SkyNetReconciler reconciles a SkyNet object
@@ -59,25 +63,74 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// submit them to the remote cluster using Kubernetes Provider (object)
 	// We create manifest and submit it to the SkyAPP controller for further processing
 	
-	// appManifests, err := r.generateSkyAppManifests(deployMap)
-	// if err != nil {
-	// 	return nil, nil, errors.Wrap(err, "Error generating SkyApp manifests.")
-	// }
+	// Manifest are submitted through "Object" CRD from Crossplane
+	// We need provider config name from "XProvider" objects.
+
+	provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
+	}
+
 	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 
 	skynet.Status.Manifests = manifests
-	
-	// err := r.generateIstioCfg()
-	// if err != nil {
-	// 	_ = r.updateStatus(&skynet) // best effort update
-	// 	return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
-	// }
+
+	manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
+	if err != nil {
+		_ = r.updateStatus(&skynet) // best effort update
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
+	}
+
+	skynet.Status.Manifests = append(skynet.Status.Manifests, manifestsIstio...)
 
 	if err := r.updateStatus(&skynet); err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to update SkyNet status")
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[string]string, error) {
+	provProfiles, err := r.fetchProviderProfilesMap()
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to fetch provider profiles")
+	}
+
+	// the name of corresponding xprovider object is the same as provider profile name
+	cfgPerProv := map[string]string{}
+
+	cfgPerProvList := &unstructured.UnstructuredList{}
+	cfgPerProvList.SetGroupVersionKind(
+		schema.GroupVersionKind{
+			Group:   "skycluster.io",
+			Version: "v1alpha1",
+			Kind:    "XKube",
+		},
+	)
+	if err := r.List(context.TODO(), cfgPerProvList); err != nil {
+		return nil, errors.Wrap(err, "failed to list XProvider objects")
+	}
+
+	for pName, pp := range provProfiles {
+		for _, xProvObj := range cfgPerProvList.Items {
+			xpRegion, err1 := utils.GetNestedString(xProvObj.Object, "spec", "providerRef", "region")
+			xpPlatform, err2 := utils.GetNestedString(xProvObj.Object, "spec", "providerRef", "platform")
+			if err1 != nil || err2 != nil {
+				continue
+			}
+			if xpPlatform != pp.Spec.Platform || xpRegion != pp.Spec.Region {
+				continue
+			}
+			// platform and region match (TODO: consider zones later)
+			provCfgName, err := utils.GetNestedString(xProvObj.Object, "status", "providerConfigs", "k8s")
+			if err != nil {
+				continue
+			}
+			cfgPerProv[pName] = provCfgName
+		}
+	}
+
+	return cfgPerProv, nil
 }
 
 func (r *SkyNetReconciler) updateStatus(skynet *cv1a1.SkyNet) error {
@@ -172,7 +225,7 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 		thisSvc := generateNewServiceFromService(&svc)
 		
 		svcLabels := thisSvc.ObjectMeta.Labels
-		svcLabels["skycluster.io/service-type"] = "app-face"
+		svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
 
 		yamlObj, err := generateYAMLManifest(thisSvc)
 		if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
@@ -223,6 +276,116 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 	return manifests, nil
 }
 
+func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
+	istioManifests := make([]hv1a1.SkyService, 0)
+	objs := map[string]unstructured.Unstructured{}
+	// Generate Istio configuration
+	// As a general rule, we create a DestinationRule object that enforces
+	// priorities for failover, and we prioritize the local provider.
+	// More specifically, we priotize a destination where it adopts
+	// as many labels as the client that send the request.
+	// These set of labels are introduced in the DestinationRule object
+	// and include provider region alias, region, and zone.
+	for _, manifest := range manifests {
+		if strings.ToLower(manifest.ComponentRef.Kind) == "service" {
+			yamlManifest := map[string]any{}
+			err := yaml.Unmarshal([]byte(manifest.Manifest), &yamlManifest)
+			if err != nil {return nil, errors.Wrap(err, "error unmarshaling YAML manifest.")}
+
+			labels, err := GetNestedField(yamlManifest, "metadata", "labels")
+			if err != nil { continue } // this service is not eligible for istio configuration
+
+			// this label is added to the service indicating this is the main endpoint
+			// for the service and should be used for istio configuration
+			// TODO: check this out
+			if v, ok := labels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL]; !ok || v != "app-face" { continue }
+
+			failovers := []string{
+				"skycluster.io/provider-region-alias",
+				"skycluster.io/provider-region",
+				"skycluster.io/provider-zone",
+			}
+
+			istioObj := map[string]interface{}{
+				"apiVersion": "networking.istio.io/v1",
+				"kind":       "DestinationRule",
+				"metadata": map[string]interface{}{
+					"name": manifest.ComponentRef.Name,
+				},
+				"spec": map[string]interface{}{
+					"host": manifest.ComponentRef.Name,
+					"trafficPolicy": map[string]interface{}{
+						"loadBalancer": map[string]interface{}{
+							"simple":           "LEAST_REQUEST",
+							"failoverPriority": failovers,
+						},
+						"outlierDetection": map[string]interface{}{
+							"consecutiveErrors":  5,
+							"interval":           "5s",
+							"baseEjectionTime":   "30s",
+							"maxEjectionPercent": 100,
+						},
+					},
+				},
+			}
+
+			obj := &unstructured.Unstructured{}
+			obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
+			obj.SetKind("Object")
+			obj.SetName(manifest.ComponentRef.Name)
+			obj.SetLabels(map[string]string{
+				"skycluster.io/managed-by": "skycluster",
+			})
+			obj.Object["spec"] = map[string]interface{}{
+				"forProvider": map[string]interface{}{
+					"manifest": istioObj,
+				},
+				"providerConfigRef": map[string]string{
+					"name": providerCfgNameMap[manifest.ProviderRef.Name],
+				},
+			}
+
+			objs[manifest.ComponentRef.Name] = *obj
+		}
+	}
+
+	// Update the status with the objects that will be created
+	for _, obj := range objs {
+		yamlObj, err := generateYAMLManifest(obj.Object)
+		if err != nil {
+			return nil, errors.Wrap(err, "error generating YAML manifest.")
+		}
+		istioManifests = append(istioManifests, hv1a1.SkyService{
+			ComponentRef: corev1.ObjectReference{
+				Name:       obj.GetName(),
+				Kind:       obj.GetKind(),
+				APIVersion: obj.GetAPIVersion(),
+			},
+			Manifest: yamlObj,
+		})
+	}
+
+	return istioManifests, nil
+}
+
+func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
+	ppList := &cv1a1.ProviderProfileList{}
+	if err := r.List(context.Background(), ppList); err != nil {
+		return nil, errors.Wrap(err, "listing provider profiles")
+	}
+
+	if len(ppList.Items) == 0 {
+		return nil, errors.New("no provider profiles found")
+	}
+
+	providerProfilesMap := make(map[string]cv1a1.ProviderProfile)
+	for _, pp := range ppList.Items {
+		if _, ok := providerProfilesMap[pp.Spec.Platform]; !ok {
+			providerProfilesMap[pp.Name] = pp
+		}
+	}
+	return providerProfilesMap, nil
+}
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *SkyNetReconciler) SetupWithManager(mgr ctrl.Manager) error {
