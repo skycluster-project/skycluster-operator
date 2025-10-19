@@ -111,6 +111,9 @@ func (v *ImageCustomValidator) ValidateCreate(_ context.Context, obj runtime.Obj
 		v.logger.Info("unable to fetch ProviderProfile for image", "name", img.Spec.ProviderRef)
 		return nil, err
 	}
+	if img.Namespace != provider.Namespace {
+		return nil, fmt.Errorf("image %s/%s references a provider profile %s/%s in a different namespace", img.Namespace, img.Name, provider.Namespace, provider.Name)
+	}
 
 	return nil, nil
 }

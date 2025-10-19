@@ -18,10 +18,9 @@ package v1alpha1
 
 import (
 	"context"
-	"fmt"
 
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	ctrlv1alpha1 "github.com/skycluster-project/skycluster-operator/internal/controller"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/internal/controller"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -53,15 +52,16 @@ var _ webhook.CustomDefaulter = &DeploymentCustomDefaulter{}
 // Default implements webhook.CustomDefaulter so a webhook will be registered for the Kind Deployment.
 func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Object) error {
 	logger := log.FromContext(ctx)
+	logger.Info("Deployment Custom Defaulter invoked")
 
 	deployment, ok := obj.(*appsv1.Deployment)
-	exists := ctrlv1alpha1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
+	exists := cv1a1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
 		hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
 	})
 	if !ok || !exists {
 		return nil
 	} else {
-		logger.Info(fmt.Sprintf("Webhook [%s] detected. Setting paused to true.", deployment.Name))
+		logger.Info("Webhook invoked. Setting paused to true.", "deployment", deployment.Name)
 		deployment.Spec.Paused = true
 	}
 

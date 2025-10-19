@@ -111,6 +111,9 @@ func (v *InstanceTypeCustomValidator) ValidateCreate(_ context.Context, obj runt
 		v.logger.Info("unable to fetch ProviderProfile for instance type", "name", it.Spec.ProviderRef)
 		return nil, err
 	}
+	if it.Namespace != provider.Namespace {
+		return nil, fmt.Errorf("instance type %s/%s references a provider profile %s/%s in a different namespace", it.Namespace, it.Name, provider.Namespace, provider.Name)
+	}
 
 	return nil, nil
 }

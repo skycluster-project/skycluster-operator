@@ -102,13 +102,20 @@ var _ webhook.CustomValidator = &DeviceNodeCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type DeviceNode.
 func (v *DeviceNodeCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
-	devicenode, ok := obj.(*cv1a1.DeviceNode)
+	dn, ok := obj.(*cv1a1.DeviceNode)
 	if !ok {
 		return nil, fmt.Errorf("expected a DeviceNode object but got %T", obj)
 	}
-	v.logger.Info("Validation for DeviceNode upon creation", "name", devicenode.GetName())
+	v.logger.Info("Validation for DeviceNode upon creation", "name", dn.GetName())
 
-	// TODO(user): fill in your validation logic upon object creation.
+	provider := &cv1a1.ProviderProfile{}
+	if err := v.client.Get(context.Background(), client.ObjectKey{Name: dn.Spec.ProviderRef, Namespace: dn.Namespace}, provider); err != nil {
+		return nil, fmt.Errorf("unable to fetch ProviderProfile %q for DeviceNode %q: %w", dn.Spec.ProviderRef, dn.Name, err)
+	}
+
+	if dn.Namespace != provider.Namespace {
+		return nil, fmt.Errorf("ProviderProfile %q is not in the same namespace as DeviceNode %q", dn.Spec.ProviderRef, dn.Name)
+	}
 
 	return nil, nil
 }
