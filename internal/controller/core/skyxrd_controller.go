@@ -18,8 +18,11 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"math"
+	"sort"
 	"strconv"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -38,6 +41,7 @@ import (
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
 
 // SkyXRDReconciler reconciles a SkyXRD object
@@ -105,12 +109,13 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				return ctrl.Result{}, err
 			}
 
-			if xrd.ComponentRef.Kind != "XProvider" {continue} // only create providers for now
-	
+			svcKind := xrd.ComponentRef.Kind
+			if svcKind != "XProvider" && svcKind != "XKube" {continue} // only create providers for now
+
 			unstrObj := &unstructured.Unstructured{Object: obj}
 			unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
 			unstrObj.SetKind(xrd.ComponentRef.Kind)
-			unstrObj.SetName(xrd.ComponentRef.Name)
+			unstrObj.SetGenerateName(fmt.Sprintf("%s-", xrd.ComponentRef.Name))
 			// if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
 			// 	return ctrl.Result{}, errors.Wrap(err, "error setting controller reference.")
 			// }
@@ -205,19 +210,18 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	managedK8sSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
 	for pName, virtSvcs := range requiredVirtSvcs {
 		for _, vs := range virtSvcs {
-			switch vs.Name {
-			case "ManagedKubernetes":
+			if vs.Name == "ManagedKubernetes" { // TODO: we use Name to identify the kind, need to change later.
 				// we only need to create one ManagedKubernetes virtual service per provider
 				// we filter all ComputeProfile (flavors) and use them to create workers in the cluster
 				if _, ok := managedK8sSvcs[pName]; !ok {
 					managedK8sSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
-						return v.Name == "ComputeProfile"
+						return v.Name == "ComputeProfile" || v.Kind == "ComputeProfile"
 					})
 				}
-			case "ComputeProfile":
+			} else if vs.Name == "ComputeProfile" || vs.Kind == "ComputeProfile" {
 				// TODO: Handle ComputeProfile virtual services
-				r.Logger.Info("ComputeProfile virtual service found. Skipping...", "provider", pName, "service", vs.Name)
-			default:
+				// r.Logger.Info("ComputeProfile virtual service.", "service", vs.Name, "provider", pName)
+			} else {
 				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Name)
 			}
 		}
@@ -281,6 +285,11 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		// obj.SetNamespace(ns)
 		obj.SetName(pName)
 
+		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+		if !ok {return nil, errors.New("No primary zone found")}
+		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
+		if !ok {return nil, errors.New("No secondary zone found")}
+
 		spec := map[string]any{
 			"applicationId": appId,
 			"vpcCidr":       provMetadata[p.Platform][idx].VPCCIDR,
@@ -331,8 +340,8 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 				"platform": p.Platform,
 				"region": p.Region,
 				"zones":  map[string]string{
-					"primary": p.Zone,
-					"secondary": findSecondaryZone(providerProfiles[pName], p.Zone),
+					"primary": znPrimary.Name,
+					"secondary": znSecondary.Name,
 				},
 			},
 		}
@@ -385,12 +394,17 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 	provLastIdxUsed := make(map[string]int)
 
 	for pName, computeProfileList := range svcList {
+
 		// computeProfileList is the list of ComputeProfile virtual services for this provider
+		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
+		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
+			return v.Name
+		})
+		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
 		pp := provProfiles[pName]
 		if _, ok := provLastIdxUsed[pp.Spec.Platform]; !ok {provLastIdxUsed[pp.Spec.Platform] = 0}
 		idx := provLastIdxUsed[pp.Spec.Platform]
 
-		r.Logger.Info("Zones:", "provider", pName, "zones", pp.Spec.Zones)
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
@@ -430,7 +444,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 					fields = append(fields, f)
 
 					// workers
-					for _, vs := range computeProfileList {
+					for _, vs := range uniqueProfiles {
 						f := make(map[string]any)
 						f["instanceType"] = vs.Name
 						f["publicAccess"] = false
@@ -439,7 +453,8 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				}
 				if pp.Spec.Platform == "gcp" {
 					// workers only
-					for _, vs := range computeProfileList {
+					// manually limit this to prevent charging too much
+					for _, vs := range uniqueProfiles {
 						f := make(map[string]any)
 						f["nodeCount"] = 2
 						f["instanceType"] = vs.Name
@@ -463,7 +478,6 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				return fields
 			}(),
 			"providerRef": map[string]any{
-				"name":   pName,
 				"platform": pp.Spec.Platform,
 				"region": pp.Spec.Region,
 				"zones":  map[string]string{
@@ -620,6 +634,70 @@ func (r *SkyXRDReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyServic
 				cheapestVirtualSvcs, err := r.findCheapestVirtualSvcs(ns, provRef, vsSet.AnyOf)
 				if err != nil {return nil, errors.Wrap(err, "finding cheapest virtual services")}
 				reqVirtualSvcs = append(reqVirtualSvcs, *cheapestVirtualSvcs)
+
+				// if this requested virtual service is a managed Kubernetes
+				// we find all potential ComputeProfile alternatives
+				// and sort them by cost, then use top N=5 cheapest ones
+				// change N to allow more alternatives (Karpenter will pick)
+				// Alternativelly, if user specifies specific ComputeProfile,
+				// we only use that one.
+				if cheapestVirtualSvcs.Name == "ManagedKubernetes" {
+					virtSvcMap, err := r.fetchVirtualServiceCfgMap(ns, provRef)
+					if err != nil { return nil, errors.Wrap(err, "failed fetching virtual service config map for compute profiles") }
+
+					type computeProfileAlternative struct {
+						Name  string
+						EstimatedCost float64
+					}
+
+					// cmData["flavors.yaml"]
+					var zoneOfferings []cv1a1.ZoneOfferings
+					err1 := yaml.Unmarshal([]byte(virtSvcMap["flavors.yaml"]), &zoneOfferings); 
+					computeProfiles := make([]computeProfileAlternative, 0)
+					if err1 == nil {
+						for _, zo := range zoneOfferings {
+							if zo.Zone != provRef.Zone {continue}
+							
+							for _, of := range zo.Offerings {
+								priceFloat, err := helper.ParseAmount(of.Price)
+								if err != nil {continue}
+
+								if strings.Contains(of.NameLabel, "-0GB") {continue}
+								
+								computeProfiles = append(computeProfiles, computeProfileAlternative{
+									Name:  of.NameLabel,
+									EstimatedCost: priceFloat,
+								})
+							}
+						}
+						// remove duplicates
+						uniqueProfiles := lo.UniqBy(computeProfiles, func(cp computeProfileAlternative) string {
+							return cp.Name
+						})
+						// sort compute profiles by estimated cost
+						sort.Slice(uniqueProfiles, func(i, j int) bool {
+							return uniqueProfiles[i].EstimatedCost < uniqueProfiles[j].EstimatedCost
+						})
+						// take top N=5 cheapest compute profiles
+						N := 5
+						if len(uniqueProfiles) < N {
+							N = len(uniqueProfiles)
+						}
+						tmp := make([]pv1a1.VirtualServiceSelector, 0)
+						for _, cp := range uniqueProfiles[:N] {
+							tmp = append(tmp, pv1a1.VirtualServiceSelector{
+								VirtualService: hv1a1.VirtualService{
+									Name: cp.Name,
+									Kind: "ComputeProfile",
+								},
+								Count: 1,
+							})
+						}
+
+						reqVirtualSvcs = append(reqVirtualSvcs, tmp...)
+					}
+				}
+
 			}
 			// one component is matched, no need to continue
 			return reqVirtualSvcs, nil

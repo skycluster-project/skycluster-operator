@@ -2,6 +2,7 @@ package helper
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -22,4 +23,32 @@ func NormalizeToTOPS(value float64, unit string) float64 {
 		fmt.Printf("Warning: Unknown unit '%s', returning raw value\n", unit)
 		return value
 	}
+}
+
+func ParseAmount(s string) (float64, error) {
+	s = strings.TrimSpace(s)
+
+	// handle parentheses as negative: (123.45)
+	neg := false
+	if strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		neg = true
+		s = s[1 : len(s)-1]
+	}
+
+	// remove dollar sign(s), commas and surrounding spaces
+	s = strings.ReplaceAll(s, "$", "")
+	s = strings.ReplaceAll(s, ",", "")
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, fmt.Errorf("no numeric content")
+	}
+
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0, err
+	}
+	if neg {
+		v = -v
+	}
+	return v, nil
 }

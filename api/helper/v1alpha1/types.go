@@ -50,6 +50,7 @@ type LocationCondition struct {
 
 type VirtualService struct {
 	Name string       `json:"name,omitempty"`
+	Kind string       `json:"kind,omitempty"`
 	metav1.TypeMeta `json:",inline"`
 }
 
