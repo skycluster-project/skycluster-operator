@@ -278,7 +278,10 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
-		obj.SetName(pName + "-" + pName)
+		name := helper.EnsureK8sName(appId + "-" + pName)
+		if len(name) >= 21 {name = name[0:21]}
+		name = name + RandSuffix(5)
+		obj.SetName(name)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
@@ -405,7 +408,10 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
 		xrdObj.SetNamespace(ns)
-		xrdObj.SetName(helper.EnsureK8sName(appId + "-" + pName))
+		name := helper.EnsureK8sName(appId + "-" + pName)
+		if len(name) >= 18 {name = name[0:18]} // leave space for suffix, gcp limitation
+		name = name + RandSuffix(5)
+		xrdObj.SetName(name)
 
 		spec := map[string]any{
 			"applicationId": appId,
@@ -450,18 +456,28 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				if pp.Spec.Platform == "gcp" {
 					// workers only
 					// manually limit this to prevent charging too much
-					for _, vs := range uniqueProfiles {
-						f := make(map[string]any)
+					f := make(map[string]any)
 						f["nodeCount"] = 2
-						f["instanceType"] = vs.Name
+						f["instanceType"] = "2vCPU-4GB"
 						f["publicAccess"] = false
 						f["autoScaling"] = map[string]any{
 							"enabled": true,
 							"minSize": 1,
 							"maxSize": 3,
-						}
-						fields = append(fields, f)
 					}
+					fields = append(fields, f)
+					// for _, vs := range uniqueProfiles {
+					// 	f := make(map[string]any)
+					// 	f["nodeCount"] = 2
+					// 	f["instanceType"] = vs.Name
+					// 	f["publicAccess"] = false
+					// 	f["autoScaling"] = map[string]any{
+					// 		"enabled": true,
+					// 		"minSize": 1,
+					// 		"maxSize": 3,
+					// 	}
+					// 	fields = append(fields, f)
+					// }
 				}
 				return fields
 			}(),

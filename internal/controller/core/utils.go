@@ -3,6 +3,7 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"strconv"
 	"strings"
 	"time"
@@ -324,4 +325,15 @@ func MapToIndex(id string, n int) (int, error) {
 	h := fnv.New64a()
 	_, _ = h.Write([]byte(id))
 	return int(h.Sum64() % uint64(n)), nil
+}
+
+
+func RandSuffix(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, n)
+	for i := range b {
+			b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }

@@ -15,7 +15,7 @@ metadata:
   name: redis
   namespace: redis-app
   labels:
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
 spec:
   replicas: 1
   selector:
@@ -61,7 +61,7 @@ metadata:
   name: gateway
   namespace: redis-app
   labels:
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
 spec:
   replicas: 1
   selector:
@@ -125,7 +125,7 @@ metadata:
   name: backend
   namespace: redis-app
   labels:
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed 
 spec:
   replicas: 1
   selector:
@@ -187,7 +187,7 @@ metadata:
   name: worker
   namespace: redis-app
   labels:
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
 spec:
   replicas: 1
   selector:
