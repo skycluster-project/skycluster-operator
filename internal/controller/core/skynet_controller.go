@@ -67,27 +67,27 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Manifest are submitted through "Object" CRD from Crossplane
 	// We need provider config name from "XProvider" objects.
 
-	provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
-	if err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
-	}
+	// provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
+	// if err != nil {
+	// 	return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
+	// }
 
-	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
+	// manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
+	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 
-	skynet.Status.Manifests = manifests
+	// skynet.Status.Manifests = manifests
 
-	manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
-	if err != nil {
-		_ = r.updateStatusManifests(&skynet) // best effort update
-		return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
-	}
+	// manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
+	// if err != nil {
+	// 	_ = r.updateStatusManifests(&skynet) // best effort update
+	// 	return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
+	// }
 
-	skynet.Status.Manifests = append(skynet.Status.Manifests, manifestsIstio...)
+	// skynet.Status.Manifests = append(skynet.Status.Manifests, manifestsIstio...)
 
-	if err := r.updateStatusManifests(&skynet); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "failed to update SkyNet status")
-	}
+	// if err := r.updateStatusManifests(&skynet); err != nil {
+	// 	return ctrl.Result{}, errors.Wrap(err, "failed to update SkyNet status")
+	// }
 	return ctrl.Result{}, nil
 }
 

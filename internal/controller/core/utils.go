@@ -327,13 +327,18 @@ func MapToIndex(id string, n int) (int, error) {
 	return int(h.Sum64() % uint64(n)), nil
 }
 
-
-func RandSuffix(n int) string {
+func RandSuffix(s string) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, n)
+	const length = 5
+
+	// Use a hash of the input as the seed
+	h := fnv.New64a()
+	h.Write([]byte(s))
+	r := rand.New(rand.NewSource(int64(h.Sum64()))) // use local rand to avoid affecting global seed
+
+	b := make([]byte, length)
 	for i := range b {
-			b[i] = letters[rand.Intn(len(letters))]
+		b[i] = letters[r.Intn(len(letters))]
 	}
 	return string(b)
 }

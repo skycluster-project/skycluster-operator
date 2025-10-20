@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,7 +31,6 @@ import (
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/util/retry"
@@ -96,7 +96,6 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "error creating manifests.")
 	}
-	skyxrd.Status.Manifests = manifests
 	
 	if skyxrd.Spec.Approve {
 		for _, xrd := range manifests {
@@ -123,10 +122,14 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	skyxrd.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "Reconciled", "SkyXRD reconciled successfully.")
-	if err := r.Status().Update(ctx, skyxrd); err != nil {
-		return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status after approval.")
+	if !reflect.DeepEqual(skyxrd.Status.Manifests, manifests) {
+    skyxrd.Status.Manifests = manifests
+    if err := r.Status().Update(ctx, skyxrd); err != nil {
+        return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status")
+    }
+		r.Logger.Info("Updated SkyXRD status manifests.", "count", len(manifests))
 	}
+	
 	return ctrl.Result{}, nil
 }
 
@@ -150,6 +153,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
+	r.Logger.Info("Generating provider manifests.")
 	providersManifests, err := r.generateProviderManifests(appId, ns, deployMap.Component)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
@@ -157,6 +161,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	for _, obj := range providersManifests {
 		manifests = append(manifests, obj)
 	}
+	r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
 
 	// ######### Deployments
 	// allDeployments := make([]hv1a1.SkyService, 0)
@@ -226,20 +231,23 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
-	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, ns, managedK8sSvcs)
+	r.Logger.Info("Generating SkyK8SCluster manifests.")
+	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
 	}
 	for _, obj := range managedK8sManifests {
 		manifests = append(manifests, obj)
 	}
+	r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
 
-	// Handle unmanaged K8S Cluster (using VMs)
-	// skyK8SObj, err := r.generateSkyK8SCluster(ctx, req, allDeployments)
-	// if err != nil {
-	// 	return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
-	// }
-	// manifests = append(manifests, *skyK8SObj)
+	// Kubernetes Mesh
+	r.Logger.Info("Generating XKubeMesh manifests.")
+	skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
+	}
+	manifests = append(manifests, *skyMesh)
 
 	return manifests, nil, nil
 }
@@ -272,15 +280,14 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
 		idx, err := MapToIndex(appId, len(provMetadata[p.Platform]))
-		r.Logger.Info("Mapping provider", "appId", appId, "provider", pName, "index", idx)
 		if err != nil { return nil, err }
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
-		name := helper.EnsureK8sName(appId + "-" + pName)
-		if len(name) >= 21 {name = name[0:21]}
-		name = name + RandSuffix(5)
+		name := helper.EnsureK8sName("xp-" + pName + "-" + appId)
+		name = name[0:int(math.Min(float64(len(name)), 20))]
+		name = name + "-" + RandSuffix(name)
 		obj.SetName(name)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
@@ -375,7 +382,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	return manifests, nil
 }
 
-func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svcList map[string][]pv1a1.VirtualServiceSelector) (map[string]hv1a1.SkyService, error) {
+func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector) (map[string]hv1a1.SkyService, error) {
 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 	// The optimization has decided that for requested workload, this provider is the best fit.
@@ -407,10 +414,9 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 		xrdObj := &unstructured.Unstructured{}
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
-		xrdObj.SetNamespace(ns)
-		name := helper.EnsureK8sName(appId + "-" + pName)
-		if len(name) >= 18 {name = name[0:18]} // leave space for suffix, gcp limitation
-		name = name + RandSuffix(5)
+		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+		name = name[0:int(math.Min(float64(len(name)), 20))]
+		name = name + "-" + RandSuffix(name)
 		xrdObj.SetName(name)
 
 		spec := map[string]any{
@@ -536,6 +542,53 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 	
 	return manifests, nil
 }
+
+// only one mesh per application
+func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
+	
+	clusterNames := make([]string, 0)
+	for _, xkube := range xKubeList {
+		kName := xkube.ComponentRef.Name
+		clusterNames = append(clusterNames, kName)
+	}
+	
+	// we need to create a XKube object
+	xrdObj := &unstructured.Unstructured{}
+	xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
+	xrdObj.SetKind("XKubeMesh")
+	name := helper.EnsureK8sName("xkmesh-" + appId)
+	name = name[0:int(math.Min(float64(len(name)), 20))]
+	name = name + "-" + RandSuffix(name)
+	xrdObj.SetName(name)
+
+	spec := map[string]any{
+		"clusterNames": clusterNames,
+		"localCluster": func () map[string]any {
+			return map[string]any{
+				"podCidr": "10.0.0.0/19",
+				"serviceCidr": "10.0.32.0/19",
+			}
+		}(),
+	}
+
+	xrdObj.Object["spec"] = spec
+
+	yamlObj, err := generateYAMLManifest(xrdObj)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error generating YAML manifest.")
+	}
+	return &hv1a1.SkyService{
+		ComponentRef: corev1.ObjectReference{
+			APIVersion: xrdObj.GetAPIVersion(),
+			Kind:       xrdObj.GetKind(),
+			Namespace:  xrdObj.GetNamespace(),
+			Name:       xrdObj.GetName(),
+		},
+		Manifest: yamlObj,
+	}, nil
+	
+}
+
 
 // dpRef is the deployment plan reference from SkyXRD spec
 func (r *SkyXRDReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.DeploymentPolicyRef) (*pv1a1.DeploymentPolicy, error) {
