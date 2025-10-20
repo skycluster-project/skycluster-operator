@@ -286,7 +286,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
 		name := helper.EnsureK8sName("xp-" + pName + "-" + appId)
-		name = name[0:int(math.Min(float64(len(name)), 20))]
+		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + RandSuffix(name)
 		obj.SetName(name)
 
@@ -415,7 +415,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
-		name = name[0:int(math.Min(float64(len(name)), 20))]
+		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + RandSuffix(name)
 		xrdObj.SetName(name)
 
@@ -557,7 +557,7 @@ func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv
 	xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 	xrdObj.SetKind("XKubeMesh")
 	name := helper.EnsureK8sName("xkmesh-" + appId)
-	name = name[0:int(math.Min(float64(len(name)), 20))]
+	name = name[0:int(math.Min(float64(len(name)), 15))]
 	name = name + "-" + RandSuffix(name)
 	xrdObj.SetName(name)
 
