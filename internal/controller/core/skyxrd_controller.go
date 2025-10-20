@@ -66,18 +66,15 @@ type providerMetadata struct {
 	VPCCIDR string           `yaml:"vpcCidr"`
 	Subnets []subnetMetadata `yaml:"subnets"`
 	Gateway gatewayMetadata  `yaml:"gateway"`
+	ServiceCidr string `yaml:"serviceCidr,omitempty"`
+	NodeCidr    string `yaml:"nodeCidr,omitempty"`
+	PodCidr     PodCidrSpec `yaml:"podCidr,omitempty"`
 }
 
 type PodCidrSpec struct {
 	Cidr 	string `yaml:"cidr"`
 	Public string `yaml:"public,omitempty"`
 	Private string `yaml:"private,omitempty"`
-}
-
-type k8sMetadata struct {
-	ServiceCidr string `yaml:"serviceCidr,omitempty"`
-	NodeCidr    string `yaml:"nodeCidr,omitempty"`
-	PodCidr     PodCidrSpec `yaml:"podCidr,omitempty"`
 }
 
 
@@ -274,15 +271,14 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
-		idx, err := MapToIndex(pName, len(provMetadata[p.Platform]))
+		idx, err := MapToIndex(appId, len(provMetadata[p.Platform]))
+		r.Logger.Info("Mapping provider", "appId", appId, "provider", pName, "index", idx)
 		if err != nil { return nil, err }
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
-		
-		// obj.SetNamespace(ns)
-		obj.SetName(pName)
+		obj.SetName(pName + "-" + pName)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
@@ -335,7 +331,6 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 				}
 			}(),
 			"providerRef": map[string]any{
-				"name":   pName,
 				"platform": p.Platform,
 				"region": p.Region,
 				"zones":  map[string]string{
@@ -382,7 +377,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 	// The optimization has decided that for requested workload, this provider is the best fit.
 
-	k8sMetadata, err := r.loadK8sSrvcMetadata()
+	k8sMetadata, err := r.loadProviderMetadata()
 	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
 
 	provProfiles, err := r.fetchProviderProfilesMap()
@@ -397,7 +392,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 		})
 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
 		pp := provProfiles[pName]
-		idx, err := MapToIndex(pName, len(k8sMetadata[pp.Spec.Platform]))
+		idx, err := MapToIndex(appId, len(k8sMetadata[pp.Spec.Platform]))
 		if err != nil { return nil, err }
 
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
@@ -410,11 +405,17 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
 		xrdObj.SetNamespace(ns)
-		xrdObj.SetName(appId)
+		xrdObj.SetName(helper.EnsureK8sName(appId + "-" + pName))
 
 		spec := map[string]any{
 			"applicationId": appId,
 			"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
+			"nodeCidr": func () string {
+				if pp.Spec.Platform == "gcp" {
+					return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
+				}
+				return ""
+			}(),
 			"podCidr": func () map[string]any {
 				fields := make(map[string]any)
 				if pp.Spec.Platform == "aws" {
@@ -472,14 +473,24 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				}
 				return fields
 			}(),
-			"providerRef": map[string]any{
-				"platform": pp.Spec.Platform,
-				"region": pp.Spec.Region,
-				"zones":  map[string]string{
-					"primary": znPrimary.Name,
-					"secondary": znSecondary.Name,
-				},
-			},
+			"providerRef": func () map[string]any {
+				fields := map[string]any{
+					"platform": pp.Spec.Platform,
+					"region": pp.Spec.Region,
+				}
+				if pp.Spec.Platform == "aws" {
+					fields["zones"] = map[string]string{
+						"primary": znPrimary.Name,
+						"secondary": znSecondary.Name,
+					}
+				}
+				if pp.Spec.Platform == "gcp" {
+					fields["zones"] = map[string]string{
+						"primary": znPrimary.Name,
+					}
+				}
+				return fields
+			}(),
 		}
 
 		xrdObj.Object["spec"] = spec
@@ -698,47 +709,6 @@ func (r *SkyXRDReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyServic
 		}
 	}
 	return nil, errors.New("no matching component found in deployment policy")
-}
-
-// Load static metadata about k8s managed services from configmaps
-// key: platform name, value: list of ManagedK8s metadata
-func (r *SkyXRDReconciler) loadK8sSrvcMetadata() (map[string][]k8sMetadata, error) {
-	k8sSrvcData, err := r.fetchK8sSrvcMetadataMap()
-	if err != nil {return nil, errors.Wrap(err, "fetching k8s managed service metadata map")}
-	
-	k8sSrvcMetadataByKey := make(map[string][]k8sMetadata)
-	for key, yamlStr := range k8sSrvcData {
-		var metas []k8sMetadata
-		if err := yaml.Unmarshal([]byte(yamlStr), &metas); err != nil {
-			return nil, errors.Wrapf(err, "unmarshalling k8s service metadata for key %s", key)
-		}
-		k8sSrvcMetadataByKey[key] = metas
-	}
-	return k8sSrvcMetadataByKey, nil
-}
-
-// Load static metadata about k8s managed services from configmaps and return as a map
-// key: platform name, value: yaml string 
-func (r *SkyXRDReconciler) fetchK8sSrvcMetadataMap() (map[string]string, error) {
-	cmList := &corev1.ConfigMapList{}
-	if err := r.List(context.Background(), cmList, client.MatchingLabels{
-		"skycluster.io/config-type": "k8s-cluster-metadata-e2e",
-	}); err != nil {
-		return nil, errors.Wrap(err, "listing k8s service metadata ConfigMaps")
-	}
-
-	if len(cmList.Items) == 0 {
-		return nil, errors.New("no k8s service metadata ConfigMaps found")
-	}
-	if len(cmList.Items) > 1 {
-		return nil, errors.New("more than one k8s service metadata ConfigMap found")
-	}
-
-	k8sSrvcData := make(map[string]string, len(cmList.Items[0].Data))
-	for k, v := range cmList.Items[0].Data {
-		k8sSrvcData[k] = v
-	}
-	return k8sSrvcData, nil
 }
 
 // Load static metadata about providers from configmaps
