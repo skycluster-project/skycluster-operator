@@ -249,13 +249,14 @@ func main() {
 		os.Exit(1)
 	}
 
-	// if err = (&corecontroller.SkyXRDReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
-	// 	os.Exit(1)
-	// }
+	if err = (&corecontroller.SkyXRDReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[SkyXRD]"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+		os.Exit(1)
+	}
 	if err = (&policycontroller.DataflowPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
@@ -309,10 +310,10 @@ func main() {
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		// if err = webhookcv1a1.SetupDeploymentWebhookWithManager(mgr); err != nil {
-		// 	setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
-		// 	os.Exit(1)
-		// }
+		if err = webhookcv1a1.SetupDeploymentWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
+			os.Exit(1)
+		}
 		if err := webhookcv1a1.SetupImageWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
 			os.Exit(1)
@@ -346,19 +347,27 @@ func main() {
 	if err = (&corecontroller.ILPTaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.LatencyReconciler{
+	if err := (&corecontroller.SkyNetReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[SkyNet]"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Latency")
+		setupLog.Error(err, "unable to create controller", "controller", "SkyNet")
 		os.Exit(1)
 	}
+	// if err := (&corecontroller.LatencyReconciler{
+	// 	Client: mgr.GetClient(),
+	// 	Scheme: mgr.GetScheme(),
+	// 	Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+	// }).SetupWithManager(mgr); err != nil {
+	// 	setupLog.Error(err, "unable to create controller", "controller", "Latency")
+	// 	os.Exit(1)
+	// }
 	// if err = (&svccontroller.SkyAppReconciler{
 	// 	Client: mgr.GetClient(),
 	// 	Scheme: mgr.GetScheme(),

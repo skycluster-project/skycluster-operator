@@ -27,4 +27,12 @@ kubectl patch ILPTask redis-app-policies \
 aws ec2 describe-availability-zones --region us-west-1 --query "AvailabilityZones[].ZoneName" --output text
 
 
+mkdir /tmp/shared
+N=netshoot-846db597fb-px7cc
+kubectl cp skycluster-system/$N:/shared /tmp/shared
+
+
+kubectl scale deployment -n crossplane-system crossplane --replicas=0
+
+
 ```

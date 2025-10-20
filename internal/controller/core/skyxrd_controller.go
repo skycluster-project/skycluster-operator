@@ -272,11 +272,10 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		return nil, errors.Wrap(err, "Error fetching provider profiles.")
 	}
 	
-	provLastIdxUsed := make(map[string]int)
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
-		if _, ok := provLastIdxUsed[p.Platform]; !ok {provLastIdxUsed[p.Platform] = 0}
-		idx := provLastIdxUsed[p.Platform]
+		idx, err := MapToIndex(pName, len(provMetadata[p.Platform]))
+		if err != nil { return nil, err }
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -374,7 +373,6 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 				Zone:   p.Zone,
 			},
 		}
-		provLastIdxUsed[p.Platform] = idx + 1
 	}
 	return manifests, nil
 }
@@ -391,10 +389,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
 
 	manifests := map[string]hv1a1.SkyService{}
-	provLastIdxUsed := make(map[string]int)
-
 	for pName, computeProfileList := range svcList {
-
 		// computeProfileList is the list of ComputeProfile virtual services for this provider
 		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
 		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
@@ -402,8 +397,8 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 		})
 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
 		pp := provProfiles[pName]
-		if _, ok := provLastIdxUsed[pp.Spec.Platform]; !ok {provLastIdxUsed[pp.Spec.Platform] = 0}
-		idx := provLastIdxUsed[pp.Spec.Platform]
+		idx, err := MapToIndex(pName, len(k8sMetadata[pp.Spec.Platform]))
+		if err != nil { return nil, err }
 
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
@@ -510,7 +505,6 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, ns string, svc
 				Zone:   znPrimary.Name,
 			},
 		}
-		provLastIdxUsed[pp.Spec.Platform] = idx + 1
 	}
 	
 	return manifests, nil

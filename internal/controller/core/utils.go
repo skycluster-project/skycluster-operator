@@ -9,6 +9,8 @@ import (
 
 	"maps"
 
+	"hash/fnv"
+
 	"github.com/pkg/errors"
 	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
@@ -311,4 +313,15 @@ func generateYAMLManifest(obj any) (string, error) {
 		return "", errors.Wrap(err, "Error marshalling obj manifests.")
 	}
 	return string(objYAML), nil
+}
+
+// MapToIndex deterministically maps id to an index in [0, n-1].
+// Returns an error if n <= 0.
+func MapToIndex(id string, n int) (int, error) {
+	if n <= 0 {
+		return 0, fmt.Errorf("n must be > 0")
+	}
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(id))
+	return int(h.Sum64() % uint64(n)), nil
 }

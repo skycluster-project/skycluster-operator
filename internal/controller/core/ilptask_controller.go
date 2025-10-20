@@ -39,6 +39,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -219,13 +221,27 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
+	
+	// write all JSON strings to a temporary directory for quick inspection
+	tmpDir, err := os.MkdirTemp("/tmp", "ilp-debug-")
+	if err != nil {
+		return "", err
+	}
+
 	tasksJson, err := r.generateTasksJson(dp)
 	if err != nil {
 		return "", err
 	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "tasks.json"), []byte(tasksJson), 0644); err != nil {
+		return "", err
+	}
+
 	// Creating tasks-edges.csv
 	tasksEdges, err := generateTasksEdgesJson(df)
 	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "tasks-edges.json"), []byte(tasksEdges), 0644); err != nil {
 		return "", err
 	}
 
@@ -233,43 +249,32 @@ func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPoli
 	if err != nil {
 		return "", err
 	}
+	if err := os.WriteFile(filepath.Join(tmpDir, "providers.json"), []byte(providers), 0644); err != nil {
+		return "", err
+	}
+
 	providersAttr, err := r.generateProvidersAttrJson(hv1a1.SKYCLUSTER_NAMESPACE)
 	if err != nil {
 		return "", err
 	}
-	virtualServices, err := r.generateVServicesJson()
-	if err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "providers-attr.json"), []byte(providersAttr), 0644); err != nil {
 		return "", err
 	}
+
+	// virtualServices, err := r.generateVServicesJson()
+	// if err != nil {
+	// 	return "", err
+	// }
+	// if err := os.WriteFile(filepath.Join(tmpDir, "virtual-services.json"), []byte(virtualServices), 0644); err != nil {
+	// 	return "", err
+	// }
 
 	dataMap := map[string]string{
 		"tasks.json":         tasksJson,
 		"tasks-edges.json":   tasksEdges,
 		"providers.json":     providers,
 		"providers-attr.json": providersAttr,
-		"virtual-services.json": virtualServices,
-	}
-
-	// write all JSON strings to a temporary directory for quick inspection
-	tmpDir, err := os.MkdirTemp("/tmp", "ilp-debug-")
-	if err != nil {
-		return "", err
-	}
-
-	if err := os.WriteFile(filepath.Join(tmpDir, "tasks.json"), []byte(tasksJson), 0644); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "tasks-edges.json"), []byte(tasksEdges), 0644); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "providers.json"), []byte(providers), 0644); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "providers-attr.json"), []byte(providersAttr), 0644); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(tmpDir, "virtual-services.json"), []byte(virtualServices), 0644); err != nil {
-		return "", err
+		// "virtual-services.json": virtualServices,
 	}
 
 	// Results
@@ -314,6 +319,7 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 		ApiVersion  string `json:"apiVersion,omitempty"`
 		Kind       string `json:"kind,omitempty"`
 		Count      string `json:"count,omitempty"`
+		Price      float64 `json:"price,omitempty"`
 	}
 
 	type locStruct struct {
@@ -413,11 +419,22 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 						additionalVSList = append(additionalVSList, virtualSvcStruct{
 								ApiVersion: alternativeVS.APIVersion,
 								Kind:       "ComputeProfile",
-								Name:       off.name, // or off.NameLabel if you prefer
+								Name:       off.name, // name is mapped to nameLabel
 								Count:      "1",
+								Price:      off.deployCost,
 						})
 					}
-					// r.Logger.Info("Added compute profile alternatives for component", "component", cmpnt.ComponentRef.Name, "numAlternatives", len(additionalVSList))
+					// the list can be huge, so sort and limit to top 5 cheapest
+					sort.Slice(additionalVSList, func(i, j int) bool {
+						return additionalVSList[i].Price < additionalVSList[j].Price
+					})
+					// remove duplicates
+					additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
+						return v.Name
+					})
+					if len(additionalVSList) > 5 {
+						additionalVSList = additionalVSList[:5]
+					}
 				}
 			}
 			if len(altVSList) == 0 {
@@ -823,6 +840,25 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	}
 	
 	initContainers := make([]corev1.Container, 0)
+	initContainers = append(initContainers, corev1.Container{
+		Name:  "prepare-vservices",
+		Image: "etesami/optimizer-helper:latest",
+		ImagePullPolicy: corev1.PullAlways,
+		Command: []string{"/bin/sh", "-c"},
+		Args:    []string{"/vservices"},
+		Env: []corev1.EnvVar{
+			{
+				Name:  "OUTPUT_PATH",
+				Value: "/shared/virtual-services.json",
+			},
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{
+				Name:      "shared",
+				MountPath: "/shared",
+			},
+		},
+	})
 	for file, content := range filesMap {
 		initContainers = append(initContainers, corev1.Container{
 			Name:  "prepare-" + strings.ReplaceAll(file, ".", "-"),
