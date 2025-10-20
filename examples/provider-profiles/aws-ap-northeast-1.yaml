@@ -7,7 +7,7 @@ spec:
   platform: aws
   region: ap-northeast-1
   regionAlias: ap-northeast
-  continent: europe
+  continent: asia
   enabled: true
   zones:
     - name: ap-northeast-1a

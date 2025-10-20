@@ -52,63 +52,46 @@ spec:
         name: gateway
       virtualServiceConstraint:
       - anyOf:
-        - name: EKS
-          kind: ManagedKubernetes
+        - name: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - platform: aws
-        required: 
-          - anyOf:
-            - region: us-east-1
-          - anyOf:
-            - region: us-west-1
+          - platform: gcp
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: worker
       virtualServiceConstraint:
       - anyOf:
-        - name: EKS
-          kind: ManagedKubernetes
+        - name: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - regionAlias: us-east
-            platform: aws
-          - regionAlias: toronto
+          - platform: gcp
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: backend # name must uniquely identify the component
       virtualServiceConstraint:
       - anyOf:
-        - name: EKS
-          kind: ManagedKubernetes
-          # Other fields
-          # apiVersion: <apiVersion>
-          # count: <count>
+        - name: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - regionAlias: us-east
-            platform: aws
-          - regionAlias: toronto
+          - platform: aws
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
       virtualServiceConstraint:
       - anyOf:
-        - name: EKS
-          kind: ManagedKubernetes
+        - name: ManagedKubernetes
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - regionAlias: us-east
-            platform: aws
+          - platform: gcp
 ---
