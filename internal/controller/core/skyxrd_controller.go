@@ -205,20 +205,20 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	managedK8sSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
 	for pName, virtSvcs := range requiredVirtSvcs {
 		for _, vs := range virtSvcs {
-			switch vs.Kind {
+			switch vs.Name {
 			case "ManagedKubernetes":
 				// we only need to create one ManagedKubernetes virtual service per provider
 				// we filter all ComputeProfile (flavors) and use them to create workers in the cluster
 				if _, ok := managedK8sSvcs[pName]; !ok {
 					managedK8sSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
-						return v.Kind == "ComputeProfile"
+						return v.Name == "ComputeProfile"
 					})
 				}
 			case "ComputeProfile":
 				// TODO: Handle ComputeProfile virtual services
 				r.Logger.Info("ComputeProfile virtual service found. Skipping...", "provider", pName, "service", vs.Name)
 			default:
-				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Kind)
+				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Name)
 			}
 		}
 	}
@@ -557,7 +557,7 @@ func (r *SkyXRDReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a
 func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
 	
 	// limited number of virtual services are supported: ManagedKubernetes, ComputeProfile
-	switch vs.Kind {
+	switch vs.Name {
 	case "ManagedKubernetes":
 		// cmData["managed-k8s.yaml"]
 		mngK8sList := []hv1a1.ManagedK8s{}
@@ -565,7 +565,7 @@ func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[str
 			return -1, errors.Wrap(err, "unmarshalling managed-k8s.yaml")
 		}
 		for _, mngK8s := range mngK8sList {
-			if mngK8s.Name == vs.Name {
+			if mngK8s.NameLabel == vs.Name {
 				// found matching managed K8s, calculate cost
 				overheadCost, err := strconv.ParseFloat(mngK8s.Overhead.Cost, 64)
 				if err != nil {return -1, errors.Wrap(err, "parsing overhead cost")}
@@ -587,7 +587,7 @@ func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[str
 				if zo.Zone != zone {continue}
 				
 				for _, of := range zo.Offerings {
-					if of.Name != vs.Name {continue}
+					if of.NameLabel != vs.Name {continue}
 					
 					priceFloat, err := strconv.ParseFloat(of.Price, 64)
 					if err != nil {continue}

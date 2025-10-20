@@ -362,7 +362,7 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 				// add all potential ComputeProfile alternatives,
 				// Optimizer will choose the best one based on cost and requirements.
 				// This can be disabled later if needed
-				if strings.EqualFold(alternativeVS.Kind, "ManagedKubernetes") {
+				if strings.EqualFold(alternativeVS.Name, "ManagedKubernetes") {
 					r.Logger.Info("Adding ComputeProfile alternatives for ManagedKubernetes virtual service", "component", cmpnt.ComponentRef.Name, "managedK8sName", alternativeVS.Name)
 					// Compute the minimum compute resource required for this component/deployment
 					minCR, err := r.calculateMinComputeResource(dp.Namespace, cmpnt.ComponentRef.Name)
@@ -373,13 +373,13 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 						return "", fmt.Errorf("nil min compute resource for component %s", cmpnt.ComponentRef.Name)
 					}
 
-					r.Logger.Info("Minimum compute resource for component", "component", cmpnt.ComponentRef.Name, "cpu", minCR.cpu, "ram", minCR.ram)
+					// r.Logger.Info("Minimum compute resource for component", "component", cmpnt.ComponentRef.Name, "cpu", minCR.cpu, "ram", minCR.ram)
 
 					// Try to fetch flavors for the provider identified by alternativeVS.Name (fallback to component name)
 					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
 					if err != nil { return "", err }
 
-					r.Logger.Info("Found compute profiles for component", "component", cmpnt.ComponentRef.Name, "numProfiles", len(profiles))
+					// r.Logger.Info("Found compute profiles for component", "component", cmpnt.ComponentRef.Name, "numProfiles", len(profiles))
 					
 					// // find the cheapest offering
 					// var cheapest *computeProfileService
@@ -417,7 +417,7 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 								Count:      "1",
 						})
 					}
-					r.Logger.Info("Added compute profile alternatives for component", "component", cmpnt.ComponentRef.Name, "numAlternatives", len(additionalVSList))
+					// r.Logger.Info("Added compute profile alternatives for component", "component", cmpnt.ComponentRef.Name, "numAlternatives", len(additionalVSList))
 				}
 			}
 			if len(altVSList) == 0 {
@@ -782,13 +782,13 @@ func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
 				return "", fmt.Errorf("failed to parse price or overhead for managed k8s vservice %s: price error: %v; overhead error: %v", mk8s.Name, err1, err2)
 			}
 			vServicesList = append(vServicesList, vServiceStruct{
-				VServiceName:   mk8s.Name,
+				VServiceName:   mk8s.NameLabel,
 				VServiceKind:   "ManagedKubernetes",
 				ProviderName:   pName,
 				ProviderPlatform: pPlatform,
 				ProviderRegion: pRegion,
 				DeployCost:     priceFloat + priceOverheadFloat,
-				Availability:   10000, // assuming always available
+				Availability:   100000, // assuming always available
 			})
 		}
 	}

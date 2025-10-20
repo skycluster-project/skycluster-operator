@@ -694,6 +694,7 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 	if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
 		managedClusters := []map[string]any{
 			{
+				"nameLabel":  "ManagedKubernetes",
 				"name":    lo.If(pf.Spec.Platform == "aws", "EKS").ElseIf(pf.Spec.Platform == "gcp", "GKE").Else("AKS"),
 				"price":   lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
 				"overhead": map[string]any{
