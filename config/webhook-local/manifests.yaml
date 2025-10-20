@@ -151,4 +151,4 @@ webhooks:
   # Need to add selector manually
   objectSelector:
     matchLabels:
-      skycluster.io/managed-by: skycluster
+      skycluster.io/managed-by: skycluster-app

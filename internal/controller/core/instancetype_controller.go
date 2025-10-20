@@ -398,7 +398,6 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 						Name:            "runner",
 						Image:           "etesami/instance-finder:latest",
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						// ImagePullPolicy: corev1.PullAlways,
 						Env:             envVars,
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},

@@ -384,6 +384,7 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 					InitContainers: []corev1.Container{{
 						Name:  "runner",
 						Image: "etesami/image-finder:latest",
+						ImagePullPolicy: corev1.PullIfNotPresent,
 						Env:   envVars,
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},
