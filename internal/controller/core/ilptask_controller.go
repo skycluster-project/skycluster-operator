@@ -38,6 +38,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -47,6 +48,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,7 +82,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// Fetch the ILPTask instance
 	task := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, task); err != nil {
-		_ = r.removeOptimizationPod(ctx, task.Name)
+		r.Logger.Info("unable to fetch ILPTask, cleaning up optimization pod if exists", "name", req.Name)
+		_ = r.removeOptimizationPod(ctx, req.Name)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -216,7 +219,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
-	tasksJson, err := generateTasksJson(dp)
+	tasksJson, err := r.generateTasksJson(dp)
 	if err != nil {
 		return "", err
 	}
@@ -305,7 +308,7 @@ func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Reque
 	return skyCluster, nil
 }
 
-func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
+func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 	type virtualSvcStruct struct {
 		Name 		 string `json:"name,omitempty"`
 		ApiVersion  string `json:"apiVersion,omitempty"`
@@ -345,6 +348,7 @@ func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
 			}
 			altVSList := make([]virtualSvcStruct, 0)
+			additionalVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 				newVS := virtualSvcStruct{
 					ApiVersion:  alternativeVS.APIVersion,
@@ -353,11 +357,74 @@ func generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 					Count:  strconv.Itoa(alternativeVS.Count),
 				}
 				altVSList = append(altVSList, newVS)
+				
+				// If this alternative is a managed Kubernetes offering, 
+				// add all potential ComputeProfile alternatives,
+				// Optimizer will choose the best one based on cost and requirements.
+				// This can be disabled later if needed
+				if strings.EqualFold(alternativeVS.Kind, "ManagedKubernetes") {
+					r.Logger.Info("Adding ComputeProfile alternatives for ManagedKubernetes virtual service", "component", cmpnt.ComponentRef.Name, "managedK8sName", alternativeVS.Name)
+					// Compute the minimum compute resource required for this component/deployment
+					minCR, err := r.calculateMinComputeResource(dp.Namespace, cmpnt.ComponentRef.Name)
+					if err != nil {
+						return "", fmt.Errorf("failed to calculate min compute resource for component %s: %w", cmpnt.ComponentRef.Name, err)
+					}
+					if minCR == nil {
+						return "", fmt.Errorf("nil min compute resource for component %s", cmpnt.ComponentRef.Name)
+					}
+
+					r.Logger.Info("Minimum compute resource for component", "component", cmpnt.ComponentRef.Name, "cpu", minCR.cpu, "ram", minCR.ram)
+
+					// Try to fetch flavors for the provider identified by alternativeVS.Name (fallback to component name)
+					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
+					if err != nil { return "", err }
+
+					r.Logger.Info("Found compute profiles for component", "component", cmpnt.ComponentRef.Name, "numProfiles", len(profiles))
+					
+					// // find the cheapest offering
+					// var cheapest *computeProfileService
+					// for _, off := range profiles {
+					// 	if off.cpu < minCR.cpu { continue }
+					// 	if off.ram < minCR.ram { continue } // GiB
+						
+					// 	if cheapest == nil || off.deployCost < cheapest.deployCost {
+					// 		tmp := off
+					// 		cheapest = &tmp
+					// 	}
+					// }
+					// if cheapest == nil {
+					// 	r.Logger.Info("No suitable compute profile found for component, may not be deployable, Optimization is not accurate.", "component", cmpnt.ComponentRef.Name)
+					// }
+					// // Add the cheapest offering as a ComputeProfile alternative
+					// cpVS := virtualSvcStruct{
+					// 	ApiVersion: alternativeVS.APIVersion, 
+					// 	Kind:       "ComputeProfile",
+					// 	Name:       cheapest.name, // or NameLabel if you prefer
+					// 	Count:      "1",
+					// }
+					// altVSList = append(altVSList, cpVS)
+
+					// collect all suitable offerings
+					for _, off := range profiles {
+						if off.cpu < minCR.cpu { continue }
+						if off.ram < minCR.ram { continue } // GiB
+
+						// Add this offering as a ComputeProfile alternative
+						additionalVSList = append(additionalVSList, virtualSvcStruct{
+								ApiVersion: alternativeVS.APIVersion,
+								Kind:       "ComputeProfile",
+								Name:       off.name, // or off.NameLabel if you prefer
+								Count:      "1",
+						})
+					}
+					r.Logger.Info("Added compute profile alternatives for component", "component", cmpnt.ComponentRef.Name, "numAlternatives", len(additionalVSList))
+				}
 			}
 			if len(altVSList) == 0 {
 				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
 			}
 			vsList = append(vsList, altVSList)
+			vsList = append(vsList, additionalVSList)
 		}
 
 		perLocList := make([]locStruct, 0)
@@ -539,6 +606,110 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 		return "", fmt.Errorf("failed to marshal providers: %v", err)
 	}
 	return string(b), nil
+}
+
+func (r *ILPTaskReconciler) getAllComputeProfiles(provRefs []hv1a1.ProviderRefSpec) ([]computeProfileService, error) {
+	provProfiles := make([]cv1a1.ProviderProfileSpec, 0)
+	for _, provRef := range provRefs {
+		provProfiles = append(provProfiles, cv1a1.ProviderProfileSpec{
+			Platform: provRef.Platform,
+			Region:   provRef.Region,
+			RegionAlias: provRef.RegionAlias,
+		})
+	}
+
+	candidates, err := r.getCandidateProviders(provProfiles)
+	if err != nil { return nil, err }
+
+	allComputeProfiles := make([]computeProfileService, 0)
+	for _, c := range candidates {
+		profiles, err := r.getComputeProfileForProvider(c)
+		if err != nil {
+			return nil, err
+		}
+		allComputeProfiles = append(allComputeProfiles, profiles...)
+	}
+
+	return allComputeProfiles, nil
+}
+
+func (r *ILPTaskReconciler) getCandidateProviders(filter []cv1a1.ProviderProfileSpec) ([]cv1a1.ProviderProfile, error) {
+	providers := cv1a1.ProviderProfileList{}
+	err := r.List(context.Background(), &providers)
+	if err != nil {
+		return nil, err
+	}
+	candidateProviders := make([]cv1a1.ProviderProfile, 0)
+	for _, item := range providers.Items {
+		for _, ref := range filter {
+			match := true
+			if ref.Platform != "" && item.Spec.Platform != ref.Platform { match = false }
+			if ref.Region != "" && item.Spec.Region != ref.Region { match = false }
+			if ref.RegionAlias != "" && item.Spec.RegionAlias != ref.RegionAlias { match = false }
+			if match { candidateProviders = append(candidateProviders, item) }
+		}
+	}
+
+	return candidateProviders, nil
+}
+
+func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile) ([]computeProfileService, error) {
+	
+	// List all config maps by labels
+	var configMaps corev1.ConfigMapList
+	if err := r.List(context.Background(), &configMaps, client.MatchingLabels{
+		"skycluster.io/config-type": "provider-profile",
+		"skycluster.io/managed-by": "skycluster",
+		"skycluster.io/provider-profile": p.Name,
+		"skycluster.io/provider-platform": p.Spec.Platform,
+		"skycluster.io/provider-region": p.Spec.Region,
+	}); err != nil {
+		return nil, err
+	}
+
+	if len(configMaps.Items) == 0 {
+		return nil, fmt.Errorf("no config maps found for provider %s", p.Name)
+	}
+	if len(configMaps.Items) > 1 {
+		return nil, fmt.Errorf("multiple config maps found for provider %s", p.Name)
+	}
+
+	var vServicesList []computeProfileService
+	cmData, ok := configMaps.Items[0].Data["flavors.yaml"]
+	if ok {
+		var zoneOfferings []cv1a1.ZoneOfferings
+		if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
+			for _, zo := range zoneOfferings {
+				for _, of := range zo.Offerings{
+					priceFloat, err := strconv.ParseFloat(of.Price, 64)
+					if err != nil {continue}
+					fRam, err1 := parseMemory(of.RAM)
+					fCPU := float64(of.VCPUs)
+					if err1 != nil {continue }
+
+					vServicesList = append(vServicesList, computeProfileService{
+						name:   of.NameLabel,
+						cpu: 	fCPU,
+						ram: fRam,
+						gpuEnabled:    of.GPU.Enabled,
+						gpuManufacturer: of.GPU.Manufacturer,
+						deployCost:     priceFloat,
+					})
+				}
+			}
+		}
+	}
+	
+	return vServicesList, nil
+}
+
+func parseMemory(s string) (float64, error) {
+	var numRe = regexp.MustCompile(`([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)`)
+	m := numRe.FindStringSubmatch(s)
+	if len(m) < 2 {
+		return 0, fmt.Errorf("no number found in %q", s)
+	}
+	return strconv.ParseFloat(m[1], 64)
 }
 
 func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
@@ -960,4 +1131,42 @@ func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName 
 		}
 	}
 	return nil
+}
+
+
+type computeProfileService struct {
+	name    string
+	cpu     float64
+	ram     float64
+	usedCPU float64
+	usedRAM float64
+	gpuEnabled bool
+	gpuManufacturer string
+	deployCost     float64
+}
+
+// calculateMinComputeResource returns the minimum compute resource required for a deployment
+// based on all its containers' resources
+func (r *ILPTaskReconciler) calculateMinComputeResource(ns string, deployName string) (*computeProfileService, error) {
+	// We proceed with structured objects for simplicity instead of
+	// unsctructured objects
+	depObj := &appsv1.Deployment{}
+	if err := r.Get(context.TODO(), client.ObjectKey{
+		Namespace: ns, Name: deployName,
+	}, depObj); err != nil {
+		return nil, errors.Wrap(err, "error getting deployment: " + deployName)
+	}
+	// Each deployment has a single pod but may contain multiple containers
+	// For each deployment (and subsequently each pod) we dervie the
+	// total cpu and memory for all its containers
+	allContainers := []corev1.Container{}
+	allContainers = append(allContainers, depObj.Spec.Template.Spec.Containers...)
+	allContainers = append(allContainers, depObj.Spec.Template.Spec.InitContainers...)
+	totalCPU, totalMem := 0.0, 0.0
+	for _, container := range allContainers {
+		cpu, mem := getContainerComputeResources(container)
+		totalCPU += cpu
+		totalMem += mem
+	}
+	return &computeProfileService{name: deployName, cpu: totalCPU, ram: totalMem}, nil
 }

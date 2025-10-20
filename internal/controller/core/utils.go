@@ -80,7 +80,7 @@ func deploymentHasLabels(deploy *appsv1.Deployment, labels map[string]string) bo
 
 // sortComputeResources sorts the compute resources by cpu and ram
 // It returns -1 if i < j, 1 if i > j, and 0 if i == j
-func sortComputeResources(i, j computeResource) int {
+func sortComputeResources(i, j computeProfileService) int {
 	if i.cpu != j.cpu {
 		if i.cpu < j.cpu {
 			return -1
@@ -184,8 +184,8 @@ func getContainerComputeResources(container corev1.Container) (float64, float64)
 
 // computeResourcesForFlavors returns a list of computeResource structs
 // based on the flavor names in the input map
-func computeResourcesForFlavors(configData map[string]string) ([]computeResource, error) {
-	allFlavorsCpuRam := make([]computeResource, 0)
+func computeResourcesForFlavors(configData map[string]string) ([]computeProfileService, error) {
+	allFlavorsCpuRam := make([]computeProfileService, 0)
 	for k, _ := range configData {
 		if !strings.Contains(k, "skyvm_flavor") {
 			continue
@@ -202,7 +202,7 @@ func computeResourcesForFlavors(configData map[string]string) ([]computeResource
 		if err1 != nil || err2 != nil {
 			return nil, errors.Wrap(err1, "Error converting flavor to int in assigning deployments to nodes.")
 		}
-		allFlavorsCpuRam = append(allFlavorsCpuRam, computeResource{name: flavor, cpu: float64(cpu), ram: float64(ram)})
+		allFlavorsCpuRam = append(allFlavorsCpuRam, computeProfileService{name: flavor, cpu: float64(cpu), ram: float64(ram)})
 	}
 	return allFlavorsCpuRam, nil
 }
@@ -210,10 +210,10 @@ func computeResourcesForFlavors(configData map[string]string) ([]computeResource
 // findSuitableComputeResource returns the name of the compute resource that satisfies the
 // minimum requirements for the given compute resource. If no compute resource satisfies
 // the requirements, it returns an empty string
-func findSuitableComputeResource(cmResource computeResource, allComputeResources []computeResource) (*computeResource, bool) {
+func findSuitableComputeResource(cmResource computeProfileService, allComputeResources []computeProfileService) (*computeProfileService, bool) {
 	for _, cr := range allComputeResources {
 		if cr.cpu >= cmResource.cpu && cr.ram >= cmResource.ram {
-			return &computeResource{name: cr.name, cpu: cr.cpu, ram: cr.ram}, true
+			return &computeProfileService{name: cr.name, cpu: cr.cpu, ram: cr.ram}, true
 		}
 	}
 	return nil, false
@@ -290,7 +290,7 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 // attemptPlaceDeployment returns true if the deployment can be placed on any of given nodes
 // and if it is possible to use any node, it updates the corresponding
 // node with the new used cpu and memory
-func attemptPlaceDeployment(dep computeResource, nodes []computeResource) (bool, []computeResource) {
+func attemptPlaceDeployment(dep computeProfileService, nodes []computeProfileService) (bool, []computeProfileService) {
 	for i, node := range nodes {
 		if (node.cpu-node.usedCPU) >= dep.cpu && (node.ram-node.usedRAM) >= dep.ram {
 			nodes[i].usedCPU += dep.cpu

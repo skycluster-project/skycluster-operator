@@ -13,7 +13,7 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
-      latency: 30ms
+      latency: 500ms
       totalDataTransfer: 0.5GB
       averageDataRate: 0.01GB/s
     - from:
@@ -24,7 +24,7 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
-      latency: 30ms
+      latency: 500ms
       totalDataTransfer: 0.5GB
       averageDataRate: 0.01GB/s
     - from:
@@ -35,7 +35,7 @@ spec:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
-      latency: 30ms
+      latency: 500ms
       totalDataTransfer: 0.5GB
       averageDataRate: 0.01GB/s
 ---
@@ -58,12 +58,12 @@ spec:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - regionAlias: us-east
-            platform: aws
-          - regionAlias: toronto
-        # required: 
-        #   - region: scinet
-        #     zone: zone-26
+          - platform: aws
+        required: 
+          - anyOf:
+            - region: us-east-1
+          - anyOf:
+            - region: us-west-1
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment

@@ -1,0 +1,1066 @@
+apiVersion: core.skycluster.io/v1alpha1
+kind: SkyNet
+metadata:
+  creationTimestamp: "2025-10-19T20:20:04Z"
+  generateName: redis-app-policies-
+  generation: 1
+  name: redis-app-policies-6mdhq
+  namespace: redis-app
+  resourceVersion: "83662499"
+  uid: 87061722-7af9-4f13-b8d4-d91b4866f920
+spec:
+  approve: false
+  dataflowPolicyRef:
+    name: redis-app-policies
+    resourceVersion: "83642529"
+  deployPlan:
+    components:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: gateway
+      providerRef:
+        name: aws-us-west-2
+        platform: aws
+        region: us-west-2
+        regionAlias: us-west
+        type: cloud
+        zone: us-west-2b
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: gateway
+      providerRef:
+        name: aws-us-east-2
+        platform: aws
+        region: us-east-2
+        regionAlias: us-east
+        type: cloud
+        zone: us-east-2b
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: worker
+      providerRef:
+        name: aws-us-east-1
+        platform: aws
+        region: us-east-1
+        regionAlias: us-east
+        type: cloud
+        zone: us-east-1b
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: backend
+      providerRef:
+        name: aws-us-east-2
+        platform: aws
+        region: us-east-2
+        regionAlias: us-east
+        type: cloud
+        zone: us-east-2b
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      providerRef:
+        name: aws-us-east-2
+        platform: aws
+        region: us-east-2
+        regionAlias: us-east
+        type: cloud
+        zone: us-east-2b
+    edges:
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: gateway
+        providerRef:
+          name: aws-us-west-2
+          region: us-west-2
+          regionAlias: us-west
+          type: cloud
+          zone: us-west-2b
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: redis
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: gateway
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: redis
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: backend
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: redis
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+    - from:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: worker
+        providerRef:
+          name: aws-us-east-1
+          region: us-east-1
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-1b
+      latency: "1.0"
+      to:
+        componentRef:
+          apiVersion: apps/v1
+          kind: Deployment
+          name: redis
+        providerRef:
+          name: aws-us-east-2
+          region: us-east-2
+          regionAlias: us-east
+          type: cloud
+          zone: us-east-2b
+  deploymentPlanRef:
+    name: redis-app-policies
+    resourceVersion: "83642533"
+status:
+  manifests:
+  - componentRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: gateway
+      namespace: redis-app
+    manifest: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"gateway","namespace":"redis-app"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"gateway"}},"template":{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"gateway"}},"spec":{"containers":[{"env":[{"name":"REDIS_HOST","value":"redis"},{"name":"REDIS_PORT","value":"6379"}],"image":"etesami/redis-gateway:latest","imagePullPolicy":"Always","name":"gateway","ports":[{"containerPort":8000}],"resources":{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}}}]}}}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-west-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-west-2b
+          name: gateway
+          namespace: redis-app
+      spec:
+          replicas: 1
+          selector:
+              matchLabels:
+                  app: gateway
+          strategy: {}
+          template:
+              metadata:
+                  annotations:
+                      prometheus.io/path: /metrics
+                      prometheus.io/port: "8000"
+                      prometheus.io/scrape: "true"
+                  creationTimestamp: null
+                  labels:
+                      app: gateway
+                      skycluster.io/managed-by: skycluster
+                      skycluster.io/provider-name: aws-us-west-2
+                      skycluster.io/provider-platform: aws
+                      skycluster.io/provider-region: us-west-2
+                      skycluster.io/provider-region-alias: us-west
+                      skycluster.io/provider-type: cloud
+                      skycluster.io/provider-zone: us-west-2b
+              spec:
+                  containers:
+                      - env:
+                          - name: REDIS_HOST
+                            value: redis
+                          - name: REDIS_PORT
+                            value: "6379"
+                        image: etesami/redis-gateway:latest
+                        imagePullPolicy: Always
+                        name: gateway
+                        ports:
+                          - containerPort: 8000
+                            protocol: TCP
+                        resources:
+                          limits:
+                              cpu: 500m
+                              memory: 512Mi
+                          requests:
+                              cpu: 200m
+                              memory: 256Mi
+                        terminationMessagePath: /dev/termination-log
+                        terminationMessagePolicy: File
+                  dnsPolicy: ClusterFirst
+                  restartPolicy: Always
+                  schedulerName: default-scheduler
+                  securityContext: {}
+                  terminationGracePeriodSeconds: 30
+      status: {}
+    providerRef:
+      name: aws-us-west-2
+      region: us-west-2
+      zone: us-west-2b
+  - componentRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: gateway
+      namespace: redis-app
+    manifest: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"gateway","namespace":"redis-app"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"gateway"}},"template":{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"gateway"}},"spec":{"containers":[{"env":[{"name":"REDIS_HOST","value":"redis"},{"name":"REDIS_PORT","value":"6379"}],"image":"etesami/redis-gateway:latest","imagePullPolicy":"Always","name":"gateway","ports":[{"containerPort":8000}],"resources":{"limits":{"cpu":"500m","memory":"512Mi"},"requests":{"cpu":"200m","memory":"256Mi"}}}]}}}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: gateway
+          namespace: redis-app
+      spec:
+          replicas: 1
+          selector:
+              matchLabels:
+                  app: gateway
+          strategy: {}
+          template:
+              metadata:
+                  annotations:
+                      prometheus.io/path: /metrics
+                      prometheus.io/port: "8000"
+                      prometheus.io/scrape: "true"
+                  creationTimestamp: null
+                  labels:
+                      app: gateway
+                      skycluster.io/managed-by: skycluster
+                      skycluster.io/provider-name: aws-us-east-2
+                      skycluster.io/provider-platform: aws
+                      skycluster.io/provider-region: us-east-2
+                      skycluster.io/provider-region-alias: us-east
+                      skycluster.io/provider-type: cloud
+                      skycluster.io/provider-zone: us-east-2b
+              spec:
+                  containers:
+                      - env:
+                          - name: REDIS_HOST
+                            value: redis
+                          - name: REDIS_PORT
+                            value: "6379"
+                        image: etesami/redis-gateway:latest
+                        imagePullPolicy: Always
+                        name: gateway
+                        ports:
+                          - containerPort: 8000
+                            protocol: TCP
+                        resources:
+                          limits:
+                              cpu: 500m
+                              memory: 512Mi
+                          requests:
+                              cpu: 200m
+                              memory: 256Mi
+                        terminationMessagePath: /dev/termination-log
+                        terminationMessagePolicy: File
+                  dnsPolicy: ClusterFirst
+                  restartPolicy: Always
+                  schedulerName: default-scheduler
+                  securityContext: {}
+                  terminationGracePeriodSeconds: 30
+      status: {}
+    providerRef:
+      name: aws-us-east-2
+      region: us-east-2
+      zone: us-east-2b
+  - componentRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: worker
+      namespace: redis-app
+    manifest: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"worker","namespace":"redis-app"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"worker"}},"template":{"metadata":{"annotations":{"prometheus.io/path":"/","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"worker"}},"spec":{"containers":[{"env":[{"name":"REDIS_HOST","value":"redis"},{"name":"REDIS_PORT","value":"6379"},{"name":"METRICS_PORT","value":"8000"}],"image":"etesami/redis-worker:latest","imagePullPolicy":"Always","name":"worker","ports":[{"containerPort":8000}],"resources":{"limits":{"cpu":"2000m","memory":"512Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}]}}}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-1
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-1b
+          name: worker
+          namespace: redis-app
+      spec:
+          replicas: 1
+          selector:
+              matchLabels:
+                  app: worker
+          strategy: {}
+          template:
+              metadata:
+                  annotations:
+                      prometheus.io/path: /
+                      prometheus.io/port: "8000"
+                      prometheus.io/scrape: "true"
+                  creationTimestamp: null
+                  labels:
+                      app: worker
+                      skycluster.io/managed-by: skycluster
+                      skycluster.io/provider-name: aws-us-east-1
+                      skycluster.io/provider-platform: aws
+                      skycluster.io/provider-region: us-east-1
+                      skycluster.io/provider-region-alias: us-east
+                      skycluster.io/provider-type: cloud
+                      skycluster.io/provider-zone: us-east-1b
+              spec:
+                  containers:
+                      - env:
+                          - name: REDIS_HOST
+                            value: redis
+                          - name: REDIS_PORT
+                            value: "6379"
+                          - name: METRICS_PORT
+                            value: "8000"
+                        image: etesami/redis-worker:latest
+                        imagePullPolicy: Always
+                        name: worker
+                        ports:
+                          - containerPort: 8000
+                            protocol: TCP
+                        resources:
+                          limits:
+                              cpu: "2"
+                              memory: 512Mi
+                          requests:
+                              cpu: 100m
+                              memory: 128Mi
+                        terminationMessagePath: /dev/termination-log
+                        terminationMessagePolicy: File
+                  dnsPolicy: ClusterFirst
+                  restartPolicy: Always
+                  schedulerName: default-scheduler
+                  securityContext: {}
+                  terminationGracePeriodSeconds: 30
+      status: {}
+    providerRef:
+      name: aws-us-east-1
+      region: us-east-1
+      zone: us-east-1b
+  - componentRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: backend
+      namespace: redis-app
+    manifest: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"backend","namespace":"redis-app"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"backend"}},"template":{"metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"backend"}},"spec":{"containers":[{"env":[{"name":"REDIS_HOST","value":"redis"},{"name":"REDIS_PORT","value":"6379"}],"image":"etesami/redis-backend:latest","imagePullPolicy":"Always","name":"backend","ports":[{"containerPort":8000}],"resources":{"limits":{"cpu":"300m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}]}}}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: backend
+          namespace: redis-app
+      spec:
+          replicas: 1
+          selector:
+              matchLabels:
+                  app: backend
+          strategy: {}
+          template:
+              metadata:
+                  annotations:
+                      prometheus.io/path: /metrics
+                      prometheus.io/port: "8000"
+                      prometheus.io/scrape: "true"
+                  creationTimestamp: null
+                  labels:
+                      app: backend
+                      skycluster.io/managed-by: skycluster
+                      skycluster.io/provider-name: aws-us-east-2
+                      skycluster.io/provider-platform: aws
+                      skycluster.io/provider-region: us-east-2
+                      skycluster.io/provider-region-alias: us-east
+                      skycluster.io/provider-type: cloud
+                      skycluster.io/provider-zone: us-east-2b
+              spec:
+                  containers:
+                      - env:
+                          - name: REDIS_HOST
+                            value: redis
+                          - name: REDIS_PORT
+                            value: "6379"
+                        image: etesami/redis-backend:latest
+                        imagePullPolicy: Always
+                        name: backend
+                        ports:
+                          - containerPort: 8000
+                            protocol: TCP
+                        resources:
+                          limits:
+                              cpu: 300m
+                              memory: 256Mi
+                          requests:
+                              cpu: 100m
+                              memory: 128Mi
+                        terminationMessagePath: /dev/termination-log
+                        terminationMessagePolicy: File
+                  dnsPolicy: ClusterFirst
+                  restartPolicy: Always
+                  schedulerName: default-scheduler
+                  securityContext: {}
+                  terminationGracePeriodSeconds: 30
+      status: {}
+    providerRef:
+      name: aws-us-east-2
+      region: us-east-2
+      zone: us-east-2b
+  - componentRef:
+      apiVersion: apps/v1
+      kind: Deployment
+      name: redis
+      namespace: redis-app
+    manifest: |
+      apiVersion: apps/v1
+      kind: Deployment
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"redis","namespace":"redis-app"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"redis"}},"template":{"metadata":{"labels":{"app":"redis"}},"spec":{"containers":[{"image":"redis:6-alpine","name":"redis","ports":[{"containerPort":6379}],"resources":{"limits":{"cpu":"500m","memory":"256Mi"},"requests":{"cpu":"100m","memory":"128Mi"}}}]}}}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: redis
+          namespace: redis-app
+      spec:
+          replicas: 1
+          selector:
+              matchLabels:
+                  app: redis
+          strategy: {}
+          template:
+              metadata:
+                  creationTimestamp: null
+                  labels:
+                      app: redis
+                      skycluster.io/managed-by: skycluster
+                      skycluster.io/provider-name: aws-us-east-2
+                      skycluster.io/provider-platform: aws
+                      skycluster.io/provider-region: us-east-2
+                      skycluster.io/provider-region-alias: us-east
+                      skycluster.io/provider-type: cloud
+                      skycluster.io/provider-zone: us-east-2b
+              spec:
+                  containers:
+                      - image: redis:6-alpine
+                        imagePullPolicy: IfNotPresent
+                        name: redis
+                        ports:
+                          - containerPort: 6379
+                            protocol: TCP
+                        resources:
+                          limits:
+                              cpu: 500m
+                              memory: 256Mi
+                          requests:
+                              cpu: 100m
+                              memory: 128Mi
+                        terminationMessagePath: /dev/termination-log
+                        terminationMessagePolicy: File
+                  dnsPolicy: ClusterFirst
+                  restartPolicy: Always
+                  schedulerName: default-scheduler
+                  securityContext: {}
+                  terminationGracePeriodSeconds: 30
+      status: {}
+    providerRef:
+      name: aws-us-east-2
+      region: us-east-2
+      zone: us-east-2b
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: headscale-server
+      namespace: skycluster-system
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: '{"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"kubectl.kubernetes.io/last-applied-configuration":"{\"apiVersion\":\"skycluster.io/v1alpha1\",\"kind\":\"XSetup\",\"metadata\":{\"annotations\":{},\"labels\":{\"skycluster.io/managed-by\":\"skycluster\"},\"name\":\"mycluster\"},\"spec\":{\"apiServer\":\"142.1.174.178:6443\",\"submariner\":{\"enabled\":true}}}\n"},"labels":{"crossplane.io/composite":"mycluster","skycluster.io/managed-by":"skycluster","skycluster.io/service-type":"headscale-server"},"name":"headscale-server","namespace":"skycluster-system"},"spec":{"ports":[{"nodePort":30080,"port":8080,"targetPort":8080}],"selector":{"app":"headscale-server"},"type":"NodePort"}}'
+          creationTimestamp: null
+          labels:
+              crossplane.io/composite: mycluster
+              skycluster.io/managed-by: skycluster
+              skycluster.io/service-type: app-face
+          name: headscale-server
+          namespace: skycluster-system
+      spec:
+          ports:
+              - nodePort: 30080
+                port: 8080
+                protocol: TCP
+                targetPort: 8080
+          selector:
+              app: headscale-server
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: gateway
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"gateway","skycluster.io/managed-by":"skycluster"},"name":"gateway","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8000}],"selector":{"app":"gateway"},"type":"ClusterIP"}}
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: gateway
+              skycluster.io/managed-by: skycluster
+              skycluster.io/service-type: app-face
+          name: gateway
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 80
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: gateway
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: gateway
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"gateway","skycluster.io/managed-by":"skycluster"},"name":"gateway","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8000}],"selector":{"app":"gateway"},"type":"ClusterIP"}}
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: gateway
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-west-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-west-2
+              skycluster.io/provider-region-alias: us-west
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-west-2b
+          name: gateway
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 80
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: gateway
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: gateway
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"gateway","skycluster.io/managed-by":"skycluster"},"name":"gateway","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8000}],"selector":{"app":"gateway"},"type":"ClusterIP"}}
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: gateway
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: gateway
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 80
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: gateway
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: redis
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"redis","namespace":"redis-app"},"spec":{"ports":[{"port":6379,"targetPort":6379}],"selector":{"app":"redis"},"type":"ClusterIP"}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/service-type: app-face
+          name: redis
+          namespace: redis-app
+      spec:
+          ports:
+              - port: 6379
+                protocol: TCP
+                targetPort: 6379
+          selector:
+              app: redis
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: redis
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{},"labels":{"skycluster.io/managed-by":"skycluster"},"name":"redis","namespace":"redis-app"},"spec":{"ports":[{"port":6379,"targetPort":6379}],"selector":{"app":"redis"},"type":"ClusterIP"}}
+          creationTimestamp: null
+          labels:
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: redis
+          namespace: redis-app
+      spec:
+          ports:
+              - port: 6379
+                protocol: TCP
+                targetPort: 6379
+          selector:
+              app: redis
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: worker
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"worker","skycluster.io/managed-by":"skycluster"},"name":"worker","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":8000,"targetPort":8000}],"selector":{"app":"worker"},"type":"ClusterIP"}}
+              prometheus.io/path: /
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: worker
+              skycluster.io/managed-by: skycluster
+              skycluster.io/service-type: app-face
+          name: worker
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 8000
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: worker
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: worker
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"worker","skycluster.io/managed-by":"skycluster"},"name":"worker","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":8000,"targetPort":8000}],"selector":{"app":"worker"},"type":"ClusterIP"}}
+              prometheus.io/path: /
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: worker
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-1
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-1
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-1b
+          name: worker
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 8000
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: worker
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: backend
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"backend","skycluster.io/managed-by":"skycluster"},"name":"backend","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8000}],"selector":{"app":"backend"},"type":"ClusterIP"}}
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: backend
+              skycluster.io/managed-by: skycluster
+              skycluster.io/service-type: app-face
+          name: backend
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 80
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: backend
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: v1
+      kind: Service
+      name: backend
+      namespace: redis-app
+    manifest: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+          annotations:
+              kubectl.kubernetes.io/last-applied-configuration: |
+                  {"apiVersion":"v1","kind":"Service","metadata":{"annotations":{"prometheus.io/path":"/metrics","prometheus.io/port":"8000","prometheus.io/scrape":"true"},"labels":{"app":"backend","skycluster.io/managed-by":"skycluster"},"name":"backend","namespace":"redis-app"},"spec":{"ports":[{"name":"http","port":80,"targetPort":8000}],"selector":{"app":"backend"},"type":"ClusterIP"}}
+              prometheus.io/path: /metrics
+              prometheus.io/port: "8000"
+              prometheus.io/scrape: "true"
+          creationTimestamp: null
+          labels:
+              app: backend
+              skycluster.io/managed-by: skycluster
+              skycluster.io/provider-name: aws-us-east-2
+              skycluster.io/provider-platform: aws
+              skycluster.io/provider-region: us-east-2
+              skycluster.io/provider-region-alias: us-east
+              skycluster.io/provider-type: cloud
+              skycluster.io/provider-zone: us-east-2b
+          name: backend
+          namespace: redis-app
+      spec:
+          ports:
+              - name: http
+                port: 80
+                protocol: TCP
+                targetPort: 8000
+          selector:
+              app: backend
+      status:
+          loadBalancer: {}
+    providerRef: {}
+  - componentRef:
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      name: headscale-server
+    manifest: |
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      metadata:
+          labels:
+              skycluster.io/managed-by: skycluster
+          name: headscale-server
+      spec:
+          forProvider:
+              manifest:
+                  apiVersion: networking.istio.io/v1
+                  kind: DestinationRule
+                  metadata:
+                      name: headscale-server
+                  spec:
+                      host: headscale-server
+                      trafficPolicy:
+                          loadBalancer:
+                              failoverPriority:
+                                  - skycluster.io/provider-region-alias
+                                  - skycluster.io/provider-region
+                                  - skycluster.io/provider-zone
+                              simple: LEAST_REQUEST
+                          outlierDetection:
+                              baseEjectionTime: 30s
+                              consecutiveErrors: 5
+                              interval: 5s
+                              maxEjectionPercent: 100
+          providerConfigRef:
+              name: ""
+    providerRef: {}
+  - componentRef:
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      name: gateway
+    manifest: |
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      metadata:
+          labels:
+              skycluster.io/managed-by: skycluster
+          name: gateway
+      spec:
+          forProvider:
+              manifest:
+                  apiVersion: networking.istio.io/v1
+                  kind: DestinationRule
+                  metadata:
+                      name: gateway
+                  spec:
+                      host: gateway
+                      trafficPolicy:
+                          loadBalancer:
+                              failoverPriority:
+                                  - skycluster.io/provider-region-alias
+                                  - skycluster.io/provider-region
+                                  - skycluster.io/provider-zone
+                              simple: LEAST_REQUEST
+                          outlierDetection:
+                              baseEjectionTime: 30s
+                              consecutiveErrors: 5
+                              interval: 5s
+                              maxEjectionPercent: 100
+          providerConfigRef:
+              name: ""
+    providerRef: {}
+  - componentRef:
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      name: redis
+    manifest: |
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      metadata:
+          labels:
+              skycluster.io/managed-by: skycluster
+          name: redis
+      spec:
+          forProvider:
+              manifest:
+                  apiVersion: networking.istio.io/v1
+                  kind: DestinationRule
+                  metadata:
+                      name: redis
+                  spec:
+                      host: redis
+                      trafficPolicy:
+                          loadBalancer:
+                              failoverPriority:
+                                  - skycluster.io/provider-region-alias
+                                  - skycluster.io/provider-region
+                                  - skycluster.io/provider-zone
+                              simple: LEAST_REQUEST
+                          outlierDetection:
+                              baseEjectionTime: 30s
+                              consecutiveErrors: 5
+                              interval: 5s
+                              maxEjectionPercent: 100
+          providerConfigRef:
+              name: ""
+    providerRef: {}
+  - componentRef:
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      name: worker
+    manifest: |
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      metadata:
+          labels:
+              skycluster.io/managed-by: skycluster
+          name: worker
+      spec:
+          forProvider:
+              manifest:
+                  apiVersion: networking.istio.io/v1
+                  kind: DestinationRule
+                  metadata:
+                      name: worker
+                  spec:
+                      host: worker
+                      trafficPolicy:
+                          loadBalancer:
+                              failoverPriority:
+                                  - skycluster.io/provider-region-alias
+                                  - skycluster.io/provider-region
+                                  - skycluster.io/provider-zone
+                              simple: LEAST_REQUEST
+                          outlierDetection:
+                              baseEjectionTime: 30s
+                              consecutiveErrors: 5
+                              interval: 5s
+                              maxEjectionPercent: 100
+          providerConfigRef:
+              name: ""
+    providerRef: {}
+  - componentRef:
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      name: backend
+    manifest: |
+      apiVersion: kubernetes.crossplane.io/v1alpha2
+      kind: Object
+      metadata:
+          labels:
+              skycluster.io/managed-by: skycluster
+          name: backend
+      spec:
+          forProvider:
+              manifest:
+                  apiVersion: networking.istio.io/v1
+                  kind: DestinationRule
+                  metadata:
+                      name: backend
+                  spec:
+                      host: backend
+                      trafficPolicy:
+                          loadBalancer:
+                              failoverPriority:
+                                  - skycluster.io/provider-region-alias
+                                  - skycluster.io/provider-region
+                                  - skycluster.io/provider-zone
+                              simple: LEAST_REQUEST
+                          outlierDetection:
+                              baseEjectionTime: 30s
+                              consecutiveErrors: 5
+                              interval: 5s
+                              maxEjectionPercent: 100
+          providerConfigRef:
+              name: ""
+    providerRef: {}
+  ready: false
+  synced: false
