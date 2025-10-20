@@ -6,7 +6,7 @@ metadata:
 spec:
   platform: openstack
   region: VAUGHAN
-  regionAlias: vaughan # Optional
+  regionAlias: us-east
   continent: north-america # Optional
   enabled: true
   zones:

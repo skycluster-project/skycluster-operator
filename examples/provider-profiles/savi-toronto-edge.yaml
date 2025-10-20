@@ -6,8 +6,8 @@ metadata:
 spec:
   platform: baremetal
   region: toronto
-  regionAlias: toronto # Optional
-  continent: north-america # Optional
+  regionAlias: us-east
+  continent: north-america
   enabled: true
   zones:
     - name: default

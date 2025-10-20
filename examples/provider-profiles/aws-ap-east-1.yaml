@@ -6,7 +6,7 @@ metadata:
 spec:
   platform: aws
   region: ap-east-1
-  regionAlias: ap-east
+  regionAlias: ap-northeast # intentionally set to us region alias
   continent: asia
   enabled: true
   zones:

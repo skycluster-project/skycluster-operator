@@ -6,7 +6,7 @@ metadata:
 spec:
   platform: gcp
   region: northamerica-northeast2
-  regionAlias: us-east
+  regionAlias: us-east # intentionally set to us region alias
   continent: north-america
   enabled: true
   zones:

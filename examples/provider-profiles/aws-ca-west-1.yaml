@@ -6,7 +6,7 @@ metadata:
 spec:
   platform: aws
   region: ca-west-1
-  regionAlias: ca-west
+  regionAlias: us-west # intentionally set to us region alias
   continent: north-america
   enabled: true
   zones:

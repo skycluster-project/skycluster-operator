@@ -578,8 +578,21 @@ func ComputeFixedLatency(r1, r2 string) int {
 }
 
 
+// helper: extract metro like "us-east" from "us-east-1"
+func metroFromRegion(region string) string {
+	parts := strings.Split(region, "-")
+	if len(parts) >= 2 {
+		return parts[0] + "-" + parts[1]
+	}
+	// fallback to first token
+	if len(parts) >= 1 {
+		return parts[0]
+	}
+	return region
+}
+
 // GenerateSyntheticLatency returns latency in ms rounded to 2 decimals.
-func GenerateSyntheticLatency(srcRegion, dstRegion, srcType, dstType string) (float64, error) {
+func GenerateSyntheticLatency(srcRegion, dstRegion, srcRegionAlias, dstRegionAlias, srcType, dstType string) (float64, error) {
 	// helper: sample from lognormal given desired mean and std (of the lognormal)
 	lognormal := func(mean, std float64) float64 {
 		if mean <= 0 {
@@ -596,12 +609,39 @@ func GenerateSyntheticLatency(srcRegion, dstRegion, srcType, dstType string) (fl
 		return math.Exp(mu + sigma*z)
 	}
 
-	cloudCloudLatency := func(sameContinent bool) float64 {
-		if sameContinent {
-			return lognormal(100, 10)
+	// replaced cloudCloudLatency with proximity-aware logic
+	cloudCloudLatency := func(srcRegion, dstRegion, srcRegionAlias, dstRegionAlias string) float64 {
+		// same exact region
+		if srcRegion == dstRegion {
+			return lognormal(10, 3) // very low latency inside same region
 		}
+
+		srcMetro := metroFromRegion(srcRegionAlias)
+		dstMetro := metroFromRegion(dstRegionAlias)
+
+		// same metro (e.g., us-east-1 <-> us-east-2)
+		if srcMetro != "" && srcMetro == dstMetro {
+			return lognormal(20, 5) // low latency for same metro
+		}
+
+		// same continent but different metros (e.g., us-east <-> us-central)
+		srcCont := strings.Split(srcRegionAlias, "-")[0]
+		dstCont := strings.Split(dstRegionAlias, "-")[0]
+		if srcCont == dstCont {
+			return lognormal(75, 10) // medium latency (target <100ms)
+		}
+
+		// intercontinental
 		return lognormal(200, 50)
 	}
+
+
+	// cloudCloudLatency := func(sameContinent bool) float64 {
+	// 	if sameContinent {
+	// 		return lognormal(100, 10)
+	// 	}
+	// 	return lognormal(200, 50)
+	// }
 	cloudEdgeLatency := func() float64 {
 		return lognormal(15.44, 7)
 	}
@@ -618,47 +658,75 @@ func GenerateSyntheticLatency(srcRegion, dstRegion, srcType, dstType string) (fl
 		return lognormal(8, 3)
 	}
 
-	// Extract continent from region (part before first '-')
-	srcContinent := srcRegion
-	if parts := strings.SplitN(srcRegion, "-", 2); len(parts) >= 1 {
-		srcContinent = parts[0]
-	}
-	dstContinent := dstRegion
-	if parts := strings.SplitN(dstRegion, "-", 2); len(parts) >= 1 {
-		dstContinent = parts[0]
-	}
+	// Extract continent from region alias (part before first '-')
+	// srcContinent := srcRegionAlias
+	// if parts := strings.Split(srcContinent, "-"); len(parts) >= 1 {
+	// 	srcContinent = parts[0]
+	// }
+	// dstContinent := dstRegionAlias
+	// if parts := strings.Split(dstContinent, "-"); len(parts) >= 1 {
+	// 	dstContinent = parts[0]
+	// }
 
-	sameRegion := srcRegion == dstRegion
-	sameContinent := srcContinent == dstContinent
-
+	sameRegion := (srcRegion == dstRegion) || (srcRegionAlias == dstRegionAlias)
 	var totalLatency float64
 
-	switch {
-	case srcType == "cloud" && dstType == "cloud":
-		totalLatency = cloudCloudLatency(sameContinent)
-
-	case (srcType == "cloud" && dstType == "nte") || (srcType == "nte" && dstType == "cloud"):
-		totalLatency = cloudNteLatency()
-
-	case (srcType == "cloud" && dstType == "edge") || (srcType == "edge" && dstType == "cloud"):
-		totalLatency = cloudEdgeLatency()
-
-	case srcType == "edge" && dstType == "edge":
-		// optionally you could check sameRegion or sameContinent if needed
-		totalLatency = edgeEdgeLatency()
-
-	case srcType == "nte" && dstType == "nte":
-		// only supported for same region / zone in the original; keep same behavior if needed:
-		if !sameRegion {
-			return 0, errors.New("nte-nte communication only supported within same region/zone")
+	// helper to model local -> cloud latency for an endpoint type
+	localToCloud := func(t string) (float64, error) {
+		switch t {
+		case "cloud":
+			return 0, nil
+		case "edge":
+			return cloudEdgeLatency(), nil
+		case "nte":
+			return cloudNteLatency(), nil
+		default:
+			return 0, errors.New("unsupported endpoint type: " + t)
 		}
-		totalLatency = nteNteLatency()
+	}
 
-	case (srcType == "nte" && dstType == "edge") || (srcType == "edge" && dstType == "nte"):
-		totalLatency = nteEdgeLatency()
+	// If same region, keep direct/same-region behavior (as before)
+	if sameRegion {
+		switch {
+		case srcType == "cloud" && dstType == "cloud":
+			totalLatency = cloudCloudLatency(srcRegion, dstRegion, srcRegionAlias, dstRegionAlias)
 
-	default:
-		return 0, errors.New("unsupported communication type")
+		case (srcType == "cloud" && dstType == "nte") || (srcType == "nte" && dstType == "cloud"):
+			totalLatency = cloudNteLatency()
+
+		case (srcType == "cloud" && dstType == "edge") || (srcType == "edge" && dstType == "cloud"):
+			totalLatency = cloudEdgeLatency()
+
+		case srcType == "edge" && dstType == "edge":
+			totalLatency = edgeEdgeLatency()
+
+		case srcType == "nte" && dstType == "nte":
+			// same-region nte-nte: keep original behavior
+			totalLatency = nteNteLatency()
+
+		case (srcType == "nte" && dstType == "edge") || (srcType == "edge" && dstType == "nte"):
+			totalLatency = nteEdgeLatency()
+
+		default:
+			return 0, errors.New("unsupported communication type")
+		}
+	} else {
+		// Different regions: route via clouds
+		// total = src -> local cloud (if needed) + cloud-to-cloud + remote cloud -> dst (if needed)
+		srcToCloud, err := localToCloud(srcType)
+		if err != nil {
+			return 0, err
+		}
+		dstFromCloud, err := localToCloud(dstType)
+		if err != nil {
+			return 0, err
+		}
+
+		// cloud-to-cloud latency depends on whether clouds are on same continent
+		cc := cloudCloudLatency(srcRegion, dstRegion, srcRegionAlias, dstRegionAlias)
+
+		// Special case: if both endpoints are clouds then localToCloud parts are zero, so it's just cc.
+		totalLatency = srcToCloud + cc + dstFromCloud
 	}
 
 	// round to 2 decimals

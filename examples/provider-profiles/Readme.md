@@ -10,3 +10,9 @@ Make sure the zones are available for your provider, for example:
 ```bash
  aws ec2 describe-availability-zones --region ca-central-1
 ```
+
+```bash
+
+kubectl patch providerprofiles aws-ap-east-1 -n skycluster-system --type='merge' -p '{"status":{"conditions":[{"type":"ResyncRequired","status":"True","lastTransitionTime":"2025-10-20T04:32:07Z","reason":"ResyncNeeded","message":"Resync required"}]}}' --subresource=status
+
+```

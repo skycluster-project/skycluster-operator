@@ -6,7 +6,7 @@ metadata:
 spec:
   platform: aws
   region: eu-north-1
-  regionAlias: eu-north
+  regionAlias: eu-south # intentionally set to eu south 
   continent: europe
   enabled: true
   zones:

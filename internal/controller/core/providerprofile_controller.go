@@ -415,7 +415,8 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 			if !ok1 || !ok2 {
 				continue
 			}
-			fixedMs, err := utils.GenerateSyntheticLatency(pf.Spec.Region, other.Spec.Region, z.Type, o.Type)
+			fixedMs, err := utils.GenerateSyntheticLatency(
+				pf.Spec.Region, other.Spec.Region, pf.Spec.RegionAlias, other.Spec.RegionAlias, z.Type, o.Type)
 			if err != nil {
 				continue
 			}
@@ -436,9 +437,19 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 			if err := r.Create(ctx, &newLat); err != nil {return err}
 		} else if err != nil {
 			return err
-		} else {
-			// exists - optionally ensure Spec.ProviderA/B set correctly; update fixed value if desired
-			// (skip updates here to keep it compact)
+		} else { // exists - optionally ensure; update
+			// z, ok1 := lo.Find(pf.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+			// o, ok2 := lo.Find(other.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+			// if !ok1 || !ok2 {
+			// 	continue
+			// }
+			// fixedMs, err := utils.GenerateSyntheticLatency(
+			// 	pf.Spec.Region, other.Spec.Region, pf.Spec.RegionAlias, other.Spec.RegionAlias, z.Type, o.Type)
+			// if err != nil {
+			// 	continue
+			// }
+			// lat.Spec.FixedLatencyMs = fmt.Sprintf("%.2f", fixedMs)
+			// _ = r.Update(ctx, &lat)
 			_ = lat
 		}
 	}
