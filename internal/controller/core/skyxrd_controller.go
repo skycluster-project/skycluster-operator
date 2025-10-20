@@ -104,6 +104,8 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 				r.Logger.Error(err, "error unmarshalling manifest yaml.", "manifest", xrd.Manifest)
 				return ctrl.Result{}, err
 			}
+
+			if xrd.ComponentRef.Kind != "XProvider" {continue} // only create providers for now
 	
 			unstrObj := &unstructured.Unstructured{Object: obj}
 			unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
@@ -288,7 +290,12 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 					fields["volumeType"] = "gp2"
 					fields["volumeSize"] = 30
 				}
-				fields["flavor"] = provMetadata[p.Platform][idx].Gateway.Flavor
+				fields["flavor"] = func () string {
+					if p.Platform == "aws" || p.Platform == "openstack" {
+						return "4vCPU-16GB"
+					}
+					return "2vCPU-8GB"
+				}()
 				return fields
 			}(),
 			"subnets": func() []map[string]any {

@@ -20,6 +20,3 @@ spec:
       defaultZone: false
       enabled: true
       type: cloud
----
-metadata:
-  namespace: skycluster-system
