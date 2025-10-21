@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"reflect"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -67,27 +68,28 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// Manifest are submitted through "Object" CRD from Crossplane
 	// We need provider config name from "XProvider" objects.
 
-	// provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
-	// if err != nil {
-	// 	return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
-	// }
+	provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
+	}
 
-	// manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
-	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
+	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
+	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 
 	// skynet.Status.Manifests = manifests
 
-	// manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
-	// if err != nil {
-	// 	_ = r.updateStatusManifests(&skynet) // best effort update
-	// 	return ctrl.Result{}, errors.Wrap(err, "failed to generate Istio configuration")
-	// }
+	manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
+	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 
-	// skynet.Status.Manifests = append(skynet.Status.Manifests, manifestsIstio...)
+	manifests = append(manifests, manifestsIstio...)
 
-	// if err := r.updateStatusManifests(&skynet); err != nil {
-	// 	return ctrl.Result{}, errors.Wrap(err, "failed to update SkyNet status")
-	// }
+	if !reflect.DeepEqual(skynet.Status.Manifests, manifests) {
+    skynet.Status.Manifests = manifests
+    if err := r.Status().Update(ctx, &skynet); err != nil {
+        return ctrl.Result{}, errors.Wrap(err, "error updating SkyNet status")
+    }
+		r.Logger.Info("Updated SkyNet status manifests.", "count", len(manifests))
+	}
 	return ctrl.Result{}, nil
 }
 
@@ -221,7 +223,7 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 	// and istio configuration for remote cluster
 	svcList := &corev1.ServiceList{}
 	if err := r.List(context.TODO(), svcList, client.MatchingLabels{
-		"skycluster.io/managed-by": "skycluster",
+		"skycluster.io/app-scope": "distributed",
 	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
 	
 	for _, svc := range svcList.Items {

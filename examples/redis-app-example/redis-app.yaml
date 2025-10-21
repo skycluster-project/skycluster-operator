@@ -103,7 +103,7 @@ metadata:
   namespace: redis-app
   labels:
     app: gateway
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
   annotations:
     # If Prometheus scrapes services instead of pods, these help
     prometheus.io/scrape: "true"
@@ -166,7 +166,7 @@ metadata:
   namespace: redis-app
   labels:
     app: backend
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8000"
@@ -230,7 +230,7 @@ metadata:
   namespace: redis-app
   labels:
     app: worker
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
   annotations:
     prometheus.io/scrape: "true"
     prometheus.io/port: "8000"
@@ -252,7 +252,7 @@ metadata:
   name: worker-hpa
   namespace: redis-app
   labels:
-    skycluster.io/managed-by: skycluster
+    skycluster.io/app-scope: distributed
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
