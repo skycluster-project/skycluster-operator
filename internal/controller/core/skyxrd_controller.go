@@ -442,22 +442,24 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 				if pp.Spec.Platform == "aws" {
 					// default node group
 					f := make(map[string]any)
-					f["instanceType"] = []string{
+					f["instanceTypes"] = []string{
+						"2vCPU-4GB",
 						"4vCPU-8GB",
-						"8vCPU-16GB",
+						"8vCPU-32GB",
 					}
+					f["nodeCount"] = 2
 					f["publicAccess"] = true
 					f["autoScaling"] = map[string]any{
 						"enabled": false,
 						"minSize": 1,
-						"maxSize": 1,
+						"maxSize": 2,
 					}
 					fields = append(fields, f)
 
 					// workers
 					for _, vs := range uniqueProfiles {
 						f := make(map[string]any)
-						f["instanceType"] = vs.Name
+						f["instanceTypes"] = []string{vs.Name}
 						f["publicAccess"] = false
 						fields = append(fields, f)
 					}
