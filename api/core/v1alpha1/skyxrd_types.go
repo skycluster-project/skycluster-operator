@@ -36,12 +36,12 @@ type SkyXRDSpec struct {
 type SkyXRDStatus struct {
 	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	Ready      bool                `json:"ready"`
-	Synced     bool                `json:"synced"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the SkyXRD is approved"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyXRD is ready"
 
 // SkyXRD is the Schema for the skyxrds API.
 type SkyXRD struct {

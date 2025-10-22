@@ -35,12 +35,12 @@ type SkyNetSpec struct {
 type SkyNetStatus struct {
 	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
-	Ready      bool                `json:"ready"`
-	Synced     bool                `json:"synced"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the SkyNet is approved"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyNet is ready"
 
 // SkyNet is the Schema for the skynets API
 type SkyNet struct {

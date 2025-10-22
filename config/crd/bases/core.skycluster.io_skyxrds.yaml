@@ -14,7 +14,16 @@ spec:
     singular: skyxrd
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Indicates if the SkyXRD is approved
+      jsonPath: .spec.approve
+      name: Approved
+      type: boolean
+    - description: Indicates if the SkyXRD is ready
+      jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: SkyXRD is the Schema for the skyxrds API.
@@ -646,13 +655,6 @@ spec:
                   - componentRef
                   type: object
                 type: array
-              ready:
-                type: boolean
-              synced:
-                type: boolean
-            required:
-            - ready
-            - synced
             type: object
         type: object
     served: true

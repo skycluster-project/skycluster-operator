@@ -279,7 +279,8 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
-		idx, err := MapToIndex(appId, len(provMetadata[p.Platform]))
+		id := appId + "-" + pName
+		idx, err := MapToIndex(id, len(provMetadata[p.Platform]))
 		if err != nil { return nil, err }
 
 		obj := &unstructured.Unstructured{}
@@ -402,7 +403,8 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 		})
 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
 		pp := provProfiles[pName]
-		idx, err := MapToIndex(appId, len(k8sMetadata[pp.Spec.Platform]))
+		id := appId + "-" + pName
+		idx, err := MapToIndex(id, len(k8sMetadata[pp.Spec.Platform]))
 		if err != nil { return nil, err }
 
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })

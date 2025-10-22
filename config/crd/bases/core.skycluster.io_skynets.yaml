@@ -14,7 +14,16 @@ spec:
     singular: skynet
   scope: Namespaced
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - description: Indicates if the SkyNet is approved
+      jsonPath: .spec.approve
+      name: Approved
+      type: boolean
+    - description: Indicates if the SkyNet is ready
+      jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         description: SkyNet is the Schema for the skynets API
@@ -645,13 +654,6 @@ spec:
                   - componentRef
                   type: object
                 type: array
-              ready:
-                type: boolean
-              synced:
-                type: boolean
-            required:
-            - ready
-            - synced
             type: object
         required:
         - spec
