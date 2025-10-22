@@ -27,7 +27,9 @@ import (
 	"go.uber.org/zap/zapcore"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +40,7 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
+	k8sobj "github.com/crossplane-contrib/provider-kubernetes/apis/cluster/object/v1alpha2"
 	"github.com/samber/lo"
 
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
@@ -73,6 +76,16 @@ func init() {
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(svcv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
+
+	// test registration via SchemeBuilder
+	gv := schema.GroupVersion{Group: "kubernetes.crossplane.io", Version: "v1alpha2"}
+	sb := runtime.NewSchemeBuilder(func(s *runtime.Scheme) error {
+			s.AddKnownTypes(gv, &k8sobj.Object{}, &k8sobj.ObjectList{})
+			metav1.AddToGroupVersion(s, gv)
+			return nil
+	})
+	utilruntime.Must(sb.AddToScheme(scheme))
+	
 	// +kubebuilder:scaffold:scheme
 }
 

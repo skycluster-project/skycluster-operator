@@ -20,6 +20,7 @@ import (
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	k8sobj "github.com/crossplane-contrib/provider-kubernetes/apis/cluster/object/v1alpha2"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
@@ -33,7 +34,7 @@ type SkyNetSpec struct {
 
 // SkyNetStatus defines the observed state of SkyNet.
 type SkyNetStatus struct {
-	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
+	Manifests []k8sobj.Object `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

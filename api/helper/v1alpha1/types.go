@@ -89,6 +89,7 @@ type ProviderRefSpec struct {
 	Region      string `json:"region,omitempty"`
 	RegionAlias string `json:"regionAlias,omitempty"`
 	Zone        string `json:"zone,omitempty"`
+	ConfigName  string `json:"configName,omitempty"`
 }
 
 type ConnectionSecret struct {

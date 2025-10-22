@@ -304,6 +304,26 @@ func attemptPlaceDeployment(dep computeProfileService, nodes []computeProfileSer
 	return false, nodes
 }
 
+func objToMap(obj any) (map[string]any, error) {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func generateJsonManifest(obj any) ([]byte, error) {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal object to JSON")
+	}
+	return b, nil
+}
+
 // generateYAMLManifest generates a string YAML manifest from the given object
 func generateYAMLManifest(obj any) (string, error) {
 	var inInterface map[string]interface{}

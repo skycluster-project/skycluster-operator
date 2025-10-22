@@ -21,6 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"github.com/crossplane-contrib/provider-kubernetes/apis/cluster/object/v1alpha2"
 	helperv1alpha1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -1156,7 +1157,7 @@ func (in *SkyNetStatus) DeepCopyInto(out *SkyNetStatus) {
 	*out = *in
 	if in.Manifests != nil {
 		in, out := &in.Manifests, &out.Manifests
-		*out = make([]helperv1alpha1.SkyService, len(*in))
+		*out = make([]v1alpha2.Object, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}

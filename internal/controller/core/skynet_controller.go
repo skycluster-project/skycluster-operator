@@ -34,6 +34,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	k8sobj "github.com/crossplane-contrib/provider-kubernetes/apis/cluster/object/v1alpha2"
+	"github.com/crossplane/crossplane-runtime/v2/apis/common"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
@@ -60,28 +62,29 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Must generate application manifests
-	// (i.e. deployments, services, istio configurations, etc.) and
-	// submit them to the remote cluster using Kubernetes Provider (object)
-	// We create manifest and submit it to the SkyAPP controller for further processing
-	
-	// Manifest are submitted through "Object" CRD from Crossplane
-	// We need provider config name from "XProvider" objects.
-
 	provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
 	}
+	r.Logger.Info("Fetched provider config name map.", "count", len(provCfgNameMap))
 
-	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
+
+	manifests := make([]k8sobj.Object, 0)
+
+	// Must generate application manifests
+	// (i.e. deployments, services, istio configurations, etc.) and
+	// submit them to the remote cluster using Kubernetes Provider (object)
+	// Manifest are submitted through "Object" CRD from Crossplane
+
+	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
-
+	
 	// skynet.Status.Manifests = manifests
 
-	manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
+	// manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
+	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 
-	manifests = append(manifests, manifestsIstio...)
+	manifests = append(manifests, depManifests...)
 
 	if !reflect.DeepEqual(skynet.Status.Manifests, manifests) {
     skynet.Status.Manifests = manifests
@@ -94,6 +97,8 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 }
 
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
+// it returns a map of provider profile name to provider config name
+// the local cluster is mapped to "local" key
 func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[string]string, error) {
 	provProfiles, err := r.fetchProviderProfilesMap()
 	if err != nil {
@@ -134,6 +139,34 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 		}
 	}
 
+	// in addition to the remote cluster, we need provider config for the local cluster
+	localSetup := &unstructured.UnstructuredList{}
+	localSetup.SetGroupVersionKind(
+		schema.GroupVersionKind{
+			Group:   "skycluster.io",
+			Version: "v1alpha1",
+			Kind:    "XSetup",
+		},
+	)
+	if err := r.List(context.TODO(), localSetup); err != nil {
+		return nil, errors.Wrap(err, "failed to list XSetup objects")
+	}
+
+	// normally there should be only one XSetup object
+	if len(localSetup.Items) == 0 {
+		return nil, errors.New("no XSetup object found for local cluster")
+	}
+	if len(localSetup.Items) > 1 {
+		return nil, errors.New("multiple XSetup objects found for local cluster")
+	}
+
+	localXSetup := localSetup.Items[0]
+	localProvCfgName, err := utils.GetNestedString(localXSetup.Object, "status", "providerConfig", "kubernetes", "name")
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to get local provider config name from XSetup")
+	}
+
+	cfgPerProv["local"] = localProvCfgName
 	return cfgPerProv, nil
 }
 
@@ -149,14 +182,14 @@ func (r *SkyNetReconciler) updateStatusManifests(skynet *cv1a1.SkyNet) error {
 	return updateErr
 }
 
-// generateAppManifests generates application manifests based on the deploy plan
+// generateDeployManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
-	manifests := make([]hv1a1.SkyService, 0)
+func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]k8sobj.Object, error) {
+	// manifests := make([]hv1a1.SkyService, 0)
+	manifests := make([]k8sobj.Object, 0)
 
 	// Deployments are created in selected remote clusters. We use "Object" CRD
 	// to wrap the deployment object along with provider reference
-	deploymentList := make([]appsv1.Deployment, 0)
 	for _, deployItem := range cmpnts {
 		// based on the type of services we may modify the objects' spec
 		switch strings.ToLower(deployItem.ComponentRef.Kind) {
@@ -196,97 +229,116 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 			deployLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
 			deployLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
 			
-			// We need to add the deployment to the manifests
-			yamlObj, err := generateYAMLManifest(newDeploy)
-			if err != nil {
-				return nil, errors.Wrap(err, "Error generating YAML manifest.")
-			}
-			manifests = append(manifests, hv1a1.SkyService{
-				ComponentRef: corev1.ObjectReference{
-					APIVersion: newDeploy.APIVersion,
-					Kind:       newDeploy.Kind,
-					Namespace:  newDeploy.Namespace,
-					Name:       newDeploy.Name,
-				},
-				Manifest: yamlObj,
-				ProviderRef: hv1a1.ProviderRefSpec{
-					Name:   deployItem.ProviderRef.Name,
-					Region: deployItem.ProviderRef.Region,
-					Zone:   deployItem.ProviderRef.Zone,
-					ConfigName: provCfgNameMap[deployItem.ProviderRef.Name],
-				},
-			})
-			deploymentList = append(deploymentList, newDeploy)
-		}
-	}
-
-	// There could be services submitted as part of the application manifests,
-	// Since services are not specified in deployPlan, 
-	// they must be tagged with managed-by label to be identified
-	// We must match the app selector with the deployment's app labels
-	// Once identified, we create corresponding services
-	// and istio configuration for remote cluster
-	svcList := &corev1.ServiceList{}
-	if err := r.List(context.TODO(), svcList, client.MatchingLabels{
-		"skycluster.io/app-scope": "distributed",
-	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
-	
-	for _, svc := range svcList.Items {
-		// Check if the svc is referring to one of the deployments in the deployment list
-
-		// For each provider, we need to create a new service with the same provider selector
-		// to control traffic distribution using istio (TODO: do we need this?)
-		// thisSvc := generateNewServiceFromService(&svc)		
-		// svcLabels := thisSvc.ObjectMeta.Labels
-		// svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
-
-		// yamlObj, err := generateYAMLManifest(thisSvc)
-		// if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
-
-		// manifests = append(manifests, hv1a1.SkyService{
-		// 	ComponentRef: corev1.ObjectReference{
-		// 		APIVersion: thisSvc.APIVersion,
-		// 		Kind:       thisSvc.Kind,
-		// 		Namespace:  thisSvc.Namespace,
-		// 		Name:       thisSvc.Name,
-		// 	},
-		// 	Manifest: yamlObj,
-		// })
-
-		// prepare replicated services for each deployment in each remote cluster
-		for _, deploy := range deploymentList {
-			if !deploymentHasLabels(&deploy, svc.Spec.Selector) { continue }
+			// yamlObj, err := generateYAMLManifest(newDeploy)
+			objMap, err := objToMap(newDeploy)
+			if err != nil {return nil, errors.Wrap(err, "error converting Deployment to map.")}
 			
-			// We need to create a new service with the same selector
-			// and add the provider's node selector to the service
-			newSvc := generateNewServiceFromService(&svc)
+			objMap["kind"] = "Deployment"
+			objMap["apiVersion"] = "apps/v1"
+			jsonObj, err := generateJsonManifest(objMap)
+			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
+
+			obj := generateObjectWrapper(newDeploy.Name, jsonObj, provCfgNameMap[deployItem.ProviderRef.Name])
 			
-			// All service is identical but with different labels
-			labels := newSvc.ObjectMeta.Labels
-			labels["skycluster.io/managed-by"] = "skycluster"
-			labels["skycluster.io/provider-name"] = deploy.Labels["skycluster.io/provider-name"]
-			labels["skycluster.io/provider-region"] = deploy.Labels["skycluster.io/provider-region"]
-			labels["skycluster.io/provider-zone"] = deploy.Labels["skycluster.io/provider-zone"]
-			labels["skycluster.io/provider-platform"] = deploy.Labels["skycluster.io/provider-platform"]
-			labels["skycluster.io/provider-region-alias"] = deploy.Labels["skycluster.io/provider-region-alias"]
-			labels["skycluster.io/provider-type"] = deploy.Labels["skycluster.io/provider-type"]
-			
-			yamlObj, err := generateYAMLManifest(newSvc)
-			if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
-			
-			manifests = append(manifests, hv1a1.SkyService{
-				ComponentRef: corev1.ObjectReference{
-					APIVersion: newSvc.APIVersion,
-					Kind:       newSvc.Kind,
-					Namespace:  newSvc.Namespace,
-					Name:       newSvc.Name,
-				},
-				Manifest: yamlObj,
-			})
+			manifests = append(manifests, *obj)
 		}
 	}
 
 	return manifests, nil
+
+	// // There could be services submitted as part of the application manifests,
+	// // Since services are not specified in deployPlan, 
+	// // they must be tagged with managed-by label to be identified
+	// // We must match the app selector with the deployment's app labels
+	// // Once identified, we create corresponding services
+	// // and istio configuration for remote cluster
+	// svcList := &corev1.ServiceList{}
+	// if err := r.List(context.TODO(), svcList, client.MatchingLabels{
+	// 	"skycluster.io/app-scope": "distributed",
+	// }); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
+	
+	// for _, svc := range svcList.Items {
+	// 	// Check if the svc is referring to one of the deployments in the deployment list
+
+	// 	// For each provider, we need to create a new service with the same provider selector
+	// 	// to control traffic distribution using istio (TODO: do we need this?)
+	// 	// thisSvc := generateNewServiceFromService(&svc)		
+	// 	// svcLabels := thisSvc.ObjectMeta.Labels
+	// 	// svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
+
+	// 	// yamlObj, err := generateYAMLManifest(thisSvc)
+	// 	// if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
+
+	// 	// manifests = append(manifests, hv1a1.SkyService{
+	// 	// 	ComponentRef: corev1.ObjectReference{
+	// 	// 		APIVersion: thisSvc.APIVersion,
+	// 	// 		Kind:       thisSvc.Kind,
+	// 	// 		Namespace:  thisSvc.Namespace,
+	// 	// 		Name:       thisSvc.Name,
+	// 	// 	},
+	// 	// 	Manifest: yamlObj,
+	// 	// })
+
+	// 	// prepare replicated services for each deployment in each remote cluster
+	// 	for _, deploy := range deploymentList {
+	// 		if !deploymentHasLabels(&deploy, svc.Spec.Selector) { continue }
+			
+	// 		// We need to create a new service with the same selector
+	// 		// and add the provider's node selector to the service
+	// 		newSvc := generateNewServiceFromService(&svc)
+			
+	// 		// All service is identical but with different labels
+	// 		labels := newSvc.ObjectMeta.Labels
+	// 		labels["skycluster.io/managed-by"] = "skycluster"
+	// 		labels["skycluster.io/provider-name"] = deploy.Labels["skycluster.io/provider-name"]
+	// 		labels["skycluster.io/provider-region"] = deploy.Labels["skycluster.io/provider-region"]
+	// 		labels["skycluster.io/provider-zone"] = deploy.Labels["skycluster.io/provider-zone"]
+	// 		labels["skycluster.io/provider-platform"] = deploy.Labels["skycluster.io/provider-platform"]
+	// 		labels["skycluster.io/provider-region-alias"] = deploy.Labels["skycluster.io/provider-region-alias"]
+	// 		labels["skycluster.io/provider-type"] = deploy.Labels["skycluster.io/provider-type"]
+			
+	// 		_, err := generateYAMLManifest(newSvc)
+	// 		if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
+			
+	// 		// manifests = append(manifests, hv1a1.SkyService{
+	// 		// 	ComponentRef: corev1.ObjectReference{
+	// 		// 		APIVersion: newSvc.APIVersion,
+	// 		// 		Kind:       newSvc.Kind,
+	// 		// 		Namespace:  newSvc.Namespace,
+	// 		// 		Name:       newSvc.Name,
+	// 		// 	},
+	// 		// 	Manifest: yamlObj,
+	// 		// })
+	// 	}
+	// }
+
+	// return manifests, nil
+}
+
+func generateObjectWrapper(name string, objB []byte, providerConfigName string) *k8sobj.Object {
+	obj := &k8sobj.Object{}
+	obj.SetGenerateName(name)
+	obj.SetLabels(map[string]string{
+		"skycluster.io/managed-by": "skycluster",
+	})
+	obj.Spec.ForProvider.Manifest.Raw = objB
+	obj.Spec.ProviderConfigReference = &common.Reference{
+		Name: providerConfigName,
+	}
+	// obj := &unstructured.Unstructured{}
+	// obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
+	// obj.SetKind("Object")
+	// obj.SetGenerateName(name + "-")
+	// obj.Object["spec"] = map[string]interface{}{
+	// 	"forProvider": map[string]interface{}{
+	// 		"manifest": objYaml,
+	// 	},
+	// 	"providerConfigRef": map[string]string{
+	// 		"name": providerConfigName,
+	// 	},
+	// }
+
+	return obj
 }
 
 func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
