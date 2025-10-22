@@ -73,7 +73,7 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
 	}
 
-	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component)
+	manifests, err := r.generateAppManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 
 	// skynet.Status.Manifests = manifests
@@ -93,6 +93,7 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
+// This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
 func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[string]string, error) {
 	provProfiles, err := r.fetchProviderProfilesMap()
 	if err != nil {
@@ -114,7 +115,7 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 		return nil, errors.Wrap(err, "failed to list XProvider objects")
 	}
 
-	for pName, pp := range provProfiles {
+	for pName, pp := range provProfiles { // for each enabled provider profile
 		for _, xProvObj := range cfgPerProvList.Items {
 			xpRegion, err1 := utils.GetNestedString(xProvObj.Object, "spec", "providerRef", "region")
 			xpPlatform, err2 := utils.GetNestedString(xProvObj.Object, "spec", "providerRef", "platform")
@@ -150,8 +151,11 @@ func (r *SkyNetReconciler) updateStatusManifests(skynet *cv1a1.SkyNet) error {
 
 // generateAppManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkyService) ([]hv1a1.SkyService, error) {
+func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
 	manifests := make([]hv1a1.SkyService, 0)
+
+	// Deployments are created in selected remote clusters. We use "Object" CRD
+	// to wrap the deployment object along with provider reference
 	deploymentList := make([]appsv1.Deployment, 0)
 	for _, deployItem := range cmpnts {
 		// based on the type of services we may modify the objects' spec
@@ -209,6 +213,7 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 					Name:   deployItem.ProviderRef.Name,
 					Region: deployItem.ProviderRef.Region,
 					Zone:   deployItem.ProviderRef.Zone,
+					ConfigName: provCfgNameMap[deployItem.ProviderRef.Name],
 				},
 			})
 			deploymentList = append(deploymentList, newDeploy)
@@ -228,25 +233,25 @@ func (r *SkyNetReconciler) generateAppManifests(ns string, cmpnts []hv1a1.SkySer
 	
 	for _, svc := range svcList.Items {
 		// Check if the svc is referring to one of the deployments in the deployment list
+
 		// For each provider, we need to create a new service with the same provider selector
-		// to control traffic distribution using istio
-		thisSvc := generateNewServiceFromService(&svc)
-		
-		svcLabels := thisSvc.ObjectMeta.Labels
-		svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
+		// to control traffic distribution using istio (TODO: do we need this?)
+		// thisSvc := generateNewServiceFromService(&svc)		
+		// svcLabels := thisSvc.ObjectMeta.Labels
+		// svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
 
-		yamlObj, err := generateYAMLManifest(thisSvc)
-		if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
+		// yamlObj, err := generateYAMLManifest(thisSvc)
+		// if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
 
-		manifests = append(manifests, hv1a1.SkyService{
-			ComponentRef: corev1.ObjectReference{
-				APIVersion: thisSvc.APIVersion,
-				Kind:       thisSvc.Kind,
-				Namespace:  thisSvc.Namespace,
-				Name:       thisSvc.Name,
-			},
-			Manifest: yamlObj,
-		})
+		// manifests = append(manifests, hv1a1.SkyService{
+		// 	ComponentRef: corev1.ObjectReference{
+		// 		APIVersion: thisSvc.APIVersion,
+		// 		Kind:       thisSvc.Kind,
+		// 		Namespace:  thisSvc.Namespace,
+		// 		Name:       thisSvc.Name,
+		// 	},
+		// 	Manifest: yamlObj,
+		// })
 
 		// prepare replicated services for each deployment in each remote cluster
 		for _, deploy := range deploymentList {
@@ -376,6 +381,7 @@ func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[st
 	return istioManifests, nil
 }
 
+// List all registered provider profiles
 func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
 	ppList := &cv1a1.ProviderProfileList{}
 	if err := r.List(context.Background(), ppList); err != nil {

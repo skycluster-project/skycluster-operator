@@ -99,6 +99,8 @@ spec:
                             (OR logic).
                           items:
                             properties:
+                              configName:
+                                type: string
                               name:
                                 type: string
                               platform:
@@ -123,6 +125,8 @@ spec:
                               anyOf:
                                 items:
                                   properties:
+                                    configName:
+                                      type: string
                                     name:
                                       type: string
                                     platform:

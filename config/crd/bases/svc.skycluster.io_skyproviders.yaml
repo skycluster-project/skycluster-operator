@@ -134,6 +134,8 @@ spec:
                 type: object
               providerRef:
                 properties:
+                  configName:
+                    type: string
                   name:
                     type: string
                   platform:

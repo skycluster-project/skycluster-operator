@@ -133,6 +133,8 @@ spec:
                             (OR logic).
                           items:
                             properties:
+                              configName:
+                                type: string
                               name:
                                 type: string
                               platform:
@@ -157,6 +159,8 @@ spec:
                               anyOf:
                                 items:
                                   properties:
+                                    configName:
+                                      type: string
                                     name:
                                       type: string
                                     platform:
@@ -176,6 +180,8 @@ spec:
                       type: object
                     provider:
                       properties:
+                        configName:
+                          type: string
                         name:
                           type: string
                         platform:
@@ -223,6 +229,8 @@ spec:
                   This list should be populated when the optimizer is executed
                 items:
                   properties:
+                    configName:
+                      type: string
                     name:
                       type: string
                     platform:
@@ -429,6 +437,8 @@ spec:
                               type: string
                             providerRef:
                               properties:
+                                configName:
+                                  type: string
                                 name:
                                   type: string
                                 platform:
@@ -557,6 +567,8 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
+                                    configName:
+                                      type: string
                                     name:
                                       type: string
                                     platform:
@@ -683,6 +695,8 @@ spec:
                                   type: string
                                 providerRef:
                                   properties:
+                                    configName:
+                                      type: string
                                     name:
                                       type: string
                                     platform:

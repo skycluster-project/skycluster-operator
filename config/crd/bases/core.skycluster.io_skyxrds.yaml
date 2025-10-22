@@ -177,6 +177,8 @@ spec:
                           type: string
                         providerRef:
                           properties:
+                            configName:
+                              type: string
                             name:
                               type: string
                             platform:
@@ -305,6 +307,8 @@ spec:
                               type: string
                             providerRef:
                               properties:
+                                configName:
+                                  type: string
                                 name:
                                   type: string
                                 platform:
@@ -431,6 +435,8 @@ spec:
                               type: string
                             providerRef:
                               properties:
+                                configName:
+                                  type: string
                                 name:
                                   type: string
                                 platform:
@@ -638,6 +644,8 @@ spec:
                       type: string
                     providerRef:
                       properties:
+                        configName:
+                          type: string
                         name:
                           type: string
                         platform:
