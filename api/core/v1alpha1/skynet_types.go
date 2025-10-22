@@ -34,6 +34,8 @@ type SkyNetSpec struct {
 
 // SkyNetStatus defines the observed state of SkyNet.
 type SkyNetStatus struct {
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
 	Manifests []k8sobj.Object `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }

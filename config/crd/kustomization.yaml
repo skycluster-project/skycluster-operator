@@ -23,12 +23,13 @@ resources:
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:
-- path: patch/patch-object-simplify-validation.json
-  target:
-    group: apiextensions.k8s.io
-    kind: CustomResourceDefinition
-    name: skynets.core.skycluster.io
-    version: v1
+# - path: patch/patch-object-simplify-validation.json
+#   target:
+#     group: apiextensions.k8s.io
+#     kind: CustomResourceDefinition
+#     name: skynets.core.skycluster.io
+#     version: v1
+
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 # +kubebuilder:scaffold:crdkustomizewebhookpatch
