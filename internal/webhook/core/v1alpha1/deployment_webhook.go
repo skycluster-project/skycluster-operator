@@ -19,7 +19,6 @@ package v1alpha1
 import (
 	"context"
 
-	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/internal/controller"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -56,7 +55,7 @@ func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 
 	deployment, ok := obj.(*appsv1.Deployment)
 	exists := cv1a1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
-		hv1a1.SKYCLUSTER_MANAGEDBY_LABEL: hv1a1.SKYCLUSTER_MANAGEDBY_VALUE,
+		"skycluster.io/app-scope": "distributed",
 	})
 	if !ok || !exists {
 		return nil
