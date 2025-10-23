@@ -30,3 +30,5 @@ SkyCluster
 
 # config/rbac
 *.notindexed.*
+
+examples/**/manifest-*

@@ -34,6 +34,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -86,11 +87,15 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
+	manifests = append(manifests, depManifests...)
 	
+	svcManifests, err := r.generateServiceManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
+	manifests = append(manifests, svcManifests...)
+
 	// manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
 	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 
-	manifests = append(manifests, depManifests...)
 
 	if skynet.Status.Manifests == nil { skynet.Status.Manifests = make([]k8sobj.Object, 0) }
 	if len(skynet.Status.Manifests) != len(manifests) || !reflect.DeepEqual(skynet.Status.Manifests, manifests) {
@@ -108,10 +113,18 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if skynet.Spec.Approve {
 		r.Logger.Info("Approval given, creating manifest objects in the cluster.")
 		for _, m := range manifests {
-			if err := r.Create(ctx, &m); err != nil && !apierrors.IsAlreadyExists(err) {
-				return ctrl.Result{}, errors.Wrap(err, "error creating manifest object")
+			if err := r.Create(ctx, &m); err != nil {
+				if apierrors.IsAlreadyExists(err) {
+					current := &k8sobj.Object{}
+					if err := r.Get(ctx, types.NamespacedName{
+						Name:      m.GetName(),
+						Namespace: m.GetNamespace(),
+					}, current); err != nil { return ctrl.Result{}, errors.Wrap(err, "error getting existing manifest object") }
+					
+					m.SetResourceVersion(current.GetResourceVersion())
+					if err := r.Update(ctx, &m); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
+				} else { return ctrl.Result{}, errors.Wrap(err, "error creating manifest object") }
 			}
-			r.Logger.Info("Prepared manifest for deployment.", "name", m.GetName())
 		}
 	}
 	return ctrl.Result{}, nil
@@ -234,7 +247,7 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.
 	}
 	selectedNs = lo.Uniq(selectedNs)
 	selectedProvNames = lo.Uniq(selectedProvNames)
-	selectedProvNames = append(selectedProvNames, "local")
+	selectedProvNames = append(selectedProvNames, "local") // Do we need this?
 
 	// now for each namespace, we create a namespace manifest
 	// along with its labels
@@ -261,12 +274,7 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.
 		// a namespace manifest must be created for each provider
 		for _, pName := range selectedProvNames {
 			// prepare namespace object
-			newNs := &corev1.Namespace{}
-			newNs.ObjectMeta = metav1.ObjectMeta{
-				Name: nsObj.Name,
-				Labels: labels,
-			}
-			
+			newNs := deepCopyNamespace(nsObj, true)
 			objMap, err := objToMap(newNs)
 			if err != nil {return nil, errors.Wrap(err, "error converting Namespace to map.")}
 	
@@ -276,6 +284,61 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.
 			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
 	
 			name := newNs.Name + "-" + pName
+			name = name[0:int(math.Min(float64(len(name)), 20))]
+			name = name + "-" + RandSuffix(name)
+	
+			obj := generateObjectWrapper(name, jsonObj, provCfgNameMap[pName])
+			manifests = append(manifests, *obj)
+		}
+	}
+	return manifests, nil
+}
+
+func (r *SkyNetReconciler) generateServiceManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]k8sobj.Object, error) {
+	// manifests := make([]hv1a1.SkyService, 0)
+	manifests := make([]k8sobj.Object, 0)
+	selectedProvNames := make([]string, 0)
+
+	for _, deployItem := range cmpnts {
+		switch strings.ToLower(deployItem.ComponentRef.Kind) {
+		case "deployment": // we collect provider names from deployments
+			pName := deployItem.ProviderRef.Name
+			// collect all providers used in the deployment plan
+			selectedProvNames = append(selectedProvNames, pName)
+		}
+	}
+
+	selectedProvNames = lo.Uniq(selectedProvNames)
+	// TODO: Do we need to create services in the local cluster?
+	// selectedProvNames = append(selectedProvNames, "local")
+
+	selectedServices := &corev1.ServiceList{}
+	if err := r.List(context.TODO(), selectedServices, client.InNamespace(ns), client.MatchingLabels{
+		"skycluster.io/app-scope": "distributed",
+	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
+
+	for _, svc := range selectedServices.Items {
+		
+		labels := svc.Labels
+		if labels == nil {
+			labels = map[string]string{}
+		}
+		labels["skycluster.io/managed-by"] = "skycluster"
+		
+		// selectedProvNames contains the list of provider names selected for deployments
+		// a namespace manifest must be created for each provider
+		for _, pName := range selectedProvNames {
+			// prepare service object
+			newSvc := deepCopyService(svc, true)
+			objMap, err := objToMap(newSvc)
+			if err != nil {return nil, errors.Wrap(err, "error converting service to map.")}
+
+			objMap["kind"] = "Service"
+			objMap["apiVersion"] = "v1"
+			jsonObj, err := generateJsonManifest(objMap)
+			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
+	
+			name := newSvc.Name + "-" + pName
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + RandSuffix(name)
 	
@@ -424,30 +487,24 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 	// return manifests, nil
 }
 
-func generateObjectWrapper(name string, objB []byte, providerConfigName string) *k8sobj.Object {
-	obj := &k8sobj.Object{}
-	obj.SetName(name)
-	obj.SetLabels(map[string]string{
-		"skycluster.io/managed-by": "skycluster",
-	})
-	obj.Spec.ForProvider.Manifest.Raw = objB
-	obj.Spec.ProviderConfigReference = &common.Reference{
-		Name: providerConfigName,
+// List all registered provider profiles
+func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
+	ppList := &cv1a1.ProviderProfileList{}
+	if err := r.List(context.Background(), ppList); err != nil {
+		return nil, errors.Wrap(err, "listing provider profiles")
 	}
-	// obj := &unstructured.Unstructured{}
-	// obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
-	// obj.SetKind("Object")
-	// obj.SetGenerateName(name + "-")
-	// obj.Object["spec"] = map[string]interface{}{
-	// 	"forProvider": map[string]interface{}{
-	// 		"manifest": objYaml,
-	// 	},
-	// 	"providerConfigRef": map[string]string{
-	// 		"name": providerConfigName,
-	// 	},
-	// }
 
-	return obj
+	if len(ppList.Items) == 0 {
+		return nil, errors.New("no provider profiles found")
+	}
+
+	providerProfilesMap := make(map[string]cv1a1.ProviderProfile)
+	for _, pp := range ppList.Items {
+		if _, ok := providerProfilesMap[pp.Spec.Platform]; !ok {
+			providerProfilesMap[pp.Name] = pp
+		}
+	}
+	return providerProfilesMap, nil
 }
 
 func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
@@ -542,24 +599,77 @@ func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[st
 	return istioManifests, nil
 }
 
-// List all registered provider profiles
-func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
-	ppList := &cv1a1.ProviderProfileList{}
-	if err := r.List(context.Background(), ppList); err != nil {
-		return nil, errors.Wrap(err, "listing provider profiles")
+func generateObjectWrapper(name string, objB []byte, providerConfigName string) *k8sobj.Object {
+	obj := &k8sobj.Object{}
+	obj.SetName(name)
+	obj.SetLabels(map[string]string{
+		"skycluster.io/managed-by": "skycluster",
+	})
+	obj.Spec.ForProvider.Manifest.Raw = objB
+	obj.Spec.ProviderConfigReference = &common.Reference{
+		Name: providerConfigName,
 	}
+	return obj
+}
 
-	if len(ppList.Items) == 0 {
-		return nil, errors.New("no provider profiles found")
-	}
+func deepCopyNamespace(src corev1.Namespace, clearAnnotations bool) *corev1.Namespace {
+	dest := src.DeepCopy()
 
-	providerProfilesMap := make(map[string]cv1a1.ProviderProfile)
-	for _, pp := range ppList.Items {
-		if _, ok := providerProfilesMap[pp.Spec.Platform]; !ok {
-			providerProfilesMap[pp.Name] = pp
-		}
-	}
-	return providerProfilesMap, nil
+	// Clear resource version and UID
+	dest.ResourceVersion = ""
+	dest.UID = ""
+	dest.CreationTimestamp = metav1.Time{}
+	dest.Generation = 0
+	dest.ManagedFields = nil
+	dest.OwnerReferences = nil
+	dest.Finalizers = nil
+	dest.Status = corev1.NamespaceStatus{}
+
+	// Clear annotations if specified
+	if clearAnnotations {dest.Annotations = nil}
+	return dest
+}
+
+func deepCopyDeployment(src appsv1.Deployment, clearAnnotations bool) *appsv1.Deployment {
+	dest := src.DeepCopy()
+
+	// Clear resource version and UID
+	dest.ResourceVersion = ""
+	dest.UID = ""					 
+	dest.CreationTimestamp = metav1.Time{}
+	dest.Generation = 0
+	dest.ManagedFields = nil
+	dest.OwnerReferences = nil
+	dest.Finalizers = nil
+	dest.Status = appsv1.DeploymentStatus{}
+	if clearAnnotations {dest.Annotations = nil}
+
+	return dest
+}
+
+func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service {
+	dest := src.DeepCopy()
+
+	// Clear resource version and UID
+	dest.ResourceVersion = ""
+	dest.UID = ""				 
+	dest.CreationTimestamp = metav1.Time{}
+	dest.Generation = 0
+	dest.ManagedFields = nil
+	dest.OwnerReferences = nil
+	dest.Finalizers = nil
+	dest.Status = corev1.ServiceStatus{}
+	dest.Spec.ClusterIP = ""
+	dest.Spec.ClusterIPs = nil
+	
+	dest.Spec.LoadBalancerIP = ""
+	dest.Spec.LoadBalancerSourceRanges = nil
+	dest.Spec.ExternalIPs = nil
+	dest.Spec.ExternalName = ""
+	
+	if clearAnnotations {dest.Annotations = nil}
+
+	return dest
 }
 
 // SetupWithManager sets up the controller with the Manager.
