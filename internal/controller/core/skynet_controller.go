@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"reflect"
 	"slices"
@@ -35,12 +36,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	k8sobj "github.com/crossplane-contrib/provider-kubernetes/apis/cluster/object/v1alpha2"
-	"github.com/crossplane/crossplane-runtime/v2/apis/common"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
@@ -73,23 +71,27 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 	r.Logger.Info("Fetched provider config name map.", "count", len(provCfgNameMap))
 
+	appId, ok := skynet.Labels["skycluster.io/app-id"]
+	if !ok || appId == "" {
+		return ctrl.Result{}, errors.New("missing required label: skycluster.io/app-id")
+	}
 
-	manifests := make([]k8sobj.Object, 0)
+	manifests := make([]*hv1a1.SkyObject, 0)
 
 	// Must generate application manifests
 	// (i.e. deployments, services, istio configurations, etc.) and
 	// submit them to the remote cluster using Kubernetes Provider (object)
 	// Manifest are submitted through "Object" CRD from Crossplane
 
-	nsManisfests, err := r.generateNamespaceManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	nsManisfests, err := r.generateNamespaceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate namespace manifests") }
 	manifests = append(manifests, nsManisfests...)
 
 	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 	manifests = append(manifests, depManifests...)
-	
-	svcManifests, err := r.generateServiceManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
+
+	svcManifests, err := r.generateServiceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
 	manifests = append(manifests, svcManifests...)
 
@@ -97,9 +99,12 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 
 
-	if skynet.Status.Manifests == nil { skynet.Status.Manifests = make([]k8sobj.Object, 0) }
-	if len(skynet.Status.Manifests) != len(manifests) || !reflect.DeepEqual(skynet.Status.Manifests, manifests) {
-    skynet.Status.Manifests = manifests
+	if skynet.Status.Objects == nil { skynet.Status.Objects = make([]hv1a1.SkyObject, 0) }
+	if len(skynet.Status.Objects) != len(manifests) || !reflect.DeepEqual(skynet.Status.Objects, manifests) {
+    skynet.Status.Objects = make([]hv1a1.SkyObject, 0)
+		for _, m := range manifests {
+			skynet.Status.Objects = append(skynet.Status.Objects, *m)
+		}
 		r.Logger.Info("SkyNet status manifests differ from generated manifests, updating status.")
 
     if err := r.Status().Update(ctx, &skynet); err != nil {
@@ -113,21 +118,54 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if skynet.Spec.Approve {
 		r.Logger.Info("Approval given, creating manifest objects in the cluster.")
 		for _, m := range manifests {
-			if err := r.Create(ctx, &m); err != nil {
+			obj, err := generateUnstructuredWrapper(m, &skynet, r.Scheme)
+			if err != nil {return ctrl.Result{}, errors.Wrap(err, "failed to generate unstructured wrapper")}
+			
+			if err := r.Create(ctx, obj); err != nil {
 				if apierrors.IsAlreadyExists(err) {
-					current := &k8sobj.Object{}
+					current := &unstructured.Unstructured{}
+					current.SetGroupVersionKind(schema.GroupVersionKind{
+						Group:   "skycluster.io",
+						Version: "v1alpha1",
+						Kind:    "Object",
+					})
 					if err := r.Get(ctx, types.NamespacedName{
-						Name:      m.GetName(),
-						Namespace: m.GetNamespace(),
-					}, current); err != nil { return ctrl.Result{}, errors.Wrap(err, "error getting existing manifest object") }
-					
-					m.SetResourceVersion(current.GetResourceVersion())
-					if err := r.Update(ctx, &m); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
+						Name:      obj.GetName(),
+						Namespace: obj.GetNamespace(),
+					}, current); err != nil { 
+						return ctrl.Result{}, errors.Wrap(err, "error getting existing manifest object") 
+					}
+
+					obj.SetResourceVersion(current.GetResourceVersion())
+					if err := r.Update(ctx, obj); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
 				} else { return ctrl.Result{}, errors.Wrap(err, "error creating manifest object") }
 			}
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.SkyNet, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
+	
+	obj := &unstructured.Unstructured{}
+	obj.SetAPIVersion("skycluster.io/v1alpha1")
+	obj.SetKind("Object")
+	obj.SetName(skyObj.Name)
+	obj.SetNamespace(owner.Namespace)
+	manifestMap, err := skyObj.ManifestAsMap()
+	if err != nil { return nil, errors.Wrap(err, "failed to convert manifest to map") }
+	obj.Object["spec"] = map[string]any{
+		"manifest":     manifestMap,
+		"providerConfigRef": map[string]any{
+			"name":      skyObj.ProviderRef.ConfigName,
+		},
+	}
+	obj.SetGroupVersionKind(schema.GroupVersionKind{
+    Group:   "skycluster.io",
+    Version: "v1alpha1",
+    Kind:    "Object",
+	})
+	return obj, nil
 }
 
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
@@ -204,23 +242,11 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 	return cfgPerProv, nil
 }
 
-func (r *SkyNetReconciler) updateStatusManifests(skynet *cv1a1.SkyNet) error {
-	updateErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &cv1a1.SkyNet{}
-		if err := r.Get(context.TODO(), client.ObjectKey{Namespace: skynet.Namespace, Name: skynet.Name}, latest); err != nil {
-			return err
-		}
-		latest.Status.Manifests = skynet.Status.Manifests // copy prepared status
-		return r.Status().Update(context.TODO(), latest)
-	})
-	return updateErr
-}
-
 // get the deployments' namespaces and generate namespace manifests
 // namespaces must be generated for all clusters
-func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]k8sobj.Object, error) {
+func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]k8sobj.Object, 0)
+	manifests := make([]*hv1a1.SkyObject, 0)
 	selectedNs := make([]string, 0)
 	selectedProvNames := make([]string, 0)
 
@@ -252,7 +278,10 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.
 	// now for each namespace, we create a namespace manifest
 	// along with its labels
 	nsList := &corev1.NamespaceList{}
-	if err := r.List(context.TODO(), nsList); err != nil {
+	if err := r.List(context.TODO(), nsList, client.MatchingLabels{
+		"skycluster.io/app-scope": "distributed",
+		"skycluster.io/app-id":    appId,
+	}); err != nil {
 		return nil, errors.Wrap(err, "error listing namespaces.")
 	}
 
@@ -274,29 +303,33 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, cmpnts []hv1a1.
 		// a namespace manifest must be created for each provider
 		for _, pName := range selectedProvNames {
 			// prepare namespace object
-			newNs := deepCopyNamespace(nsObj, true)
+			newNs := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: nsObj.Name,
+					Labels: labels,
+				},
+			}
 			objMap, err := objToMap(newNs)
 			if err != nil {return nil, errors.Wrap(err, "error converting Namespace to map.")}
 	
 			objMap["kind"] = "Namespace"
 			objMap["apiVersion"] = "v1"
-			jsonObj, err := generateJsonManifest(objMap)
-			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
 	
 			name := newNs.Name + "-" + pName
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + RandSuffix(name)
 	
-			obj := generateObjectWrapper(name, jsonObj, provCfgNameMap[pName])
-			manifests = append(manifests, *obj)
+			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
+			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			manifests = append(manifests, obj)
 		}
 	}
 	return manifests, nil
 }
 
-func (r *SkyNetReconciler) generateServiceManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]k8sobj.Object, error) {
+func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]k8sobj.Object, 0)
+	manifests := make([]*hv1a1.SkyObject, 0)
 	selectedProvNames := make([]string, 0)
 
 	for _, deployItem := range cmpnts {
@@ -313,8 +346,9 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, cmpnts []hv1a1.Sk
 	// selectedProvNames = append(selectedProvNames, "local")
 
 	selectedServices := &corev1.ServiceList{}
-	if err := r.List(context.TODO(), selectedServices, client.InNamespace(ns), client.MatchingLabels{
+	if err := r.List(context.TODO(), selectedServices, client.MatchingLabels{
 		"skycluster.io/app-scope": "distributed",
+		"skycluster.io/app-id":    appId,
 	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
 
 	for _, svc := range selectedServices.Items {
@@ -335,15 +369,14 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, cmpnts []hv1a1.Sk
 
 			objMap["kind"] = "Service"
 			objMap["apiVersion"] = "v1"
-			jsonObj, err := generateJsonManifest(objMap)
-			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
 	
 			name := newSvc.Name + "-" + pName
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + RandSuffix(name)
-	
-			obj := generateObjectWrapper(name, jsonObj, provCfgNameMap[pName])
-			manifests = append(manifests, *obj)
+
+			obj, err := generateObjectWrapper(name, newSvc.Namespace, objMap, provCfgNameMap[pName])
+			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			manifests = append(manifests, obj)
 		}
 	}
 
@@ -352,9 +385,9 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, cmpnts []hv1a1.Sk
 
 // generateDeployManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]k8sobj.Object, error) {
+func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]k8sobj.Object, 0)
+	manifests := make([]*hv1a1.SkyObject, 0)
 
 	// Deployments are created in selected remote clusters. We use "Object" CRD
 	// to wrap the deployment object along with provider reference
@@ -403,16 +436,15 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 			
 			objMap["kind"] = "Deployment"
 			objMap["apiVersion"] = "apps/v1"
-			jsonObj, err := generateJsonManifest(objMap)
-			if err != nil {return nil, errors.Wrap(err, "error generating JSON manifest.")}
 
 			name := newDeploy.Name + "-" + deployItem.ProviderRef.Name
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + RandSuffix(name)
 
-			obj := generateObjectWrapper(name, jsonObj, provCfgNameMap[deployItem.ProviderRef.Name])
+			obj, err := generateObjectWrapper(name, newDeploy.Namespace, objMap, provCfgNameMap[deployItem.ProviderRef.Name])
+			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
 
-			manifests = append(manifests, *obj)
+			manifests = append(manifests, obj)
 		}
 	}
 
@@ -599,35 +631,17 @@ func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[st
 	return istioManifests, nil
 }
 
-func generateObjectWrapper(name string, objB []byte, providerConfigName string) *k8sobj.Object {
-	obj := &k8sobj.Object{}
-	obj.SetName(name)
-	obj.SetLabels(map[string]string{
-		"skycluster.io/managed-by": "skycluster",
-	})
-	obj.Spec.ForProvider.Manifest.Raw = objB
-	obj.Spec.ProviderConfigReference = &common.Reference{
-		Name: providerConfigName,
+func generateObjectWrapper(name string, ns string, objAny map[string]any, providerConfigName string) (*hv1a1.SkyObject, error) {
+	obj := &hv1a1.SkyObject{}
+	obj.Name = name
+	if ns != "" {obj.Namespace = ns}
+	b, err := json.Marshal(objAny)
+	if err != nil { return nil, errors.Wrap(err, "failed to marshal objectAny to JSON") }
+	obj.Manifest = runtime.RawExtension{Raw: b}
+	obj.ProviderRef = hv1a1.ProviderRefSpec{
+		ConfigName: providerConfigName,
 	}
-	return obj
-}
-
-func deepCopyNamespace(src corev1.Namespace, clearAnnotations bool) *corev1.Namespace {
-	dest := src.DeepCopy()
-
-	// Clear resource version and UID
-	dest.ResourceVersion = ""
-	dest.UID = ""
-	dest.CreationTimestamp = metav1.Time{}
-	dest.Generation = 0
-	dest.ManagedFields = nil
-	dest.OwnerReferences = nil
-	dest.Finalizers = nil
-	dest.Status = corev1.NamespaceStatus{}
-
-	// Clear annotations if specified
-	if clearAnnotations {dest.Annotations = nil}
-	return dest
+	return obj, nil
 }
 
 func deepCopyDeployment(src appsv1.Deployment, clearAnnotations bool) *appsv1.Deployment {

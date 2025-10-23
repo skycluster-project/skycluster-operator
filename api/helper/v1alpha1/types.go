@@ -1,10 +1,12 @@
 package v1alpha1
 
 import (
+	"encoding/json"
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var (
@@ -80,6 +82,24 @@ type SkyComponent struct {
 	LocationConstraint LocationConstraint `json:"locationConstraint,omitempty"`
 	// VirtualServices specifies the virtual services that are required by the SkyComponent
 	VirtualServices []VirtualService `json:"virtualServices,omitempty"`
+}
+
+// SkyObject represents a "Object" managed by SkyCluster
+// This is a claim that maps to a cluster-scope object.kubernetes resource
+type SkyObject struct {
+	Name      string            `json:"name,omitempty"`
+	Namespace string            `json:"namespace,omitempty"`
+	Manifest  runtime.RawExtension    `json:"manifest,omitempty"`
+	ProviderRef ProviderRefSpec      `json:"providerRefSpec,omitempty"`
+}
+
+func (s *SkyObject) ManifestAsMap() (map[string]any, error) {
+	var m map[string]any
+	if len(s.Manifest.Raw) == 0 {
+			return nil, nil
+	}
+	err := json.Unmarshal(s.Manifest.Raw, &m)
+	return m, err
 }
 
 type ProviderRefSpec struct {

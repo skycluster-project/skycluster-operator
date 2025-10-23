@@ -535,8 +535,38 @@ spec:
                   - type
                   type: object
                 type: array
-              manifests:
-                x-kubernetes-preserve-unknown-fields: true
+              objects:
+                items:
+                  description: |-
+                    SkyObject represents a "Object" managed by SkyCluster
+                    This is a claim that maps to a cluster-scope object.kubernetes resource
+                  properties:
+                    manifest:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    providerRefSpec:
+                      properties:
+                        configName:
+                          type: string
+                        name:
+                          type: string
+                        platform:
+                          type: string
+                        region:
+                          type: string
+                        regionAlias:
+                          type: string
+                        type:
+                          type: string
+                        zone:
+                          type: string
+                      type: object
+                  type: object
+                type: array
             type: object
         required:
         - spec
