@@ -26,16 +26,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
 // nolint:unused
 // log is for logging in this package.
-var deploymentpolicylog = logf.Log.WithName("deploymentpolicy-resource")
+var dpLogger = logf.Log.WithName("deploymentpolicy-resource")
 
 // SetupDeploymentPolicyWebhookWithManager registers the webhook for DeploymentPolicy in the manager.
 func SetupDeploymentPolicyWebhookWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewWebhookManagedBy(mgr).For(&policyv1alpha1.DeploymentPolicy{}).
+	return ctrl.NewWebhookManagedBy(mgr).For(&pv1a1.DeploymentPolicy{}).
 		WithValidator(&DeploymentPolicyCustomValidator{}).
 		Complete()
 }
@@ -58,39 +58,52 @@ var _ webhook.CustomValidator = &DeploymentPolicyCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type DeploymentPolicy.
 func (v *DeploymentPolicyCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	deploymentpolicy, ok := obj.(*policyv1alpha1.DeploymentPolicy)
+	dp, ok := obj.(*pv1a1.DeploymentPolicy)
 	if !ok {
 		return nil, fmt.Errorf("expected a DeploymentPolicy object but got %T", obj)
 	}
-	dataflowpolicylog.Info(fmt.Sprintf("Validation DeploymentPolicy [%s] upon create", deploymentpolicy.GetName()))
-
-	// TODO(user): fill in your validation logic upon object creation.
+	
+	labels := []string{"skycluster.io/app-id", "skycluster.io/app-scope"}
+	if dp.Labels == nil {
+		return nil, fmt.Errorf("missing required labels on DeploymentPolicy '%s': %v", dp.GetName(), labels)
+	} else {
+		for _, label := range labels {
+			if _, exists := dp.Labels[label]; !exists {
+				return nil, fmt.Errorf("missing required label '%s' on DeploymentPolicy '%s'", label, dp.GetName())
+			}
+		}
+	}
 
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type DeploymentPolicy.
 func (v *DeploymentPolicyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	deploymentpolicy, ok := newObj.(*policyv1alpha1.DeploymentPolicy)
+	dp, ok := newObj.(*pv1a1.DeploymentPolicy)
 	if !ok {
 		return nil, fmt.Errorf("expected a DeploymentPolicy object for the newObj but got %T", newObj)
 	}
-	dataflowpolicylog.Info(fmt.Sprintf("Validation DeploymentPolicy [%s] upon update", deploymentpolicy.GetName()))
-
-	// TODO(user): fill in your validation logic upon object update.
+	
+	labels := []string{"skycluster.io/app-id", "skycluster.io/app-scope"}
+	if dp.Labels == nil {
+		return nil, fmt.Errorf("missing required labels on DeploymentPolicy '%s': %v", dp.GetName(), labels)
+	} else {
+		for _, label := range labels {
+			if _, exists := dp.Labels[label]; !exists {
+				return nil, fmt.Errorf("missing required label '%s' on DeploymentPolicy '%s'", label, dp.GetName())
+			}
+		}
+	}
 
 	return nil, nil
 }
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type DeploymentPolicy.
 func (v *DeploymentPolicyCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	deploymentpolicy, ok := obj.(*policyv1alpha1.DeploymentPolicy)
+	_, ok := obj.(*pv1a1.DeploymentPolicy)
 	if !ok {
 		return nil, fmt.Errorf("expected a DeploymentPolicy object but got %T", obj)
 	}
-	dataflowpolicylog.Info(fmt.Sprintf("Validation DeploymentPolicy [%s] upon deletion", deploymentpolicy.GetName()))
-
-	// TODO(user): fill in your validation logic upon object deletion.
 
 	return nil, nil
 }

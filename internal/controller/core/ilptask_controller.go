@@ -118,6 +118,12 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		r.Logger.Error(err, "unable to fetch DeploymentPlan", "name", dpName)
 		return ctrl.Result{}, err
 	}
+
+	appId1, ok1 := df.Labels["skycluster.io/app-id"]
+	appId2, ok2 := dp.Labels["skycluster.io/app-id"]
+	if !ok1 || !ok2 || appId1 != appId2 {
+		return ctrl.Result{}, errors.New("objects DataflowPolicy and DeploymentPolicy must have the same skycluster.io/app-id label")
+	}
 	
 	currDFRV := df.ObjectMeta.ResourceVersion
 	currDPRV := dp.ObjectMeta.ResourceVersion
@@ -172,10 +178,10 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
 
 						// generate skyXRD object
-						if err = r.ensureSkyXRD(task, deployPlan); err != nil {
+						if err = r.ensureSkyXRD(task, appId1, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
 						}
-						if err = r.ensureSkyNet(task, deployPlan); err != nil {
+						if err = r.ensureSkyNet(task, appId1, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
 						}
 					}
@@ -1069,7 +1075,7 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 
-func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, deployPlan hv1a1.DeployMap) error {
+func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
 	obj := &cv1a1.SkyNet{}
 	err := r.Get(context.TODO(), client.ObjectKey{
 		Namespace: task.Namespace,
@@ -1095,6 +1101,7 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, deployPlan hv1a1.D
 		obj := &cv1a1.SkyNet{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: task.Name + "-",
+				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
 			Spec: cv1a1.SkyNetSpec{
@@ -1112,7 +1119,7 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, deployPlan hv1a1.D
 	return nil
 }
 
-func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.DeployMap) error {
+func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
 	obj := &cv1a1.SkyXRD{}
 	err := r.Get(context.TODO(), client.ObjectKey{
 		Namespace: task.Namespace,
@@ -1138,6 +1145,7 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, deployPlan hv1a1.D
 		obj := &cv1a1.SkyXRD{
 			ObjectMeta: metav1.ObjectMeta{
 				GenerateName: task.Name + "-",
+				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
 			Spec: cv1a1.SkyXRDSpec{
