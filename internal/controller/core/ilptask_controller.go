@@ -131,6 +131,13 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	// If result is already set and referenced resources didn't change -> skip
 	if status.Result != "" && status.DataflowResourceVersion == currDFRV && status.DeploymentPlanResourceVersion == currDPRV {
 		r.Logger.Info("ILPTask already processed and references unchanged. Skipping optimization.")
+		// generate skyXRD object
+		if err := r.ensureSkyXRD(task, appId1, status.DeployMap); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
+		}
+		if err := r.ensureSkyNet(task, appId1, status.DeployMap); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
+		}
 		return ctrl.Result{}, nil
 	}
 
