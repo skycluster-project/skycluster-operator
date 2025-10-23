@@ -951,6 +951,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	// The ilptask is in the default namespace, and cross namespace reference is not allowed
 	
 	// 1) Check for any existing optimization pod for this ILPTask (someone else may have created it)
+	podFound := false
 	var podList corev1.PodList
 	if err := r.List(context.TODO(), &podList,
 		client.InNamespace(hv1a1.SKYCLUSTER_NAMESPACE),
@@ -960,12 +961,17 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 			// prefer a pod that is not terminating
 			if p.DeletionTimestamp == nil {
 				r.Logger.Info("Found existing optimization pod for ILPTask; reusing", "pod", p.Name)
-				return p.Name, nil
+				podFound = true
+				pod = &p
+				break
 			}
 		}
 	}
 	
-	if err := r.Create(context.TODO(), pod); err != nil { return "", err }
+	if !podFound {
+		if err := r.Create(context.TODO(), pod); err != nil { return "", err }
+		r.Logger.Info("Created new optimization pod for ILPTask", "pod", pod.Name)
+	}
 
 	// 3) Attempt to "claim" the pod by patching the ILPTask status (so only one reconcile will succeed)
 	// Fetch the ILPTask as it is on the server
@@ -977,6 +983,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 		_ = r.Delete(context.TODO(), pod)
 		return "", errors.Wrapf(err, "failed to get ILPTask %s/%s to claim pod; deleted created pod", taskMeta.Namespace, taskMeta.Name)
 	}
+
 
 	if orig.Status.Optimization.PodRef.Name != "" {
 			// Another reconcile already claimed a pod; delete what we created and return the claimed pod
