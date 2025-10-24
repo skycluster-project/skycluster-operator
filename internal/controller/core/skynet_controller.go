@@ -25,9 +25,12 @@ import (
 	"strings"
 
 	"github.com/go-logr/logr"
+	"github.com/golang/protobuf/ptypes/duration"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
+
+	istiov1 "istio.io/api/networking/v1"
+	istioClient "istio.io/client-go/pkg/apis/networking/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -95,9 +98,9 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
 	manifests = append(manifests, svcManifests...)
 
-	// manifestsIstio, err := generateIstioConfig(manifests, provCfgNameMap)
-	// if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
-
+	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap.Edges, provCfgNameMap)
+	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
+	manifests = append(manifests, manifestsIstio...)
 
 	if skynet.Status.Objects == nil { skynet.Status.Objects = make([]hv1a1.SkyObject, 0) }
 	if len(skynet.Status.Objects) != len(manifests) || !reflect.DeepEqual(skynet.Status.Objects, manifests) {
@@ -315,10 +318,11 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, c
 			objMap["kind"] = "Namespace"
 			objMap["apiVersion"] = "v1"
 	
-			name := newNs.Name + "-" + pName
+			name := "ns-" + newNs.Name + "-" + pName
+			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
-			name = name + "-" + RandSuffix(name)
-	
+			name = name + "-" + rand
+
 			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
 			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
 			manifests = append(manifests, obj)
@@ -370,9 +374,10 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 			objMap["kind"] = "Service"
 			objMap["apiVersion"] = "v1"
 	
-			name := newSvc.Name + "-" + pName
+			name := "svc-" + newSvc.Name + "-" + pName
+			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
-			name = name + "-" + RandSuffix(name)
+			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, newSvc.Namespace, objMap, provCfgNameMap[pName])
 			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
@@ -437,9 +442,10 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 			objMap["kind"] = "Deployment"
 			objMap["apiVersion"] = "apps/v1"
 
-			name := newDeploy.Name + "-" + deployItem.ProviderRef.Name
+			name := "dp-" + newDeploy.Name + "-" + deployItem.ProviderRef.Name
+			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
-			name = name + "-" + RandSuffix(name)
+			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, newDeploy.Namespace, objMap, provCfgNameMap[deployItem.ProviderRef.Name])
 			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
@@ -449,74 +455,6 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 	}
 
 	return manifests, nil
-
-	// // There could be services submitted as part of the application manifests,
-	// // Since services are not specified in deployPlan, 
-	// // they must be tagged with managed-by label to be identified
-	// // We must match the app selector with the deployment's app labels
-	// // Once identified, we create corresponding services
-	// // and istio configuration for remote cluster
-	// svcList := &corev1.ServiceList{}
-	// if err := r.List(context.TODO(), svcList, client.MatchingLabels{
-	// 	"skycluster.io/app-scope": "distributed",
-	// }); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
-	
-	// for _, svc := range svcList.Items {
-	// 	// Check if the svc is referring to one of the deployments in the deployment list
-
-	// 	// For each provider, we need to create a new service with the same provider selector
-	// 	// to control traffic distribution using istio (TODO: do we need this?)
-	// 	// thisSvc := generateNewServiceFromService(&svc)		
-	// 	// svcLabels := thisSvc.ObjectMeta.Labels
-	// 	// svcLabels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL] = "app-face"
-
-	// 	// yamlObj, err := generateYAMLManifest(thisSvc)
-	// 	// if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
-
-	// 	// manifests = append(manifests, hv1a1.SkyService{
-	// 	// 	ComponentRef: corev1.ObjectReference{
-	// 	// 		APIVersion: thisSvc.APIVersion,
-	// 	// 		Kind:       thisSvc.Kind,
-	// 	// 		Namespace:  thisSvc.Namespace,
-	// 	// 		Name:       thisSvc.Name,
-	// 	// 	},
-	// 	// 	Manifest: yamlObj,
-	// 	// })
-
-	// 	// prepare replicated services for each deployment in each remote cluster
-	// 	for _, deploy := range deploymentList {
-	// 		if !deploymentHasLabels(&deploy, svc.Spec.Selector) { continue }
-			
-	// 		// We need to create a new service with the same selector
-	// 		// and add the provider's node selector to the service
-	// 		newSvc := generateNewServiceFromService(&svc)
-			
-	// 		// All service is identical but with different labels
-	// 		labels := newSvc.ObjectMeta.Labels
-	// 		labels["skycluster.io/managed-by"] = "skycluster"
-	// 		labels["skycluster.io/provider-name"] = deploy.Labels["skycluster.io/provider-name"]
-	// 		labels["skycluster.io/provider-region"] = deploy.Labels["skycluster.io/provider-region"]
-	// 		labels["skycluster.io/provider-zone"] = deploy.Labels["skycluster.io/provider-zone"]
-	// 		labels["skycluster.io/provider-platform"] = deploy.Labels["skycluster.io/provider-platform"]
-	// 		labels["skycluster.io/provider-region-alias"] = deploy.Labels["skycluster.io/provider-region-alias"]
-	// 		labels["skycluster.io/provider-type"] = deploy.Labels["skycluster.io/provider-type"]
-			
-	// 		_, err := generateYAMLManifest(newSvc)
-	// 		if err != nil {return nil, errors.Wrap(err, "Error generating YAML manifest.")}
-			
-	// 		// manifests = append(manifests, hv1a1.SkyService{
-	// 		// 	ComponentRef: corev1.ObjectReference{
-	// 		// 		APIVersion: newSvc.APIVersion,
-	// 		// 		Kind:       newSvc.Kind,
-	// 		// 		Namespace:  newSvc.Namespace,
-	// 		// 		Name:       newSvc.Name,
-	// 		// 	},
-	// 		// 	Manifest: yamlObj,
-	// 		// })
-	// 	}
-	// }
-
-	// return manifests, nil
 }
 
 // List all registered provider profiles
@@ -539,9 +477,9 @@ func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provider
 	return providerProfilesMap, nil
 }
 
-func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[string]string) ([]hv1a1.SkyService, error) {
-	istioManifests := make([]hv1a1.SkyService, 0)
-	objs := map[string]unstructured.Unstructured{}
+func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, edges []hv1a1.DeployMapEdge, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+	manifests := make([]*hv1a1.SkyObject, 0)
+
 	// Generate Istio configuration
 	// As a general rule, we create a DestinationRule object that enforces
 	// priorities for failover, and we prioritize the local provider.
@@ -549,86 +487,81 @@ func generateIstioConfig(manifests []hv1a1.SkyService, providerCfgNameMap map[st
 	// as many labels as the client that send the request.
 	// These set of labels are introduced in the DestinationRule object
 	// and include provider region alias, region, and zone.
-	for _, manifest := range manifests {
-		if strings.ToLower(manifest.ComponentRef.Kind) == "service" {
-			yamlManifest := map[string]any{}
-			err := yaml.Unmarshal([]byte(manifest.Manifest), &yamlManifest)
-			if err != nil {return nil, errors.Wrap(err, "error unmarshaling YAML manifest.")}
+	for _, edge := range edges {
+		// must fetch labels on the deployment and match with a service
+		// then use service info to create DestinationRule object
+		to := edge.To
+		if strings.ToLower(to.ComponentRef.Kind) != "deployment" { continue }
 
-			labels, err := GetNestedField(yamlManifest, "metadata", "labels")
-			if err != nil { continue } // this service is not eligible for istio configuration
+		dep := &appsv1.Deployment{}
+		if err := r.Get(context.TODO(), client.ObjectKey{
+			Namespace: ns, Name: to.ComponentRef.Name,
+		}, dep); err != nil {return nil, errors.Wrap(err, "error getting Deployment for edge target.")}
 
-			// this label is added to the service indicating this is the main endpoint
-			// for the service and should be used for istio configuration
-			// TODO: check this out
-			if v, ok := labels[hv1a1.SKYCLUSTER_SVCTYPE_LABEL]; !ok || v != "app-face" { continue }
+		// find the service that matches the deployment labels
+		svcList := &corev1.ServiceList{}
+		if err := r.List(context.TODO(), svcList, client.MatchingLabels{
+			"skycluster.io/app-scope": "distributed",
+			"skycluster.io/app-id":    appId,
+		}); err != nil {return nil, errors.Wrap(err, "error listing Services for istio configuration.")}
+		
+		failovers := []string{
+			"skycluster.io/provider-platform",
+			"skycluster.io/provider-region-alias",
+			"skycluster.io/provider-region",
+			"skycluster.io/provider-zone",
+		}
 
-			failovers := []string{
-				"skycluster.io/provider-region-alias",
-				"skycluster.io/provider-region",
-				"skycluster.io/provider-zone",
-			}
-
-			istioObj := map[string]interface{}{
-				"apiVersion": "networking.istio.io/v1",
-				"kind":       "DestinationRule",
-				"metadata": map[string]interface{}{
-					"name": manifest.ComponentRef.Name,
-				},
-				"spec": map[string]interface{}{
-					"host": manifest.ComponentRef.Name,
-					"trafficPolicy": map[string]interface{}{
-						"loadBalancer": map[string]interface{}{
-							"simple":           "LEAST_REQUEST",
-							"failoverPriority": failovers,
-						},
-						"outlierDetection": map[string]interface{}{
-							"consecutiveErrors":  5,
-							"interval":           "5s",
-							"baseEjectionTime":   "30s",
-							"maxEjectionPercent": 100,
+		for _, svc := range svcList.Items {
+			if deploymentHasLabels(dep, svc.Spec.Selector) {
+				
+				ist := &istioClient.DestinationRule{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: svc.Name + "-dst-rule",
+						Namespace: svc.Namespace,
+					},
+					Spec: istiov1.DestinationRule{
+						Host: svc.Name,
+						TrafficPolicy: &istiov1.TrafficPolicy{
+							LoadBalancer: &istiov1.LoadBalancerSettings{
+								LbPolicy: &istiov1.LoadBalancerSettings_Simple{
+									Simple: istiov1.LoadBalancerSettings_LEAST_REQUEST,
+								},
+								LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
+									FailoverPriority: failovers,
+								},
+							},
+							OutlierDetection: &istiov1.OutlierDetection{
+								ConsecutiveErrors:	5,
+								Interval: 				 &duration.Duration{Seconds: 5},
+								BaseEjectionTime: &duration.Duration{Seconds: 30},
+								MaxEjectionPercent: 30,
+							},
 						},
 					},
-				},
-			}
+				}
 
-			obj := &unstructured.Unstructured{}
-			obj.SetAPIVersion("kubernetes.crossplane.io/v1alpha2")
-			obj.SetKind("Object")
-			obj.SetName(manifest.ComponentRef.Name)
-			obj.SetLabels(map[string]string{
-				"skycluster.io/managed-by": "skycluster",
-			})
-			obj.Object["spec"] = map[string]interface{}{
-				"forProvider": map[string]interface{}{
-					"manifest": istioObj,
-				},
-				"providerConfigRef": map[string]string{
-					"name": providerCfgNameMap[manifest.ProviderRef.Name],
-				},
-			}
+				objMap, err := objToMap(ist)
+				if err != nil {return nil, errors.Wrap(err, "error converting Deployment to map.")}
+				
+				objMap["kind"] = "DestinationRule"
+				objMap["apiVersion"] = "networking.istio.io/v1"
 
-			objs[manifest.ComponentRef.Name] = *obj
+				name := "dst-" + ist.Name + "-" + to.ProviderRef.Name
+				rand := RandSuffix(name)
+				name = name[0:int(math.Min(float64(len(name)), 20))]
+				name = name + "-" + rand
+
+				obj, err := generateObjectWrapper(name, svc.Namespace, objMap, provCfgNameMap[to.ProviderRef.Name])
+				if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+
+				manifests = append(manifests, obj)
+				break
+			}
 		}
 	}
 
-	// Update the status with the objects that will be created
-	for _, obj := range objs {
-		yamlObj, err := generateYAMLManifest(obj.Object)
-		if err != nil {
-			return nil, errors.Wrap(err, "error generating YAML manifest.")
-		}
-		istioManifests = append(istioManifests, hv1a1.SkyService{
-			ComponentRef: corev1.ObjectReference{
-				Name:       obj.GetName(),
-				Kind:       obj.GetKind(),
-				APIVersion: obj.GetAPIVersion(),
-			},
-			Manifest: yamlObj,
-		})
-	}
-
-	return istioManifests, nil
+	return manifests, nil
 }
 
 func generateObjectWrapper(name string, ns string, objAny map[string]any, providerConfigName string) (*hv1a1.SkyObject, error) {
