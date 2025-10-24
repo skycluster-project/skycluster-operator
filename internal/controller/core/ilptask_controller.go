@@ -1083,13 +1083,18 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 
 func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
-	obj := &cv1a1.SkyNet{}
-	err := r.Get(context.TODO(), client.ObjectKey{
-		Namespace: task.Namespace,
-		Name:      task.Name,
-	}, obj)
-	if err == nil {
+	obj := &cv1a1.SkyNetList{}
+	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
+		"skycluster.io/app-id": appId,
+	}); err != nil {
+		return errors.Wrapf(err, "failed to list SkyNets for ILPTask %s", task.Name)
+	}
+	if len(obj.Items) > 1 {
+		return fmt.Errorf("multiple SkyNets found for ILPTask %s and appId %s", task.Name, appId)
+	}
+	if len(obj.Items) > 0 {
 		// already exists, update if necessary
+		obj := &obj.Items[0]
 		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
 			r.Logger.Info("Updating existing SkyNet with new deployment plan", "SkyNet", obj.Name)
 			obj.Spec.DeployMap = deployPlan
@@ -1127,13 +1132,17 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, depl
 }
 
 func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
-	obj := &cv1a1.SkyXRD{}
-	err := r.Get(context.TODO(), client.ObjectKey{
-		Namespace: task.Namespace,
-		Name:      task.Name,
-	}, obj)
-	if err == nil {
-		// already exists, update if necessary
+	obj := &cv1a1.SkyXRDList{}
+	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
+		"skycluster.io/app-id": appId,
+	}); err != nil {
+		return errors.Wrapf(err, "failed to list SkyXRDs for ILPTask %s", task.Name)
+	}
+	if len(obj.Items) > 1 {
+		return fmt.Errorf("multiple SkyXRDs found for ILPTask %s and appId %s", task.Name, appId)
+	}
+	if len(obj.Items) > 0 { // already exists, update if necessary
+		obj := &obj.Items[0]
 		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
 			r.Logger.Info("Updating existing SkyXRD with new deployment plan", "SkyXRD", obj.Name)
 			obj.Spec.DeployMap = deployPlan
