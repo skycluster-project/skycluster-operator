@@ -163,35 +163,6 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	}
 	r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
 
-	// ######### Deployments
-	// allDeployments := make([]hv1a1.SkyService, 0)
-	// for _, deployItem := range deployMap.Component {
-		// For each component we check its kind and based on that we decide how to proceed:
-		// 	If this is a Sky Service, then we create the corresponding Service (maybe just the yaml file?)
-		// 	If this is a Deployment, then we need to group the deployments based on the provider
-		// Then using decreasing first fit, we identitfy the number and type of VMs required.
-		// Then we create SkyK8SCluster with a controller and agents specified in previous step.
-		// We also need to annotate deployments carefully and create services and istio resources accordingly.
-
-	// based on the type of services we may modify the objects' spec
-	// 	switch strings.ToLower(deployItem.ComponentRef.Kind) {
-	// 	case "deployment":
-	// 		allDeployments = append(allDeployments, deployItem)
-	// 	case "vm":
-	// 		skyObj, err := r.generateSkyVMManifest(ctx, req, deployItem)
-	// 		if err != nil {
-	// 			return nil, nil, errors.Wrap(err, "Error generating SkyVM manifest.")
-	// 		}
-	// 		manifests = append(manifests, *skyObj)
-	// 	default:
-	//  	 We only support above services for now...
-	// 		return nil, nil, errors.New(fmt.Sprintf("unsupported component type [%s]. Skipping...\n", deployItem.ComponentRef.Kind))
-	// 	}
-	// }
-
-	// providerProfiles, err := r.fetchProviderProfilesMap()
-	// if err != nil {return nil, nil, errors.Wrap(err, "Error fetching provider profiles.")}
-
 	depPolicy, err := r.fetchDeploymentPolicy(ns, skyxrd.Spec.DeploymentPolicyRef)
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
 
@@ -287,8 +258,9 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
 		name := helper.EnsureK8sName("xp-" + pName + "-" + appId)
+		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
-		name = name + "-" + RandSuffix(name)
+		name = name + "-" + rand
 		obj.SetName(name)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
@@ -417,8 +389,9 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
-		name = name + "-" + RandSuffix(name)
+		name = name + "-" + rand
 		xrdObj.SetName(name)
 
 		spec := map[string]any{
@@ -564,8 +537,9 @@ func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv
 	xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 	xrdObj.SetKind("XKubeMesh")
 	name := helper.EnsureK8sName("xkmesh-" + appId)
+	rand := RandSuffix(name)
 	name = name[0:int(math.Min(float64(len(name)), 15))]
-	name = name + "-" + RandSuffix(name)
+	name = name + "-" + rand
 	xrdObj.SetName(name)
 
 	spec := map[string]any{
