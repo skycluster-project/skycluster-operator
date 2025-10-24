@@ -481,12 +481,15 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 			Images: []cv1a1.ImageOffering{
 				{
 					NameLabel: "ubuntu-20.04",
+					Pattern: "*hvm-ssd*/ubuntu-focal-20.04-amd64-server*",
 				},
 				{
 					NameLabel: "ubuntu-22.04",
+					Pattern: "*hvm-ssd*/ubuntu-jammy-22.04-amd64-server*",
 				},
 				{
 					NameLabel: "ubuntu-24.04",
+					Pattern: "*hvm-ssd*/ubuntu-noble-24.04-amd64-server*",
 				},
 			},
 		},

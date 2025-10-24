@@ -63,6 +63,8 @@ spec:
                       - ubuntu-24.04
                       - eks-optimized
                       type: string
+                    pattern:
+                      type: string
                     zone:
                       type: string
                   required:
@@ -146,6 +148,8 @@ spec:
                       - ubuntu-22.04
                       - ubuntu-24.04
                       - eks-optimized
+                      type: string
+                    pattern:
                       type: string
                     zone:
                       type: string

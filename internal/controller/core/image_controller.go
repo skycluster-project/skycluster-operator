@@ -384,6 +384,7 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 					InitContainers: []corev1.Container{{
 						Name:  "runner",
 						Image: "etesami/image-finder:latest",
+						// ImagePullPolicy: corev1.PullAlways,
 						ImagePullPolicy: corev1.PullIfNotPresent,
 						Env:   envVars,
 						VolumeMounts: []corev1.VolumeMount{
@@ -474,6 +475,7 @@ func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []cv1
 	type ImageOffering struct {
 		Zone      string `json:"zone"`
 		NameLabel string `json:"nameLabel"`
+		Pattern   string `json:"pattern,omitempty"`
 	}
 	type payload struct {
 		Images []ImageOffering `json:"images"`
@@ -488,6 +490,7 @@ func (r *ImageReconciler) generateJSON(zones []cv1a1.ZoneSpec, imageLabels []cv1
 			imgOfferings = append(imgOfferings, ImageOffering{
 				Zone:      zone.Name,
 				NameLabel: img.NameLabel,
+				Pattern:   img.Pattern,
 			})
 		}
 	}
