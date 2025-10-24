@@ -1107,7 +1107,7 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, depl
 		r.Logger.Info("Creating new SkyNet for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.SkyNet{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: task.Name + "-",
+				Name: task.Name + "-" + RandSuffix(task.Name),
 				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
@@ -1151,7 +1151,7 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, depl
 		r.Logger.Info("Creating new SkyXRD for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.SkyXRD{
 			ObjectMeta: metav1.ObjectMeta{
-				GenerateName: task.Name + "-",
+				Name: task.Name + "-" + RandSuffix(task.Name),
 				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
