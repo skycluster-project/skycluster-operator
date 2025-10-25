@@ -422,12 +422,12 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 						"4vCPU-8GB",
 						"8vCPU-32GB",
 					}
-					f["nodeCount"] = 2
+					f["nodeCount"] = 3
 					f["publicAccess"] = true
 					f["autoScaling"] = map[string]any{
 						"enabled": false,
 						"minSize": 1,
-						"maxSize": 2,
+						"maxSize": 4,
 					}
 					fields = append(fields, f)
 
