@@ -720,7 +720,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 
 	// failover priority labels
 	// a map of component name (deployment name) to its set of labels
-	_ = derivePriorities(cmpnts, edges)
+	labels := derivePriorities(cmpnts, edges)
 
 	// Generate Istio configuration
 	// As a general rule, we create a DestinationRule object that enforces
@@ -733,6 +733,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 		// must fetch labels on the deployment and match with a service
 		// then use service info to create DestinationRule object
 		to := edge.To
+		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
 		if strings.ToLower(to.ComponentRef.Kind) != "deployment" { continue }
 
 		dep := &appsv1.Deployment{}
@@ -747,13 +748,13 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 			"skycluster.io/app-id":    appId,
 		}); err != nil {return nil, errors.Wrap(err, "error listing Services for istio configuration.")}
 		
-		failovers := []string{
-			"skycluster.io/provider-name", // highest priority, must match exactly, if not, the rest do not matter
-			"skycluster.io/provider-platform",
-			"skycluster.io/provider-region-alias",
-			"skycluster.io/provider-region",
-			"skycluster.io/provider-zone", // lowest priority, all above must match
-		}
+		// failovers := []string{
+		// 	"skycluster.io/provider-name", // highest priority, must match exactly, if not, the rest do not matter
+		// 	"skycluster.io/provider-platform",
+		// 	"skycluster.io/provider-region-alias",
+		// 	"skycluster.io/provider-region",
+		// 	"skycluster.io/provider-zone", // lowest priority, all above must match
+		// }
 
 		for _, svc := range svcList.Items {
 			if deploymentHasLabels(dep, svc.Spec.Selector) {
@@ -771,7 +772,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 									Simple: istiov1.LoadBalancerSettings_LEAST_REQUEST,
 								},
 								LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
-									FailoverPriority: failovers,
+									FailoverPriority: lo.Keys(labels[toName]),
 								},
 							},
 							OutlierDetection: &istiov1.OutlierDetection{
