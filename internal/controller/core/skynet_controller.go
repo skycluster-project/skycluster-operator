@@ -103,7 +103,7 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
 	manifests = append(manifests, svcManifests...)
 
-	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap.Edges, provCfgNameMap)
+	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 	manifests = append(manifests, manifestsIstio...)
 
@@ -520,7 +520,8 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 			// Discard all other fields that are not necessary
 			newDeploy := generateNewDeplyFromDeploy(deploy)
 
-			podLabels := labels[deployItem.ComponentRef.Name]
+			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
+			podLabels := labels[deployItemUniqName]
 			podLabels["skycluster.io/managed-by"] = "skycluster"
 			podLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
 
@@ -540,7 +541,7 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 
 			// Add general labels to the deployment
 			deplLabels := newDeploy.ObjectMeta.Labels
-			newDeplLabels := lo.Assign(deplLabels, labels[deployItem.ComponentRef.Name]) // merge
+			newDeplLabels := lo.Assign(deplLabels, labels[deployItemUniqName]) // merge
 			newDeplLabels["skycluster.io/managed-by"] = "skycluster"
 			newDeplLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
 
@@ -593,7 +594,6 @@ func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provider
 	return providerProfilesMap, nil
 }
 
-
 func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) map[string]map[string]string {
 
 	// This function derives set of labels for each deployment target based on the edges
@@ -641,11 +641,9 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 	// first, collect primary targets
 	for _, edge := range edges {
 		from := edge.From
-		fromName := from.ComponentRef.Name
-		fromProv := from.ProviderRef.Name
+		fromName := from.ComponentRef.Name + "-" + from.ProviderRef.Name
 		to := edge.To
-		toName := to.ComponentRef.Name
-		toProv := to.ProviderRef.Name
+		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
 
 		if _, ok := labels[fromName]; !ok {
 			labels[fromName] = make(map[string]string)
@@ -654,23 +652,21 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 			labels[toName] = make(map[string]string)
 		}
 
-		fName := RandSuffix(fromName + "-" + fromProv)
-		tName := RandSuffix(toName + "-" + toProv)
+		fName := RandSuffix(fromName)
+		tName := RandSuffix(toName)
 		labelKey := "failover-" + fName + "-" + tName
 
 		// must be added to both src and dst
-		labels[fromName][labelKey] = fromName + "-" + fromProv + "-" + toName + "-" + toProv
-		labels[toName][labelKey] = fromName + "-" + fromProv + "-" + toName + "-" + toProv
+		labels[fromName][labelKey] = fromName + "-" + toName
+		labels[toName][labelKey] = fromName + "-" + toName
 	}
 
 	// then, collect backup targets
 	for _, edge := range edges {
 		from := edge.From
-		fromName := from.ComponentRef.Name
-		fromProv := from.ProviderRef.Name
+		fromName := from.ComponentRef.Name + "-" + from.ProviderRef.Name
 		to := edge.To
-		toName := to.ComponentRef.Name
-		toProv := to.ProviderRef.Name
+		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
 
 		// find backup target for 'from' deployment
 		backups := lo.Filter(cmpnts, func(c hv1a1.SkyService, _ int) bool {
@@ -695,14 +691,13 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		if len(backups) == 0 {continue}
 		bk := backups[0]
-		bkName := bk.ComponentRef.Name
-		bkProv := bk.ProviderRef.Name
+		bkName := bk.ComponentRef.Name + "-" + bk.ProviderRef.Name
 
 		if _, ok := labels[bkName]; !ok {labels[bkName] = make(map[string]string)}
 
-		fName := RandSuffix(fromName + "-" + fromProv)
-		tName := RandSuffix(toName + "-" + toProv) // primary
-		bName := RandSuffix(bkName + "-" + bkProv) 
+		fName := RandSuffix(fromName)
+		tName := RandSuffix(toName) // primary
+		bName := RandSuffix(bkName) 
 
 		primaryKey := "failover-" + fName + "-" + tName // primary
 		bkKey := "failover-" + fName + "-" + bName // backup
@@ -711,14 +706,21 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		labels[fromName][bkKey] = fromName + "-" + bkName + "-backup" // add to source
 		// must add backup label to primary target
 		labels[toName][bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
-		// must add primary target to the backup label 
+		// must add primary target to the backup label
 		labels[bkName][primaryKey] = fromName + "-" + toName
 	}
 	return labels
 }
 
-func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, edges []hv1a1.DeployMapEdge, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	manifests := make([]*hv1a1.SkyObject, 0)
+
+	edges := dpMap.Edges
+	cmpnts := dpMap.Component
+
+	// failover priority labels
+	// a map of component name (deployment name) to its set of labels
+	_ = derivePriorities(cmpnts, edges)
 
 	// Generate Istio configuration
 	// As a general rule, we create a DestinationRule object that enforces
