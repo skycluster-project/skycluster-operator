@@ -22,6 +22,7 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"sort"
 	"strings"
 
 	"github.com/go-logr/logr"
@@ -86,11 +87,15 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// submit them to the remote cluster using Kubernetes Provider (object)
 	// Manifest are submitted through "Object" CRD from Crossplane
 
-	nsManisfests, err := r.generateNamespaceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	nsManifests, err := r.generateNamespaceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate namespace manifests") }
-	manifests = append(manifests, nsManisfests...)
+	manifests = append(manifests, nsManifests...)
 
-	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	cdManifests, err := r.generateConfigDataManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate config data manifests") }
+	manifests = append(manifests, cdManifests...)
+
+	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 	manifests = append(manifests, depManifests...)
 
@@ -159,6 +164,7 @@ func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.SkyNet, s
 	if err != nil { return nil, errors.Wrap(err, "failed to convert manifest to map") }
 	obj.Object["spec"] = map[string]any{
 		"manifest":     manifestMap,
+		"compositeDeletePolicy": "Foreground",
 		"providerConfigRef": map[string]any{
 			"name":      skyObj.ProviderRef.ConfigName,
 		},
@@ -247,6 +253,105 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 
 // get the deployments' namespaces and generate namespace manifests
 // namespaces must be generated for all clusters
+func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+
+	manifests := make([]*hv1a1.SkyObject, 0)
+	selectedProvNames := make([]string, 0)
+
+	// Since we don't know and do not care about the location of configmaps,
+	// we have them distributed to all clusters in the distributed setup
+	for _, deployItem := range cmpnts {
+		// based on the type of services we may modify the objects' spec
+		switch strings.ToLower(deployItem.ComponentRef.Kind) {
+		case "configmap":
+			deploy := &appsv1.Deployment{}
+			if err := r.Get(context.TODO(), client.ObjectKey{
+				Namespace: ns, Name: deployItem.ComponentRef.Name,
+			}, deploy); err != nil {return nil, errors.Wrap(err, "error getting Deployment.")}
+
+			// collect all providers used in the deployment plan
+			selectedProvNames = append(selectedProvNames, deployItem.ProviderRef.Name)
+		}
+	}
+	selectedProvNames = lo.Uniq(selectedProvNames)
+
+	// now for each configmap, we create a configmap manifest
+	// along with its labels
+	cmList := &corev1.ConfigMapList{}
+	if err := r.List(context.TODO(), cmList, client.MatchingLabels{
+		"skycluster.io/app-scope": "distributed",
+		"skycluster.io/app-id":    appId,
+	}); err != nil {
+		return nil, errors.Wrap(err, "error listing configmaps.")
+	}
+
+	for _, cmObj := range cmList.Items {
+		// selectedProvNames contains the list of provider names selected for deployments
+		// a configmap manifest must be created for each provider
+		for _, pName := range selectedProvNames {
+			// prepare namespace object
+			newNs := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: cmObj.Name,
+					Labels: cmObj.Labels,
+				},
+			}
+			objMap, err := objToMap(newNs)
+			if err != nil {return nil, errors.Wrap(err, "error converting ConfigMap to map.")}
+
+			objMap["kind"] = "ConfigMap"
+			objMap["apiVersion"] = "v1"
+	
+			name := "cm-" + newNs.Name + "-" + pName
+			rand := RandSuffix(name)
+			name = name[0:int(math.Min(float64(len(name)), 20))]
+			name = name + "-" + rand
+
+			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
+			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			manifests = append(manifests, obj)
+		}
+	}
+
+	secrets := &corev1.SecretList{}
+	if err := r.List(context.TODO(), secrets, client.MatchingLabels{
+		"skycluster.io/app-scope": "distributed",
+		"skycluster.io/app-id":    appId,
+	}); err != nil {
+		return nil, errors.Wrap(err, "error listing secrets.")
+	}
+
+	for _, secObj := range secrets.Items {
+		// selectedProvNames contains the list of provider names selected for deployments
+		// a secret manifest must be created for each provider
+		for _, pName := range selectedProvNames {
+			// prepare namespace object
+			newNs := &corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: secObj.Name,
+					Labels: secObj.Labels,
+				},
+			}
+			objMap, err := objToMap(newNs)
+			if err != nil {return nil, errors.Wrap(err, "error converting Secret to map.")}
+
+			objMap["kind"] = "Secret"
+			objMap["apiVersion"] = "v1"
+	
+			name := "sec-" + newNs.Name + "-" + pName
+			rand := RandSuffix(name)
+			name = name[0:int(math.Min(float64(len(name)), 20))]
+			name = name + "-" + rand
+
+			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
+			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			manifests = append(manifests, obj)
+		}
+	}
+
+	return manifests, nil
+}
+
 func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyObject, 0)
@@ -276,7 +381,7 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, c
 	}
 	selectedNs = lo.Uniq(selectedNs)
 	selectedProvNames = lo.Uniq(selectedProvNames)
-	selectedProvNames = append(selectedProvNames, "local") // Do we need this?
+	// selectedProvNames = append(selectedProvNames, "local") // Do we need this?
 
 	// now for each namespace, we create a namespace manifest
 	// along with its labels
@@ -390,9 +495,13 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 
 // generateDeployManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyObject, 0)
+	cmpnts := dpMap.Component
+	edges := dpMap.Edges
+	
+	labels := derivePriorities(cmpnts, edges)
 
 	// Deployments are created in selected remote clusters. We use "Object" CRD
 	// to wrap the deployment object along with provider reference
@@ -411,14 +520,18 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 			// Discard all other fields that are not necessary
 			newDeploy := generateNewDeplyFromDeploy(deploy)
 
-			podLabels := newDeploy.Spec.Template.ObjectMeta.Labels
+			podLabels := labels[deployItem.ComponentRef.Name]
 			podLabels["skycluster.io/managed-by"] = "skycluster"
 			podLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
-			podLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
-			podLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
-			podLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
-			podLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
-			podLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
+
+			lb := newDeploy.Spec.Template.ObjectMeta.Labels
+			newDeploy.Spec.Template.ObjectMeta.Labels = lo.Assign(lb, podLabels) // merge
+			
+			// podLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
+			// podLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
+			// podLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
+			// podLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
+			// podLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
 
 			// spec.selector
 			if newDeploy.Spec.Selector == nil {newDeploy.Spec.Selector = &metav1.LabelSelector{}}
@@ -426,14 +539,17 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, cmpnts []hv1a1.Sky
 			// newDeploy.Spec.Selector.MatchLabels[pIdLabel] = providerId
 
 			// Add general labels to the deployment
-			deployLabels := newDeploy.ObjectMeta.Labels
-			deployLabels["skycluster.io/managed-by"] = "skycluster"
-			deployLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
-			deployLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
-			deployLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
-			deployLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
-			deployLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
-			deployLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
+			deplLabels := newDeploy.ObjectMeta.Labels
+			newDeplLabels := lo.Assign(deplLabels, labels[deployItem.ComponentRef.Name]) // merge
+			newDeplLabels["skycluster.io/managed-by"] = "skycluster"
+			newDeplLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
+
+			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels, newDeplLabels)
+			// deployLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
+			// deployLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
+			// deployLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
+			// deployLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
+			// deployLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
 			
 			// yamlObj, err := generateYAMLManifest(newDeploy)
 			objMap, err := objToMap(newDeploy)
@@ -477,6 +593,130 @@ func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provider
 	return providerProfilesMap, nil
 }
 
+
+func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) map[string]map[string]string {
+
+	// This function derives set of labels for each deployment target based on the edges
+	// to respect the failover priority
+
+	// e.g., 
+	// Edges: A -> B (provider_b), and alternative deployment is available 
+	// in C (provider_c) 
+
+	// Source comes with label [as well as the destination rules]:
+	//    failover-src-a-1: a-b
+	//    failover-src-a-2: a-c
+
+	// Then Deployment B must have labels:
+	//    failover-src-a-1: a-b
+	//    failover-src-a-2: a-c
+
+	// Deployment C must have labels:
+	//    failover-src-a-1: a-b
+
+	// For a label to be considered for match, the previous labels must match, 
+	// i.e. nth label would be considered matched only if first n-1 labels match.
+
+	// Deployment A is labeled with its primary target provider
+	// Then a backup target provider is found: another deployment that resides in 
+	// same region/zone as the source deployment, if found; else any other deployment
+	// that is not the primary target provider
+
+	// Corresponding labels are added to the source and target deployment(s)
+	// source: failover-src-a-1: a-b
+	//         failover-src-a-2: a-c
+
+	// target B: failover-src-a-1: a-b
+	//           failover-src-a-2: a-c
+
+	// target C: failover-src-a-1: a-b (only one)
+	
+	labels := make(map[string]map[string]string, 0)
+	// dstForDeploy := make(map[string][]string)
+
+	// ordered selected destination for each deployment in edges
+	// The ordered list includes the primary target (selected by deploy plan)
+	// and a backup plan (if any, prioritized based on region/zone proximity)
+
+	// first, collect primary targets
+	for _, edge := range edges {
+		from := edge.From
+		fromName := from.ComponentRef.Name
+		fromProv := from.ProviderRef.Name
+		to := edge.To
+		toName := to.ComponentRef.Name
+		toProv := to.ProviderRef.Name
+
+		if _, ok := labels[fromName]; !ok {
+			labels[fromName] = make(map[string]string)
+		}
+		if _, ok := labels[toName]; !ok {
+			labels[toName] = make(map[string]string)
+		}
+
+		fName := RandSuffix(fromName + "-" + fromProv)
+		tName := RandSuffix(toName + "-" + toProv)
+		labelKey := "failover-" + fName + "-" + tName
+
+		// must be added to both src and dst
+		labels[fromName][labelKey] = fromName + "-" + fromProv + "-" + toName + "-" + toProv
+		labels[toName][labelKey] = fromName + "-" + fromProv + "-" + toName + "-" + toProv
+	}
+
+	// then, collect backup targets
+	for _, edge := range edges {
+		from := edge.From
+		fromName := from.ComponentRef.Name
+		fromProv := from.ProviderRef.Name
+		to := edge.To
+		toName := to.ComponentRef.Name
+		toProv := to.ProviderRef.Name
+
+		// find backup target for 'from' deployment
+		backups := lo.Filter(cmpnts, func(c hv1a1.SkyService, _ int) bool {
+			return c.ComponentRef.Name == to.ComponentRef.Name && 
+				c.ProviderRef.Name != to.ProviderRef.Name
+		})
+		
+		// sort by the number of matching location attributes
+		// score counts how many of the three fields match `from`.
+		score := func(c hv1a1.SkyService) int {
+			s := 0
+			if c.ProviderRef.RegionAlias == from.ProviderRef.RegionAlias {s++}
+			if c.ProviderRef.Region == from.ProviderRef.Region {s++}
+			if c.ProviderRef.Zone == from.ProviderRef.Zone {s++}
+			return s
+		}
+
+		sort.SliceStable(backups, func(i, j int) bool {
+			// higher score => should come earlier
+			return score(backups[i]) > score(backups[j])
+		})
+
+		if len(backups) == 0 {continue}
+		bk := backups[0]
+		bkName := bk.ComponentRef.Name
+		bkProv := bk.ProviderRef.Name
+
+		if _, ok := labels[bkName]; !ok {labels[bkName] = make(map[string]string)}
+
+		fName := RandSuffix(fromName + "-" + fromProv)
+		tName := RandSuffix(toName + "-" + toProv) // primary
+		bName := RandSuffix(bkName + "-" + bkProv) 
+
+		primaryKey := "failover-" + fName + "-" + tName // primary
+		bkKey := "failover-" + fName + "-" + bName // backup
+		
+		// must add backup label to source
+		labels[fromName][bkKey] = fromName + "-" + bkName + "-backup" // add to source
+		// must add backup label to primary target
+		labels[toName][bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
+		// must add primary target to the backup label 
+		labels[bkName][primaryKey] = fromName + "-" + toName
+	}
+	return labels
+}
+
 func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, edges []hv1a1.DeployMapEdge, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	manifests := make([]*hv1a1.SkyObject, 0)
 
@@ -506,10 +746,11 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, edges []
 		}); err != nil {return nil, errors.Wrap(err, "error listing Services for istio configuration.")}
 		
 		failovers := []string{
+			"skycluster.io/provider-name", // highest priority, must match exactly, if not, the rest do not matter
 			"skycluster.io/provider-platform",
 			"skycluster.io/provider-region-alias",
 			"skycluster.io/provider-region",
-			"skycluster.io/provider-zone",
+			"skycluster.io/provider-zone", // lowest priority, all above must match
 		}
 
 		for _, svc := range svcList.Items {
