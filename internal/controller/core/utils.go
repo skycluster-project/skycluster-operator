@@ -225,6 +225,11 @@ func findSuitableComputeResource(cmResource computeProfileService, allComputeRes
 // generateNewDeplyFromDeploy generates a new deployment from the given deployment
 // with the same selector and template
 func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
+	antToRemove := []string{
+		"kubectl.kubernetes.io/last-applied-configuration",
+		"deployment.kubernetes.io/revision",
+	}
+
 	newDeploy := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: deploy.APIVersion,
@@ -241,6 +246,10 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 			Selector: deploy.Spec.Selector,
 			Template: deploy.Spec.Template,
 		},
+	}
+	// remove unwanted annotations
+	if newDeploy.Annotations != nil {
+		for _, ant := range antToRemove {delete(newDeploy.Annotations, ant)}
 	}
 	if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
 		newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)

@@ -589,6 +589,13 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 	for _, p := range providers.Items {
 		for _, p2 := range providers.Items {
 			if p.Name == p2.Name {
+				// we must have zero latency to self
+				providerList = append(providerList, providerAttrStruct{
+					SrcName: 	p.Name,
+					DstName: 	p2.Name,
+					Latency: 	0.0,
+					EgressCostDataRate: 0.0,
+				})
 				continue
 			}
 			a, b := utils.CanonicalPair(p.Name, p2.Name)
@@ -856,7 +863,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	initContainers = append(initContainers, corev1.Container{
 		Name:  "prepare-vservices",
 		Image: "etesami/optimizer-helper:latest",
-		ImagePullPolicy: corev1.PullAlways,
+		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{"/vservices"},
 		Env: []corev1.EnvVar{
