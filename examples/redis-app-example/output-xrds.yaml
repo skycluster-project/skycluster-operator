@@ -1,18 +1,18 @@
 apiVersion: core.skycluster.io/v1alpha1
 kind: SkyXRD
 metadata:
-  creationTimestamp: "2025-10-20T16:39:25Z"
+  creationTimestamp: "2025-10-22T07:05:42Z"
   generateName: redis-app-policies-
   generation: 1
-  name: redis-app-policies-w4gjf
+  name: redis-app-policies-qx9mr
   namespace: redis-app
-  resourceVersion: "355395"
-  uid: ead34e0d-9946-4429-b3ca-d2a5044bd5da
+  resourceVersion: "2161355"
+  uid: f3392b26-38bc-4114-bbc6-793d53a71b70
 spec:
   approve: false
   dataflowPolicyRef:
     name: redis-app-policies
-    resourceVersion: "67571"
+    resourceVersion: "1863225"
   deployPlan:
     components:
     - componentRef:
@@ -20,45 +20,45 @@ spec:
         kind: Deployment
         name: gateway
       providerRef:
-        name: gcp-us-central1
-        platform: gcp
-        region: us-central1
+        name: aws-us-east-1
+        platform: aws
+        region: us-east-1
         regionAlias: us-east
         type: cloud
-        zone: us-central1-c
+        zone: us-east-1b
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: worker
       providerRef:
-        name: gcp-us-central1
-        platform: gcp
-        region: us-central1
-        regionAlias: us-east
+        name: aws-us-west-1
+        platform: aws
+        region: us-west-1
+        regionAlias: us-west
         type: cloud
-        zone: us-central1-c
+        zone: us-west-1c
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: backend
       providerRef:
-        name: aws-us-west-2
+        name: aws-us-west-1
         platform: aws
-        region: us-west-2
+        region: us-west-1
         regionAlias: us-west
         type: cloud
-        zone: us-west-2b
+        zone: us-west-1c
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
         name: redis
       providerRef:
-        name: gcp-us-central1
-        platform: gcp
-        region: us-central1
-        regionAlias: us-east
+        name: aws-us-west-1
+        platform: aws
+        region: us-west-1
+        regionAlias: us-west
         type: cloud
-        zone: us-central1-c
+        zone: us-west-1c
     edges:
     - from:
         componentRef:
@@ -66,11 +66,11 @@ spec:
           kind: Deployment
           name: gateway
         providerRef:
-          name: gcp-us-central1
-          region: us-central1
+          name: aws-us-east-1
+          region: us-east-1
           regionAlias: us-east
           type: cloud
-          zone: us-central1-c
+          zone: us-east-1b
       latency: "1.0"
       to:
         componentRef:
@@ -78,22 +78,22 @@ spec:
           kind: Deployment
           name: redis
         providerRef:
-          name: gcp-us-central1
-          region: us-central1
-          regionAlias: us-east
+          name: aws-us-west-1
+          region: us-west-1
+          regionAlias: us-west
           type: cloud
-          zone: us-central1-c
+          zone: us-west-1c
     - from:
         componentRef:
           apiVersion: apps/v1
           kind: Deployment
           name: backend
         providerRef:
-          name: aws-us-west-2
-          region: us-west-2
+          name: aws-us-west-1
+          region: us-west-1
           regionAlias: us-west
           type: cloud
-          zone: us-west-2b
+          zone: us-west-1c
       latency: "1.0"
       to:
         componentRef:
@@ -101,22 +101,22 @@ spec:
           kind: Deployment
           name: redis
         providerRef:
-          name: gcp-us-central1
-          region: us-central1
-          regionAlias: us-east
+          name: aws-us-west-1
+          region: us-west-1
+          regionAlias: us-west
           type: cloud
-          zone: us-central1-c
+          zone: us-west-1c
     - from:
         componentRef:
           apiVersion: apps/v1
           kind: Deployment
           name: worker
         providerRef:
-          name: gcp-us-central1
-          region: us-central1
-          regionAlias: us-east
+          name: aws-us-west-1
+          region: us-west-1
+          regionAlias: us-west
           type: cloud
-          zone: us-central1-c
+          zone: us-west-1c
       latency: "1.0"
       to:
         componentRef:
@@ -124,53 +124,53 @@ spec:
           kind: Deployment
           name: redis
         providerRef:
-          name: gcp-us-central1
-          region: us-central1
-          regionAlias: us-east
+          name: aws-us-west-1
+          region: us-west-1
+          regionAlias: us-west
           type: cloud
-          zone: us-central1-c
+          zone: us-west-1c
   deploymentPlanRef:
     name: redis-app-policies
-    resourceVersion: "67574"
+    resourceVersion: "1863228"
 status:
-  conditions:
-  - lastTransitionTime: "2025-10-20T16:39:25Z"
-    message: SkyXRD reconciled successfully.
-    reason: Reconciled
-    status: "True"
-    type: Ready
   manifests:
   - componentRef:
       apiVersion: skycluster.io/v1alpha1
       kind: XProvider
-      name: xp-gcp-us-centr-c7h3w
+      name: xp-aws-us-east--wa9kb
     manifest: |
       apiVersion: skycluster.io/v1alpha1
       kind: XProvider
       metadata:
-          name: xp-gcp-us-centr-c7h3w
+          name: xp-aws-us-east--wa9kb
       spec:
-          applicationId: redis-app-policies-w4gjf
+          applicationId: redis-app-policies-qx9mr
           externalNetwork: null
           gateway:
-              flavor: 2vCPU-8GB
+              flavor: 4vCPU-16GB
+              volumeSize: 30
+              volumeType: gp2
           providerRef:
-              platform: gcp
-              region: us-central1
+              platform: aws
+              region: us-east-1
               zones:
-                  primary: us-central1-b
-                  secondary: us-central1-c
+                  primary: us-east-1a
+                  secondary: us-east-1b
           subnets:
-              - cidr: 10.29.0.0/18
-                zone: us-central1-c
-          vpcCidr: 10.29.0.0/16
+              - cidr: 10.89.0.0/19
+                type: public
+                zone: us-east-1b
+              - cidr: 10.89.32.0/19
+                type: private
+                zone: us-east-1b
+          vpcCidr: 10.89.0.0/16
     providerRef:
-      name: gcp-us-central1
-      platform: gcp
-      region: us-central1
+      name: aws-us-east-1
+      platform: aws
+      region: us-east-1
       regionAlias: us-east
       type: cloud
-      zone: us-central1-c
+      zone: us-east-1b
   - componentRef:
       apiVersion: skycluster.io/v1alpha1
       kind: XProvider
@@ -181,7 +181,7 @@ status:
       metadata:
           name: xp-aws-us-west--1wegm
       spec:
-          applicationId: redis-app-policies-w4gjf
+          applicationId: redis-app-policies-qx9mr
           externalNetwork: null
           gateway:
               flavor: 4vCPU-16GB
@@ -189,61 +189,84 @@ status:
               volumeType: gp2
           providerRef:
               platform: aws
-              region: us-west-2
+              region: us-west-1
               zones:
-                  primary: us-west-2a
-                  secondary: us-west-2b
+                  primary: us-west-1b
+                  secondary: us-west-1c
           subnets:
-              - cidr: 10.76.0.0/19
+              - cidr: 10.70.0.0/19
                 type: public
-                zone: us-west-2b
-              - cidr: 10.76.32.0/19
+                zone: us-west-1c
+              - cidr: 10.70.32.0/19
                 type: private
-                zone: us-west-2b
-          vpcCidr: 10.76.0.0/16
+                zone: us-west-1c
+          vpcCidr: 10.70.0.0/16
     providerRef:
-      name: aws-us-west-2
+      name: aws-us-west-1
       platform: aws
-      region: us-west-2
+      region: us-west-1
       regionAlias: us-west
       type: cloud
-      zone: us-west-2b
+      zone: us-west-1c
   - componentRef:
       apiVersion: skycluster.io/v1alpha1
       kind: XKube
-      name: xk-gcp-us-centr-2q1pc
+      name: xk-aws-us-east--evzal
     manifest: |
       apiVersion: skycluster.io/v1alpha1
       kind: XKube
       metadata:
-          name: xk-gcp-us-centr-2q1pc
+          name: xk-aws-us-east--evzal
       spec:
-          applicationId: redis-app-policies-w4gjf
-          nodeCidr: 10.29.128.0/17
+          applicationId: redis-app-policies-qx9mr
+          nodeCidr: ""
           nodeGroups:
               - autoScaling:
-                  enabled: true
-                  maxSize: 3
+                  enabled: false
+                  maxSize: 2
                   minSize: 1
-                instanceType: 2vCPU-4GB
+                instanceTypes:
+                  - 2vCPU-4GB
+                  - 4vCPU-8GB
+                  - 8vCPU-32GB
                 nodeCount: 2
+                publicAccess: true
+              - instanceTypes:
+                  - 16vCPU-256GB-1xH100-80GB
+                publicAccess: false
+              - instanceTypes:
+                  - 2vCPU-1GB
+                publicAccess: false
+              - instanceTypes:
+                  - 2vCPU-2GB
+                publicAccess: false
+              - instanceTypes:
+                  - 2vCPU-4GB
+                publicAccess: false
+              - instanceTypes:
+                  - 2vCPU-8GB
                 publicAccess: false
           podCidr:
-              cidr: 172.29.0.0/16
-          principal: {}
+              cidr: 10.89.128.0/17
+              private: 10.89.192.0/18
+              public: 10.89.128.0/18
+          principal:
+              id: arn:aws:iam::885707601199:root
+              type: servicePrincipal
           providerRef:
-              platform: gcp
-              region: us-central1
+              platform: aws
+              region: us-east-1
               zones:
-                  primary: us-central1-b
-          serviceCidr: ""
+                  primary: us-east-1a
+                  secondary: us-east-1b
+          serviceCidr: 10.199.0.0/16
     providerRef:
-      name: gcp-us-central1
-      platform: gcp
-      region: us-central1
+      name: aws-us-east-1
+      platform: aws
+      region: us-east-1
       regionAlias: us-east
       type: cloud
-      zone: us-central1-b
+      zone: us-east-1a
   - componentRef:
       apiVersion: skycluster.io/v1alpha1
       kind: XKube
@@ -254,46 +277,55 @@ status:
       metadata:
           name: xk-aws-us-west--ksghn
       spec:
-          applicationId: redis-app-policies-w4gjf
+          applicationId: redis-app-policies-qx9mr
           nodeCidr: ""
           nodeGroups:
               - autoScaling:
                   enabled: false
                   maxSize: 2
                   minSize: 1
-                instanceType: 4vCPU-8GB
+                instanceTypes:
+                  - 2vCPU-4GB
+                  - 4vCPU-8GB
+                  - 8vCPU-32GB
+                nodeCount: 2
                 publicAccess: true
-              - instanceType: 2vCPU-1GB
+              - instanceTypes:
+                  - 2vCPU-1GB
                 publicAccess: false
-              - instanceType: 2vCPU-2GB
+              - instanceTypes:
+                  - 2vCPU-2GB
                 publicAccess: false
-              - instanceType: 2vCPU-4GB
+              - instanceTypes:
+                  - 2vCPU-4GB
                 publicAccess: false
-              - instanceType: 2vCPU-8GB
+              - instanceTypes:
+                  - 2vCPU-8GB
                 publicAccess: false
-              - instanceType: 4vCPU-16GB
+              - instanceTypes:
+                  - 4vCPU-16GB
                 publicAccess: false
           podCidr:
-              cidr: 10.76.128.0/17
-              private: 10.76.192.0/18
-              public: 10.76.128.0/18
+              cidr: 10.70.128.0/17
+              private: 10.70.192.0/18
+              public: 10.70.128.0/18
           principal:
               id: arn:aws:iam::885707601199:root
               type: servicePrincipal
           providerRef:
               platform: aws
-              region: us-west-2
+              region: us-west-1
               zones:
-                  primary: us-west-2a
-                  secondary: us-west-2b
-          serviceCidr: 10.212.0.0/16
+                  primary: us-west-1b
+                  secondary: us-west-1c
+          serviceCidr: 10.218.0.0/16
     providerRef:
-      name: aws-us-west-2
+      name: aws-us-west-1
       platform: aws
-      region: us-west-2
+      region: us-west-1
       regionAlias: us-west
       type: cloud
-      zone: us-west-2a
+      zone: us-west-1b
   - componentRef:
       apiVersion: skycluster.io/v1alpha1
       kind: XKubeMesh
@@ -305,7 +337,7 @@ status:
           name: xkmesh-redis-ap-s4usz
       spec:
           clusterNames:
-              - xk-gcp-us-centr-2q1pc
+              - xk-aws-us-east--evzal
               - xk-aws-us-west--ksghn
           localCluster:
               podCidr: 10.0.0.0/19

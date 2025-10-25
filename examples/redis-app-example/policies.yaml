@@ -57,7 +57,10 @@ spec:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - platform: gcp
+          - platform: aws
+        required:
+          - anyOf:
+            - region: us-east-1
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
@@ -69,7 +72,7 @@ spec:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - platform: gcp
+          - platform: aws
     - componentRef:
         apiVersion: apps/v1
         kind: Deployment
@@ -93,5 +96,8 @@ spec:
         responseTime: 100ms
       locationConstraint:
         permitted:
-          - platform: gcp
+          - platform: aws
+        required:
+          - anyOf:
+            - region: us-west-1
 ---
