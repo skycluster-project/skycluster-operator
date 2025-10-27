@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fortio-server
+  namespace: loadtest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fortio-server
+  template:
+    metadata:
+      labels:
+        app: fortio-server
+    spec:
+      containers:
+      - name: fortio
+        image: fortio/fortio:latest
+        args: ["server", "-http-port", "8080", "-grpc-port", "8079"]
+        ports:
+        - containerPort: 8080
+        - containerPort: 8079
