@@ -1,0 +1,259 @@
+# ConfigMap with application scripts
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-scripts
+  namespace: loadtest
+  labels:
+    skycluster.io/app-id: loadtest
+    skycluster.io/app-scope: distributed
+data:
+  sink.py: |
+    # simple HTTP sink: receives JSON POST /data and exposes Prometheus metrics at /metrics
+    import os
+    import time
+    from flask import Flask, request, Response
+    from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST, CollectorRegistry
+    app = Flask(__name__)
+
+    processed = Counter("sink_processed_count", "Number of processed messages")
+    errors = Counter("sink_error_count", "Number of processing errors")
+    processing_latency = Histogram("sink_processing_latency_seconds", "Processing latency seconds")
+    sum_values = Gauge("sink_sum_values", "Running sum of numeric 'value' fields")
+
+    @app.route("/data", methods=["POST"])
+    def data():
+        start = time.perf_counter()
+        try:
+            payload = request.get_json(silent=True) or {}
+            v = float(payload.get("value", 0) or 0)
+            sum_values.inc(v)
+            processed.inc()
+            return ("", 204)
+        except Exception:
+            errors.inc()
+            return ("bad request", 400)
+        finally:
+            processing_latency.observe(time.perf_counter() - start)
+
+    @app.route("/metrics")
+    def metrics():
+        return Response(generate_latest(), mimetype=CONTENT_TYPE_LATEST)
+
+    @app.route("/healthz")
+    def healthz():
+        return ("ok", 200)
+
+    if __name__ == "__main__":
+        port = int(os.environ.get("PORT", "8080"))
+        # run Flask for simplicity; production code would use a proper WSGI server
+        app.run(host="0.0.0.0", port=port)
+  generator.py: |
+    # load-generator: periodically POSTs to the sink and exposes Prometheus metrics on :8081/metrics
+    import os
+    import time
+    import threading
+    import uuid
+    import random
+    import requests
+    from prometheus_client import Counter, Histogram, start_http_server
+
+    TARGET = os.environ.get("TARGET_URL", "http://data-sink.loadtest:8080/data")
+    RATE = float(os.environ.get("RATE", "1"))  # requests per second
+    PAYLOAD_MAX = int(os.environ.get("PAYLOAD_MAX", "100"))
+    METRICS_PORT = int(os.environ.get("METRICS_PORT", "8081"))
+
+    sent = Counter("generator_sent_count", "Number of requests sent")
+    gen_errors = Counter("generator_error_count", "Number of errors sending requests")
+    req_latency = Histogram("generator_request_latency_seconds", "Request latency seconds")
+
+    def worker():
+        interval = 1.0 / RATE if RATE > 0 else 1.0
+        while True:
+            payload = {"id": str(uuid.uuid4()), "value": random.randint(0, PAYLOAD_MAX)}
+            start = time.perf_counter()
+            try:
+                r = requests.post(TARGET, json=payload, timeout=5)
+                if r.status_code >= 400:
+                    gen_errors.inc()
+                else:
+                    sent.inc()
+            except Exception:
+                gen_errors.inc()
+            finally:
+                req_latency.observe(time.perf_counter() - start)
+            time.sleep(interval)
+
+    if __name__ == "__main__":
+        start_http_server(METRICS_PORT)
+        t = threading.Thread(target=worker, daemon=True)
+        t.start()
+        # keep main thread alive
+        while True:
+            time.sleep(60)
+---
+# Service for sink
+apiVersion: v1
+kind: Service
+metadata:
+  name: data-sink
+  namespace: loadtest
+  labels:
+    skycluster.io/app-id: loadtest
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: data-sink
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+# Service for load-generator (for metrics scraping)
+apiVersion: v1
+kind: Service
+metadata:
+  name: load-generator
+  namespace: loadtest
+  labels:
+    skycluster.io/app-id: loadtest
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: load-generator
+  ports:
+    - name: metrics
+      port: 8081
+      targetPort: 8081
+---
+# Deployment: data-sink
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: data-sink
+  namespace: loadtest
+  labels:
+    skycluster.io/app-id: loadtest
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: data-sink
+  template:
+    metadata:
+      labels:
+        app: data-sink
+    spec:
+      containers:
+        - name: sink
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - bash
+            - -c
+            - |
+              pip install --no-cache-dir flask prometheus_client && \
+              python /app/sink.py
+          env:
+            - name: PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: app-scripts
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app-scripts
+          configMap:
+            name: app-scripts
+---
+# Deployment: load-generator
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: load-generator
+  namespace: loadtest
+  labels:
+    skycluster.io/app-id: loadtest
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: load-generator
+  template:
+    metadata:
+      labels:
+        app: load-generator
+    spec:
+      containers:
+        - name: generator
+          image: python:3.11-slim
+          imagePullPolicy: IfNotPresent
+          command:
+            - bash
+            - -c
+            - |
+              pip install --no-cache-dir requests prometheus_client && \
+              python /app/generator.py
+          env:
+            - name: TARGET_URL
+              value: "http://data-sink.loadtest.svc.cluster.local:8080/data"
+            - name: RATE
+              value: "5"               # default 5 req/s; override via env or k8s patch
+            - name: PAYLOAD_MAX
+              value: "100"
+            - name: METRICS_PORT
+              value: "8081"
+          ports:
+            - containerPort: 8081
+              name: metrics
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /metrics
+              port: 8081
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: app-scripts
+              mountPath: /app
+              readOnly: true
+      volumes:
+        - name: app-scripts
+          configMap:
+            name: app-scripts

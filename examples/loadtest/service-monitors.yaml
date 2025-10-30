@@ -1,0 +1,42 @@
+# ServiceMonitor for data-sink (Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: data-sink-servicemonitor
+  namespace: loadtest
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: data-sink
+  namespaceSelector:
+    matchNames:
+      - loadtest
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 7s
+      scrapeTimeout: 4s
+---
+# ServiceMonitor for load-generator (Prometheus Operator)
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: load-generator-servicemonitor
+  namespace: loadtest
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: load-generator
+  namespaceSelector:
+    matchNames:
+      - loadtest
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 7s
+      scrapeTimeout: 4s
+---
