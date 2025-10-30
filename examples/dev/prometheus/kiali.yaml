@@ -1,0 +1,18 @@
+apiVersion: kiali.io/v1alpha1
+kind: Kiali
+metadata:
+  name: kiali
+spec:
+  deployment:
+    service_type: LoadBalancer
+  external_services:
+    grafana:
+      url: http://promotheus-central-grafana.monitoring:80
+      internal_url: http://promotheus-central-grafana.monitoring:80
+      auth:
+        insecure_skip_verify: true
+        password: admin
+        type: basic
+        username: admin
+    prometheus:
+      url: http://promotheus-central-kube-pr-prometheus.monitoring:9090

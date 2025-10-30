@@ -50,3 +50,36 @@ helm install thanos --version="17.3.1" --install \
 ```
 
 Introduce the Thanos remote cluster endpoints using `additional-scrape-configs` secret.
+
+
+## Kiali Setup
+
+Install Kiali Operator in central cluster using helm, then create Kiali CR:
+
+```bash
+helm install     
+  --set cr.create=true \
+  --set cr.namespace=monitoring \
+  --set cr.spec.auth.strategy="anonymous" \
+  --namespace kiali-operator \
+  --create-namespace  kiali-operator kiali/kiali-operator
+
+kubectl apply -f ./kiali.yaml -n monitoring
+
+# Once installed, install the remote clusters:
+# Download kiali-prepare-remote-cluster.sh from Kiali github
+
+kiali-prepare-remote-cluster.sh \
+  --remote-cluster-name aws \
+  --process-remote-resources true \
+  --process-kiali-secret true \
+  --kiali-cluster-namespace monitoring \
+  --kiali-cluster-context kind-skycluster --remote-cluster-context aws
+
+kiali-prepare-remote-cluster.sh \
+  --remote-cluster-name gke \
+  --process-remote-resources true \
+  --process-kiali-secret true \
+  --kiali-cluster-namespace monitoring \
+  --kiali-cluster-context kind-skycluster --remote-cluster-context gke
+```
