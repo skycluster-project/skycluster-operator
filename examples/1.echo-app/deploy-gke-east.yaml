@@ -1,0 +1,109 @@
+# echo-app deployment is deployed in AWS us-east-1
+# we only deploy its service here:
+apiVersion: v1
+kind: Service
+metadata:
+  name: echo-svc
+  namespace: echo-app
+  labels:
+    skycluster.io/managed-by: skycluster
+spec:
+  selector:
+    app-name: echo
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# The netshoot1 pod is supposed to query echo-app (first version)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot1
+  namespace: echo-app
+  labels:
+    name: net1
+spec:
+  containers:
+    - name: network-tools
+      image: nicolaka/netshoot
+      command: ["sleep", "infinity"]
+---
+# The netshoot2 pod is supposed to query echo-app (second version)
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot2
+  namespace: echo-app
+  labels:
+    name: net2
+    failover-gke-east-2: failover-gke-east-2
+spec:
+  containers:
+    - name: network-tools
+      image: nicolaka/netshoot
+      command: ["sleep", "infinity"]
+---
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: echo-svc
+  namespace: echo-app
+spec:
+  hosts:
+  - echo-svc
+  http:
+  - name: netshoot1
+    match:
+    - sourceLabels:
+        name: net1
+    route:
+    - destination:
+        host: echo-svc
+        subset: net1
+  - name: netshoot2
+    match:
+    - sourceLabels:
+        name: net2
+    route:
+    - destination:
+        host: echo-svc
+        subset: net2
+---
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: dst-rule
+  namespace: echo-app
+spec:
+  host: echo-svc
+  subsets:
+  - name: net1
+    # The target service version can be filtered 
+    # further by labels
+    # labels:
+    #   version: v1
+    trafficPolicy:
+      loadBalancer:
+        localityLbSetting:
+          failoverPriority:
+            # only select pods with this label in failover
+            - app=echo1 
+        simple: LEAST_REQUEST
+      outlierDetection:
+          baseEjectionTime: 30s
+          consecutiveErrors: 5
+          interval: 5s
+          maxEjectionPercent: 30
+  - name: net2
+    trafficPolicy:
+      loadBalancer:
+        localityLbSetting:
+          failoverPriority:
+            - app=echo2
+        simple: LEAST_REQUEST
+      outlierDetection:
+          baseEjectionTime: 30s
+          consecutiveErrors: 5
+          interval: 5s
+          maxEjectionPercent: 30
+---

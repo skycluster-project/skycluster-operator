@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: echo-app
+  labels:
+    skycluster.io/app-id: echo-app
+    skycluster.io/app-scope: distributed
