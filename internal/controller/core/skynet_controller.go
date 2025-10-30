@@ -117,16 +117,11 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
+	manifests = append(manifests, manifestsIstio...)
 
-	for _, depObj := range depManifests {
+	for _, depObj := range manifests {
 		obj, _ := generateUnstructuredWrapper(depObj, &skynet, r.Scheme)
-		utils.WriteObjectToFile(obj, "/tmp/istio1/dep-"+depObj.Name+".yaml")
-	}
-
-  for _, istioObj := range manifestsIstio {
-		r.Logger.Info("ISTIO", "name", istioObj.Name)
-		obj, _ := generateUnstructuredWrapper(istioObj, &skynet, r.Scheme)
-		utils.WriteObjectToFile(obj, "/tmp/istio1/dst-"+istioObj.Name+".yaml")
+		utils.WriteObjectToFile(obj, "/tmp/istio1/"+depObj.Name+".yaml")
 	}
 
 	// manifests = append(manifests, manifestsIstio...)
@@ -523,8 +518,6 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 	}
 
 	selectedProvNames = lo.Uniq(selectedProvNames)
-	// TODO: Do we need to create services in the local cluster?
-	// selectedProvNames = append(selectedProvNames, "local")
 
 	selectedServices := &corev1.ServiceList{}
 	if err := r.List(context.TODO(), selectedServices, client.MatchingLabels{
@@ -533,7 +526,7 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
 
 	for _, svc := range selectedServices.Items {
-		
+
 		labels := svc.Labels
 		if labels == nil {
 			labels = map[string]string{}
@@ -541,7 +534,7 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 		labels["skycluster.io/managed-by"] = "skycluster"
 		
 		// selectedProvNames contains the list of provider names selected for deployments
-		// a namespace manifest must be created for each provider
+		// a service manifest must be created for each provider
 		for _, pName := range selectedProvNames {
 			// prepare service object
 			newSvc := deepCopyService(svc, true)
@@ -996,7 +989,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 		objMap["kind"] = "VirtualService"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
-		name := vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
+		name := "ist-" + vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
 		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 25))]
 		name = name + "-" + rand
@@ -1008,7 +1001,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 	}
 
 	for _, dr := range dstRules {
-		objMap, err := objToMap(dr)
+		objMap, err := objToMap(dr.DstRule)
 		if err != nil {return nil, errors.Wrap(err, "error converting DestinationRule to map.")}
 		
 		objMap["kind"] = "DestinationRule"
