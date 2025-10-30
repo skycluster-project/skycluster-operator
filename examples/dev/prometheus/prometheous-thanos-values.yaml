@@ -1,0 +1,77 @@
+# monitoring-values.yaml
+
+nodeExporter:
+  enabled: true
+
+kubeApiServer:
+  enabled: true
+
+kubelet:
+  enabled: true
+
+kubeProxy:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+coreDns:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: admin
+  service:
+    type: ClusterIP
+
+prometheus:
+  thanosService:
+    enabled: true
+  
+  # Service for external access to sidecar
+  thanosServiceExternal:
+    enabled: false
+  
+  extraSecret:
+    ## if not set, name will be auto generated
+    name: thanos-objstore-secret
+    data:
+      objstore.yml: |
+       type: FILESYSTEM
+        config:
+          directory: /prometheus
+    
+  prometheusSpec:
+    scrapeInterval: "5s"
+    
+    # Allow Prometheus to discover ServiceMonitors in the redis-app namespace
+    serviceMonitorNamespaceSelector: {}
+    
+    # Empty selector means "select all" ServiceMonitors in the selected namespaces
+    serviceMonitorSelector: {}
+
+    podMonitorSelector: {}
+    
+    podMonitorNamespaceSelector: {}
+    
+    volumes: []
+
+    volumeMounts: []
+
+    additionalScrapeConfigs: []
+
+    thanos:
+      image: quay.io/thanos/thanos:v0.39.2
+      objectStorageConfig:
+        name: thanos-objstore-secret
+        key: objstore.yml

@@ -1,0 +1,57 @@
+nodeExporter:
+  enabled: true
+
+kubeApiServer:
+  enabled: true
+
+kubelet:
+  enabled: true
+
+kubeProxy:
+  enabled: false
+
+kubeEtcd:
+  enabled: false
+
+kubeScheduler:
+  enabled: false
+
+coreDns:
+  enabled: false
+
+kubeControllerManager:
+  enabled: false
+
+alertmanager:
+  enabled: false
+
+grafana:
+  enabled: true
+  adminUser: admin
+  adminPassword: admin        # replace for production
+  service:
+    type: ClusterIP
+
+prometheus:
+
+  prometheusSpec:
+    scrapeInterval: "5s"
+    
+    serviceMonitorNamespaceSelector: {}
+
+    serviceMonitorSelector: {}
+
+    podMonitorSelector: {}
+
+    podMonitorNamespaceSelector: {}
+
+    volumes: []
+
+    volumeMounts: []
+
+    additionalScrapeConfigs: []
+
+    additionalScrapeConfigsSecret:
+      enabled: true
+      name: additional-scrape-configs
+      key: configs.yaml

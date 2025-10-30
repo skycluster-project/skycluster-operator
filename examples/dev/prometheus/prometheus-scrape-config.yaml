@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: additional-scrape-configs
+  namespace: monitoring
+stringData:
+  configs.yaml: |
+    - job_name: 'external-node'
+      static_configs:
+        - targets: ['13.56.18.222:9100']

@@ -1,0 +1,62 @@
+image:
+  repository: bitnamilegacy/thanos
+  tag: 0.39.2-debian-12-r2
+
+minio:
+  enabled: false
+
+## @section Thanos Query parameters
+query:
+  enabled: true
+  logLevel: info
+  replicaLabel: [replica]
+  ## @param query.stores Statically configure store APIs to connect with Thanos Query
+  ##
+  stores: [
+    "10.199.170.65:10901",
+    "10.230.107.94:10901",
+  ]
+  containerPorts:
+    http: 10902
+    grpc: 10901
+
+  service:
+    type: ClusterIP
+    ports:
+      http: 9090
+
+    # nodePorts:
+    #   http: ""
+    # clusterIP: ""
+    # loadBalancerIP: ""
+    # loadBalancerSourceRanges: []
+    # externalTrafficPolicy: Cluster
+    # labels: {}
+    # annotations: {}
+    # extraPorts: []
+    # labelSelectorsOverride: {}
+    # additionalHeadless: false
+    # headless:
+    #   annotations: {}
+    # ipFamilyPolicy: ""
+    # ipFamilies: []
+
+  # serviceGrpc:
+  #   type: ClusterIP
+  #   ports:
+  #     grpc: 10901
+  #   nodePorts:
+  #     grpc: ""
+  #   clusterIP: ""
+  #   loadBalancerIP: ""
+  #   loadBalancerSourceRanges: []
+  #   externalTrafficPolicy: Cluster
+  #   labels: {}
+  #   annotations: {}
+  #   extraPorts: []
+  #   labelSelectorsOverride: {}
+  #   additionalHeadless: false
+  #   headless:
+  #     annotations: {}
+  #   ipFamilyPolicy: ""
+  #   ipFamilies: []
