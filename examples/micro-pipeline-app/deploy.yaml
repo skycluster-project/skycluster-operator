@@ -1,0 +1,259 @@
+# namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: micro-pipeline
+  labels:
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: micro-pipeline
+  labels:
+    app: redis
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          # simple single-node redis; not production HA
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-svc
+  namespace: micro-pipeline
+  labels:
+    app: redis
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: redis
+---
+# Processor Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processor
+  namespace: micro-pipeline
+  labels:
+    app: processor
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: processor
+  template:
+    metadata:
+      labels:
+        app: processor
+    spec:
+      containers:
+        - name: processor
+          image: etesami/redis-processor:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: AGGREGATOR_URL
+              value: "http://aggregator-svc:8001/finalize"
+            - name: REDIS_HOST
+              value: "redis-svc"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: PROCESSOR_LISTEN_PORT
+              value: "8000"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+# Processor Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: processor-svc
+  namespace: micro-pipeline
+  labels:
+    app: processor
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  type: ClusterIP
+  selector:
+    app: processor
+  ports:
+    - port: 8000
+      targetPort: 8000
+      name: http
+---
+# Aggregator Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aggregator
+  namespace: micro-pipeline
+  labels:
+    app: aggregator
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aggregator
+  template:
+    metadata:
+      labels:
+        app: aggregator
+    spec:
+      containers:
+        - name: aggregator
+          image: etesami/redis-aggregator:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          env:
+            - name: REDIS_HOST
+              value: "redis-svc"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: AGGREGATOR_LISTEN_PORT
+              value: "8001"
+          volumeMounts:
+            - mountPath: /app/jobs
+              name: jobs-dir
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+      volumes:
+        - name: jobs-dir
+          emptyDir: {}
+---
+# Aggregator Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: aggregator-svc
+  namespace: micro-pipeline
+  labels:
+    app: aggregator
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed
+spec:
+  type: ClusterIP
+  selector:
+    app: aggregator
+  ports:
+    - port: 8001
+      targetPort: 8001
+      name: http
+---
+# Producer Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: producer
+  namespace: micro-pipeline
+  labels:
+    app: producer
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed    
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: producer
+  template:
+    metadata:
+      labels:
+        app: producer
+    spec:
+      containers:
+        - name: producer
+          image: myregistry/producer:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9000
+          env:
+            - name: PROCESSOR_URL
+              value: "http://processor-svc:8000/process"
+            - name: REDIS_HOST
+              value: "redis-svc"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: PRODUCER_METRICS_PORT
+              value: "9000"
+            # desired rate (jobs per second). e.g. "0.016" -> ~1 job/min, "1" -> 1 job/sec
+            - name: PRODUCER_RATE
+              value: "0.5"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+---
+# Producer Service (for metrics scraping)
+apiVersion: v1
+kind: Service
+metadata:
+  name: producer-svc
+  namespace: micro-pipeline
+  labels:
+    app: producer
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed    
+spec:
+  type: ClusterIP
+  selector:
+    app: producer
+  ports:
+    - port: 9000
+      targetPort: 9000
+      name: metrics
+---
+# (Optional) Prometheus ServiceMonitor or scrape hint
+# - producer: producer-svc.micro-pipeline.svc.cluster.local:9000
+# - processor: processor-svc.micro-pipeline.svc.cluster.local:8000/metrics
+# - aggregator: aggregator-svc.micro-pipeline.svc.cluster.local:8001/metrics

@@ -1,0 +1,139 @@
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: redis-pipeline-policies
+  namespace: micro-pipeline
+  labels:
+    skycluster.io/app-id: testcase1
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: producer
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      latency: 500ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      latency: 500ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: producer
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 500ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 500ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      latency: 500ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: redis-pipeline-policies
+  namespace: micro-pipeline
+  labels:
+    skycluster.io/app-id: testcase1
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: producer
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+        required:
+          - anyOf:
+            - region: us-east-1
+          - anyOf:
+            - region: us-east1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+        required:
+          - anyOf:
+            - region: us-east-1
+          - anyOf:
+            - region: us-east1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: aggregator
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: redis
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+        required:
+          - anyOf:
+            - region: us-east-1
+---

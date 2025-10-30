@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: netshoot
+  namespace: micro-pipeline
+spec:
+  containers:
+    - name: network-tools
+      image: nicolaka/netshoot
+      command: ["sleep", "infinity"]

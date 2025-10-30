@@ -1,0 +1,60 @@
+
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: processor-servicemonitor
+  namespace: micro-pipeline
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: processor
+  namespaceSelector:
+    matchNames:
+      - micro-pipeline
+  endpoints:
+    - port: http            # matches processor-svc port name
+      path: /metrics
+      interval: 7s
+      scrapeTimeout: 4s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: aggregator-servicemonitor
+  namespace: micro-pipeline
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: aggregator
+  namespaceSelector:
+    matchNames:
+      - micro-pipeline
+  endpoints:
+    - port: http            # matches aggregator-svc port name
+      path: /metrics
+      interval: 7s
+      scrapeTimeout: 4s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: producer-servicemonitor
+  namespace: micro-pipeline
+  labels:
+    release: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: producer
+  namespaceSelector:
+    matchNames:
+      - micro-pipeline
+  endpoints:
+    - port: metrics         # matches producer-svc port name
+      path: /              # producer uses prometheus_client.start_http_server (root endpoint)
+      interval: 7s
+      scrapeTimeout: 4s
