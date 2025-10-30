@@ -2,17 +2,21 @@ apiVersion: kiali.io/v1alpha1
 kind: Kiali
 metadata:
   name: kiali
+  namespace: istio-system
 spec:
+  auth:
+    strategy: anonymous
   deployment:
     service_type: LoadBalancer
   external_services:
     grafana:
-      url: http://promotheus-central-grafana.monitoring:80
-      internal_url: http://promotheus-central-grafana.monitoring:80
+      url: http://promotheus-central-grafana.monitoring.svc.cluster.local:80
+      internal_url: http://promotheus-central-grafana.monitoring.svc.cluster.local:80
       auth:
         insecure_skip_verify: true
         password: admin
         type: basic
         username: admin
     prometheus:
-      url: http://promotheus-central-kube-pr-prometheus.monitoring:9090
+      #  Use Thanos Query as the Prometheus data source
+      url: http://thanos-query.monitoring.svc.cluster.local:9090

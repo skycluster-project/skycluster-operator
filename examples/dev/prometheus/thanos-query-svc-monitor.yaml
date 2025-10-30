@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: thanos-query-svc-monitor
+  namespace: monitoring
+  # If your Prometheus only selects ServiceMonitors by a label (common with kube-prometheus-stack),
+  # add that label here (example commented out):
+  labels:
+    release: promotheus-central 
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: query
+      app.kubernetes.io/instance: thanos
+  namespaceSelector:
+    matchNames:
+      - monitoring
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 7s
+      scrapeTimeout: 4s

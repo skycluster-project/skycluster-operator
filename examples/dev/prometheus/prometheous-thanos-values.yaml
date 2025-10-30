@@ -40,7 +40,8 @@ prometheus:
   
   # Service for external access to sidecar
   thanosServiceExternal:
-    enabled: false
+    enabled: true
+    type: ClusterIP
   
   extraSecret:
     ## if not set, name will be auto generated
@@ -68,7 +69,31 @@ prometheus:
 
     volumeMounts: []
 
-    additionalScrapeConfigs: []
+    additionalScrapeConfigs: 
+      - job_name: 'istiod'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_namespace]
+            action: keep
+            regex: istiod;istio-system
+          - source_labels: [__meta_kubernetes_endpoint_port_name]
+            action: keep
+            regex: http-monitoring
+        metrics_path: /metrics
+        scheme: http
+        scrape_interval: 7s
+
+      - job_name: 'envoy-stats'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_container_port_name]
+            action: keep
+            regex: '.*-envoy-prom'
+        metrics_path: /stats/prometheus
+        scheme: http
+        scrape_interval: 7s
 
     thanos:
       image: quay.io/thanos/thanos:v0.39.2

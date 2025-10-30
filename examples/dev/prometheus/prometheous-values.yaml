@@ -28,11 +28,13 @@ alertmanager:
 grafana:
   enabled: true
   adminUser: admin
-  adminPassword: admin        # replace for production
+  adminPassword: admin
   service:
-    type: ClusterIP
+    type: LoadBalancer
 
 prometheus:
+  service:
+    type: LoadBalancer
 
   prometheusSpec:
     scrapeInterval: "5s"

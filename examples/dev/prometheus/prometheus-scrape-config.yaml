@@ -5,6 +5,8 @@ metadata:
   namespace: monitoring
 stringData:
   configs.yaml: |
+    # for node exporter on external nodes
     - job_name: 'external-node'
       static_configs:
-        - targets: ['13.56.18.222:9100']
+        - targets: [] 
+          # - '10.0.47.150:9090'

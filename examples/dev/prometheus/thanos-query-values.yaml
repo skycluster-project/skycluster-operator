@@ -12,10 +12,10 @@ query:
   replicaLabel: [replica]
   ## @param query.stores Statically configure store APIs to connect with Thanos Query
   ##
-  stores: [
-    "10.199.170.65:10901",
-    "10.230.107.94:10901",
-  ]
+  stores: 
+    # Static store endpoints from remote clusters
+    - "172.16.254.239:10901"
+    - "10.199.22.198:10901"
   containerPorts:
     http: 10902
     grpc: 10901
