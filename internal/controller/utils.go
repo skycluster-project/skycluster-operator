@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"encoding/json"
 
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -29,6 +31,17 @@ func GetUnstructuredObject(c client.Client, name, namespace string) (*unstructur
 		return nil, err
 	}
 	return unstructuredObj, nil
+}
+
+func WriteObjectToFile(obj *unstructured.Unstructured, filePath string) error {
+	data, err := yaml.Marshal(obj.Object)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 // ListUnstructuredObjectsByLabels returns a list of unstructured objects with given type

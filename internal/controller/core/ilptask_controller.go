@@ -1130,6 +1130,10 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, depl
 				DeployMap: deployPlan,
 			},
 		}
+		// set owner reference to ILPTask
+		if err := ctrl.SetControllerReference(task, obj, r.Scheme); err != nil {
+			return errors.Wrapf(err, "failed to set owner reference for SkyXRD for ILPTask %s", task.Name)
+		}
 		if err := r.Create(context.TODO(), obj); err != nil {
 			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)
 		}
@@ -1177,6 +1181,10 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, depl
 				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
 				DeployMap: deployPlan,
 			},
+		}
+		// set owner reference to ILPTask
+		if err := ctrl.SetControllerReference(task, obj, r.Scheme); err != nil {
+			return errors.Wrapf(err, "failed to set owner reference for SkyXRD for ILPTask %s", task.Name)
 		}
 		if err := r.Create(context.TODO(), obj); err != nil {
 			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)

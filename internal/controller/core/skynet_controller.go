@@ -17,6 +17,7 @@ limitations under the License.
 package core
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"math"
@@ -53,6 +54,17 @@ type SkyNetReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Logger logr.Logger
+}
+
+type priorityLabels struct {
+	// sourceLabels are labels for the source component (deployment)
+	// that are added to the target deployment's pod template
+	// we need to keep track of them because these are added to DistinationRule
+	// for failover configuration, and not all of labels
+	sourceLabels map[string]string
+	// Each deployment has its own labels and labels that are added by others
+	// to identify them as potential failover targets
+	allLabels map[string]string
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=skynets,verbs=get;list;watch;create;update;patch;delete
@@ -105,20 +117,45 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
-	manifests = append(manifests, manifestsIstio...)
 
-	if skynet.Status.Objects == nil { skynet.Status.Objects = make([]hv1a1.SkyObject, 0) }
-	if len(skynet.Status.Objects) != len(manifests) || !reflect.DeepEqual(skynet.Status.Objects, manifests) {
-    skynet.Status.Objects = make([]hv1a1.SkyObject, 0)
-		for _, m := range manifests {
-			skynet.Status.Objects = append(skynet.Status.Objects, *m)
+	for _, depObj := range depManifests {
+		obj, _ := generateUnstructuredWrapper(depObj, &skynet, r.Scheme)
+		utils.WriteObjectToFile(obj, "/tmp/istio1/dep-"+depObj.Name+".yaml")
+	}
+
+  for _, istioObj := range manifestsIstio {
+		r.Logger.Info("ISTIO", "name", istioObj.Name)
+		obj, _ := generateUnstructuredWrapper(istioObj, &skynet, r.Scheme)
+		utils.WriteObjectToFile(obj, "/tmp/istio1/dst-"+istioObj.Name+".yaml")
+	}
+
+	// manifests = append(manifests, manifestsIstio...)
+
+	oldMap := make(map[string]hv1a1.SkyObject, len(skynet.Status.Objects))
+	for _, o := range skynet.Status.Objects {oldMap[o.Name] = o}
+
+	newObjects := make([]hv1a1.SkyObject, 0, len(manifests))
+	for _, m := range manifests {newObjects = append(newObjects, *m)}	
+	
+	changed := false
+	r.Logger.Info("Reconciling SkyNet manifests.", "oldCount", len(oldMap), "newCount", len(newObjects))
+
+	if len(oldMap) != len(newObjects) {
+		changed = true
+	} else {
+		for _, m := range newObjects {
+			oldObj, ok := oldMap[m.Name]; 
+			if !ok {changed = true; break}
+			if !reflect.DeepEqual(oldObj.Manifest, m.Manifest) {changed = true; break}
 		}
-		r.Logger.Info("SkyNet status manifests differ from generated manifests, updating status.")
+	}
 
-    if err := r.Status().Update(ctx, &skynet); err != nil {
-        return ctrl.Result{}, errors.Wrap(err, "error updating SkyNet status")
-    }
-		r.Logger.Info("Updated SkyNet status manifests.", "count", len(manifests))
+	if changed {
+		skynet.Status.Objects = newObjects
+		if err := r.Status().Update(ctx, &skynet); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error updating SkyNet status")
+		}
+		r.Logger.Info("Updated SkyNet status objects.", "count", len(skynet.Status.Objects))
 	}
 
 	// TODO: must check for deleted manifests and delete them from the remote clusters
@@ -128,9 +165,13 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		for _, m := range manifests {
 			obj, err := generateUnstructuredWrapper(m, &skynet, r.Scheme)
 			if err != nil {return ctrl.Result{}, errors.Wrap(err, "failed to generate unstructured wrapper")}
+
+			// Write the objects to disk for debugging
+			utils.WriteObjectToFile(obj, "/tmp/manifests/app-"+obj.GetName()+".yaml")
 			
 			if err := r.Create(ctx, obj); err != nil {
 				if apierrors.IsAlreadyExists(err) {
+					// r.Logger.Info("Manifest object already exists, checking for updates.", "name", obj.GetName())
 					current := &unstructured.Unstructured{}
 					current.SetGroupVersionKind(schema.GroupVersionKind{
 						Group:   "skycluster.io",
@@ -145,7 +186,19 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 					}
 
 					obj.SetResourceVersion(current.GetResourceVersion())
-					if err := r.Update(ctx, obj); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
+
+					curManifest, err1 := utils.GetNestedValue(current.Object, "spec", "manifest")
+					objManifest, err2 := utils.GetNestedValue(obj.Object, "spec", "manifest")
+					if err1 != nil || err2 != nil {
+						return ctrl.Result{}, errors.Wrap(err, "error getting current manifest")
+					}
+					if !equalManifests(curManifest, objManifest) {
+						r.Logger.Info("Manifest object spec differs, updating object.", "name", obj.GetName())
+						// We only expect the provider config and manifest to change
+						// TODO: handle provider config change later
+						current.Object["spec"].(map[string]any)["manifest"] = objManifest
+						if err := r.Update(ctx, current); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
+					}
 				} else { return ctrl.Result{}, errors.Wrap(err, "error creating manifest object") }
 			}
 		}
@@ -175,6 +228,12 @@ func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.SkyNet, s
     Kind:    "Object",
 	})
 	return obj, nil
+}
+
+func equalManifests(a, b interface{}) bool {
+    aJSON, _ := json.Marshal(a)
+    bJSON, _ := json.Marshal(b)
+    return bytes.Equal(aJSON, bJSON)
 }
 
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
@@ -263,7 +322,7 @@ func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, 
 	for _, deployItem := range cmpnts {
 		// based on the type of services we may modify the objects' spec
 		switch strings.ToLower(deployItem.ComponentRef.Kind) {
-		case "configmap":
+		case "deployment":
 			deploy := &appsv1.Deployment{}
 			if err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns, Name: deployItem.ComponentRef.Name,
@@ -274,6 +333,11 @@ func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, 
 		}
 	}
 	selectedProvNames = lo.Uniq(selectedProvNames)
+
+	labels := map[string]string{
+		"skycluster.io/app-scope": "distributed",
+		"skycluster.io/app-id":    appId,
+	}
 
 	// now for each configmap, we create a configmap manifest
 	// along with its labels
@@ -289,20 +353,24 @@ func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, 
 		// selectedProvNames contains the list of provider names selected for deployments
 		// a configmap manifest must be created for each provider
 		for _, pName := range selectedProvNames {
-			// prepare namespace object
-			newNs := &corev1.Namespace{
+			// prepare configmap object
+			newCm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: cmObj.Name,
-					Labels: cmObj.Labels,
+					Name:      cmObj.Name,
+					Namespace: cmObj.Namespace,
+					Labels:   labels,
 				},
+				Data: cmObj.Data,
 			}
-			objMap, err := objToMap(newNs)
-			if err != nil {return nil, errors.Wrap(err, "error converting ConfigMap to map.")}
+			objMap, err := objToMap(newCm)
+			if err != nil {
+				return nil, errors.Wrap(err, "error converting ConfigMap to map.")
+			}
 
 			objMap["kind"] = "ConfigMap"
 			objMap["apiVersion"] = "v1"
-	
-			name := "cm-" + newNs.Name + "-" + pName
+
+			name := "cm-" + newCm.Name + "-" + pName
 			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
@@ -325,20 +393,24 @@ func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, 
 		// selectedProvNames contains the list of provider names selected for deployments
 		// a secret manifest must be created for each provider
 		for _, pName := range selectedProvNames {
-			// prepare namespace object
-			newNs := &corev1.Namespace{
+			// prepare secret object
+			newSec := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: secObj.Name,
-					Labels: secObj.Labels,
+					Name:      secObj.Name,
+					Namespace: secObj.Namespace,
+					Labels:   labels,
 				},
+				Data: secObj.Data,
 			}
-			objMap, err := objToMap(newNs)
-			if err != nil {return nil, errors.Wrap(err, "error converting Secret to map.")}
+			objMap, err := objToMap(newSec)
+			if err != nil {
+				return nil, errors.Wrap(err, "error converting Secret to map.")
+			}
 
 			objMap["kind"] = "Secret"
 			objMap["apiVersion"] = "v1"
-	
-			name := "sec-" + newNs.Name + "-" + pName
+
+			name := "sec-" + newSec.Name + "-" + pName
 			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
@@ -521,36 +593,39 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 			newDeploy := generateNewDeplyFromDeploy(deploy)
 
 			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
-			podLabels := labels[deployItemUniqName]
-			podLabels["skycluster.io/managed-by"] = "skycluster"
-			podLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
+			// pod labels get the all labels (its own + added by others for priority/failover)
+			allLabels := labels[deployItemUniqName].allLabels
 
 			lb := newDeploy.Spec.Template.ObjectMeta.Labels
-			newDeploy.Spec.Template.ObjectMeta.Labels = lo.Assign(lb, podLabels) // merge
-			
-			// podLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
-			// podLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
-			// podLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
-			// podLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
-			// podLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
+			// pod labels
+			newDeploy.Spec.Template.ObjectMeta.Labels = lo.Assign(lb, 
+				map[string]string{
+					"skycluster.io/managed-by": "skycluster",
+					"skycluster.io/component": deployItemUniqName,
+				},
+				allLabels,
+			) 
 
-			// spec.selector
+			// deployment spec.selector
 			if newDeploy.Spec.Selector == nil {newDeploy.Spec.Selector = &metav1.LabelSelector{}}
 			if newDeploy.Spec.Selector.MatchLabels == nil {newDeploy.Spec.Selector.MatchLabels = make(map[string]string)}
-			// newDeploy.Spec.Selector.MatchLabels[pIdLabel] = providerId
+
+			newDeploy.Spec.Selector.MatchLabels = lo.Assign(
+				newDeploy.Spec.Selector.MatchLabels,
+				map[string]string{
+					"skycluster.io/component": deployItemUniqName,
+					"skycluster.io/managed-by": "skycluster",
+				},
+			)
 
 			// Add general labels to the deployment
 			deplLabels := newDeploy.ObjectMeta.Labels
-			newDeplLabels := lo.Assign(deplLabels, labels[deployItemUniqName]) // merge
-			newDeplLabels["skycluster.io/managed-by"] = "skycluster"
-			newDeplLabels["skycluster.io/provider-name"] = deployItem.ProviderRef.Name
-
-			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels, newDeplLabels)
-			// deployLabels["skycluster.io/provider-region"] = deployItem.ProviderRef.Region
-			// deployLabels["skycluster.io/provider-zone"] = deployItem.ProviderRef.Zone
-			// deployLabels["skycluster.io/provider-platform"] = deployItem.ProviderRef.Platform
-			// deployLabels["skycluster.io/provider-region-alias"] = hv1a1.GetRegionAlias(deployItem.ProviderRef.RegionAlias)
-			// deployLabels["skycluster.io/provider-type"] = deployItem.ProviderRef.Type
+			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels, 
+				map[string]string{
+					"skycluster.io/component": deployItemUniqName,
+					"skycluster.io/managed-by": "skycluster",
+				},
+			) 
 			
 			// yamlObj, err := generateYAMLManifest(newDeploy)
 			objMap, err := objToMap(newDeploy)
@@ -594,45 +669,84 @@ func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provider
 	return providerProfilesMap, nil
 }
 
-func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) map[string]map[string]string {
-
-	// This function derives set of labels for each deployment target based on the edges
-	// to respect the failover priority
-
-	// e.g., 
-	// Edges: A -> B (provider_b), and alternative deployment is available 
-	// in C (provider_c) 
-
-	// Source comes with label [as well as the destination rules]:
-	//    failover-src-a-1: a-b
-	//    failover-src-a-2: a-c
-
-	// Then Deployment B must have labels:
-	//    failover-src-a-1: a-b
-	//    failover-src-a-2: a-c
-
-	// Deployment C must have labels:
-	//    failover-src-a-1: a-b
-
-	// For a label to be considered for match, the previous labels must match, 
-	// i.e. nth label would be considered matched only if first n-1 labels match.
-
-	// Deployment A is labeled with its primary target provider
-	// Then a backup target provider is found: another deployment that resides in 
-	// same region/zone as the source deployment, if found; else any other deployment
-	// that is not the primary target provider
-
-	// Corresponding labels are added to the source and target deployment(s)
-	// source: failover-src-a-1: a-b
-	//         failover-src-a-2: a-c
-
-	// target B: failover-src-a-1: a-b
-	//           failover-src-a-2: a-c
-
-	// target C: failover-src-a-1: a-b (only one)
+func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) map[string]*priorityLabels {
 	
-	labels := make(map[string]map[string]string, 0)
-	// dstForDeploy := make(map[string][]string)
+	// using Istio destination rule, we control which target endpoint is used for each deployment
+	// We use failover priority that enables selection of endpoints based on the 
+	// matching labels provided in DestionaRule and target pod labels
+	
+	// We use VirtualService and DestinationRule to control the traffic routing
+	
+	// VirtualService defines the routing rules to the target service endpoints
+	// DestinationRule defines the failover priorities among the target service endpoints
+	
+	// For each target service endpoint, we define a virtual service and destination rule
+	// For each source deployment, we define a HTTPRoute in the virtual service
+	// that points to the a route destination for this deployment
+	
+	// Within the destination rule, we define the failover priorities for each 
+	// route destination defined in the virtual service
+	
+	
+	// The labels in DestinationRule must match with the labels in the target pods
+	// The target pod that matches the largest number of labels is selected.
+	// For a match to be considered, all previous labels must match as well.
+	
+	// The plan for selecting target deployment then is as follows:
+	// For each src deployment -> target deployment as selected by deployment plan
+	// We add same labels to target deployment and DestinationRule for target service endpoint
+	// (in source deployment cluster)
+	
+	// For a backup target deployment (if any, typically same zone/region as source deployment):
+	// we add additional labels to the backup target, BUT we also need to add this label 
+	// to the primary target deployment as well. Since a target with largest number of matching
+	// labels is selected, the primary target will be selected first. The backup target
+	// will be selected only if the primary target is not available.
+	
+	// Here is an example:
+	// Source deployment A (in cluster/provider_1) targets deployment X (in cluster/provider_2)
+	// Source deployment B (in cluster/provider_1) also targets deployment X
+	// Backup target for deployment A and B is deployment Y (in cluster/provider_3)
+	//
+	// The derived labels would be as follows:
+	
+	// Virtual Service for X in cluster/provider_1:
+	//  - match: deployment A labels
+	//    route to: destination rule X, subset A
+	//  - match: deployment B labels
+	//    route to: destination rule X, subset B
+	
+	// DestinationRule for service X in cluster_1: 
+	//  - subset A:
+	//    trafficPolicy:
+	//      loadBalancer:
+	//        failoverPriority:
+	//          - failover-src-a-1: a-x
+	//          - failover-src-a-2: a-y
+	//  - subset B:
+	//    trafficPolicy:
+	//      loadBalancer:
+	//        failoverPriority:
+	//          - failover-src-b-1: b-x
+	//          - failover-src-b-2: b-y
+	
+	// Deployment X:
+	//    failover-src-a-1: a-x
+	//    failover-src-a-2: a-y
+	//    failover-src-b-1: b-x
+	//    failover-src-b-2: b-y
+	// Deployment A:
+	//    failover-src-a-1: a-x
+	//    failover-src-a-2: a-y
+	// Deployment B:
+	//    failover-src-b-1: b-x
+	//    failover-src-b-2: b-y
+	// Deployment Y:
+	//    failover-src-a-2: a-y
+	//    failover-src-b-2: b-y
+
+	
+	labels := make(map[string]*priorityLabels)
 
 	// ordered selected destination for each deployment in edges
 	// The ordered list includes the primary target (selected by deploy plan)
@@ -646,19 +760,27 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
 
 		if _, ok := labels[fromName]; !ok {
-			labels[fromName] = make(map[string]string)
+			labels[fromName] = &priorityLabels{
+				sourceLabels: make(map[string]string),
+				allLabels:    make(map[string]string),
+			}
 		}
 		if _, ok := labels[toName]; !ok {
-			labels[toName] = make(map[string]string)
+			labels[toName] = &priorityLabels{
+				sourceLabels: make(map[string]string),
+				allLabels:    make(map[string]string),
+			}
 		}
 
-		fName := RandSuffix(fromName)
-		tName := RandSuffix(toName)
-		labelKey := "failover-" + fName + "-" + tName
+		// fName := RandSuffix(fromName)
+		// tName := RandSuffix(toName)
+		// labelKey := "failover-" + fName + "-" + tName
+		labelKey := "failover-" + fromName + "-" + toName
 
 		// must be added to both src and dst
-		labels[fromName][labelKey] = fromName + "-" + toName
-		labels[toName][labelKey] = fromName + "-" + toName
+		// for source as source label and for destination as all label
+		labels[fromName].sourceLabels[labelKey] = fromName + "-" + toName
+		labels[toName].allLabels[labelKey] = fromName + "-" + toName
 	}
 
 	// then, collect backup targets
@@ -685,29 +807,36 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		}
 
 		sort.SliceStable(backups, func(i, j int) bool {
-			// higher score => should come earlier
-			return score(backups[i]) > score(backups[j])
+			// higher score first; if equal, tie-break by ProviderRef.Name for stability
+			si, sj := score(backups[i]), score(backups[j])
+			if si == sj {
+				return backups[i].ProviderRef.Name < backups[j].ProviderRef.Name
+			}
+			return si > sj
 		})
 
 		if len(backups) == 0 {continue}
 		bk := backups[0]
 		bkName := bk.ComponentRef.Name + "-" + bk.ProviderRef.Name
 
-		if _, ok := labels[bkName]; !ok {labels[bkName] = make(map[string]string)}
+		if _, ok := labels[bkName]; !ok {
+			labels[bkName] = &priorityLabels{
+				sourceLabels: make(map[string]string),
+				allLabels:    make(map[string]string),
+			}
+		}
 
-		fName := RandSuffix(fromName)
-		tName := RandSuffix(toName) // primary
-		bName := RandSuffix(bkName) 
-
-		primaryKey := "failover-" + fName + "-" + tName // primary
-		bkKey := "failover-" + fName + "-" + bName // backup
+		// fName := RandSuffix(fromName)
+		// bName := RandSuffix(bkName) 
+		// bkKey := "failover-" + fName + "-" + bName // backup
+		bkKey := "failover-" + fromName + "-" + bkName // backup
 		
-		// must add backup label to source
-		labels[fromName][bkKey] = fromName + "-" + bkName + "-backup" // add to source
-		// must add backup label to primary target
-		labels[toName][bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
-		// must add primary target to the backup label
-		labels[bkName][primaryKey] = fromName + "-" + toName
+		// must add backup label to source (as source labels)
+		labels[fromName].sourceLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to source
+		// must add backup label to primary target (as all labels)
+		labels[toName].allLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
+		// backup only gets the backup label (as all labels)
+		labels[bkName].allLabels[bkKey] = fromName + "-" + bkName + "-backup"
 	}
 	return labels
 }
@@ -719,21 +848,40 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 	cmpnts := dpMap.Component
 
 	// failover priority labels
-	// a map of component name (deployment name) to its set of labels
+	// a map of (ComponentRef.Name + "-" + ProviderRef.Name) to priorityLabels
 	labels := derivePriorities(cmpnts, edges)
 
 	// Generate Istio configuration
-	// As a general rule, we create a DestinationRule object that enforces
-	// priorities for failover, and we prioritize the local provider.
-	// More specifically, we priotize a destination where it adopts
-	// as many labels as the client that send the request.
-	// These set of labels are introduced in the DestinationRule object
-	// and include provider region alias, region, and zone.
+	// We use VirtualService and DestinationRule to control the traffic routing
+	
+	// VirtualService defines the routing rules to the target service endpoints
+	// DestinationRule defines the failover priorities among the target service endpoints
+	
+	// For each target service endpoint, we define a virtual service and destination rule
+	// For each source deployment, we define a HTTPRoute in the virtual service
+	// that points to the a route destination for this deployment
+	
+	// Within the destination rule, we define the failover priorities for each 
+	// route destination defined in the virtual service
+	type virtualServiceHelper struct {
+		ProviderCfgName string
+		VirtualService  *istioClient.VirtualService
+	}
+	type dstRuleHelper struct {
+		ProviderCfgName string
+		DstRule         *istioClient.DestinationRule
+	}
+
+	virtualSvcs := make(map[string]*virtualServiceHelper)
+	dstRules := make(map[string]*dstRuleHelper)
+	
 	for _, edge := range edges {
 		// must fetch labels on the deployment and match with a service
-		// then use service info to create DestinationRule object
+		// then use service info to create/update virtual service and destination rule
+		from := edge.From
+		fromName := from.ComponentRef.Name + "-" + from.ProviderRef.Name
 		to := edge.To
-		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
+		// toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
 		if strings.ToLower(to.ComponentRef.Kind) != "deployment" { continue }
 
 		dep := &appsv1.Deployment{}
@@ -747,62 +895,134 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 			"skycluster.io/app-scope": "distributed",
 			"skycluster.io/app-id":    appId,
 		}); err != nil {return nil, errors.Wrap(err, "error listing Services for istio configuration.")}
-		
-		// failovers := []string{
-		// 	"skycluster.io/provider-name", // highest priority, must match exactly, if not, the rest do not matter
-		// 	"skycluster.io/provider-platform",
-		// 	"skycluster.io/provider-region-alias",
-		// 	"skycluster.io/provider-region",
-		// 	"skycluster.io/provider-zone", // lowest priority, all above must match
-		// }
 
 		for _, svc := range svcList.Items {
 			if deploymentHasLabels(dep, svc.Spec.Selector) {
-				
-				ist := &istioClient.DestinationRule{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: svc.Name + "-dst-rule",
-						Namespace: svc.Namespace,
-					},
-					Spec: istiov1.DestinationRule{
-						Host: svc.Name,
-						TrafficPolicy: &istiov1.TrafficPolicy{
-							LoadBalancer: &istiov1.LoadBalancerSettings{
-								LbPolicy: &istiov1.LoadBalancerSettings_Simple{
-									Simple: istiov1.LoadBalancerSettings_LEAST_REQUEST,
-								},
-								LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
-									FailoverPriority: lo.Keys(labels[toName]),
-								},
+
+				// Making a virtual service and destination rule for this service
+				// in the source deployment's cluster (from.ProviderRef)
+				name := svc.Name + "-" + from.ProviderRef.Name
+				if _, ok := virtualSvcs[name]; !ok {
+					virtualSvcs[name] = &virtualServiceHelper{
+						ProviderCfgName: from.ProviderRef.Name,
+						VirtualService: &istioClient.VirtualService{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      svc.Name + "-vs",
+								Namespace: svc.Namespace,
 							},
-							OutlierDetection: &istiov1.OutlierDetection{
-								ConsecutiveErrors:	5,
-								Interval: 				 &duration.Duration{Seconds: 5},
-								BaseEjectionTime: &duration.Duration{Seconds: 30},
-								MaxEjectionPercent: 30,
+							Spec: istiov1.VirtualService{
+								Hosts:    []string{svc.Name},
+							},
+						},
+					}
+				}
+				// init destination rule
+				if _, ok := dstRules[name]; !ok { 
+					dstRules[name] = &dstRuleHelper{
+						ProviderCfgName: from.ProviderRef.Name,
+						DstRule: &istioClient.DestinationRule{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      svc.Name + "-dst-rule",
+								Namespace: svc.Namespace,
+							},
+							Spec: istiov1.DestinationRule{
+								Host: svc.Name,
+							},
+					  },
+					}
+				}
+
+				// Now per each source deployment (from), we add a HTTPRoute to the virtual service
+				// Check Virtual Service example
+				vs := virtualSvcs[name]
+				http := &istiov1.HTTPRoute{
+					Name: from.ComponentRef.Name,
+					Match: []*istiov1.HTTPMatchRequest{
+						{
+							// must match the source deployment
+							SourceLabels: map[string]string{
+								"skycluster.io/component": fromName,
+							},
+						},
+					},
+					Route: []*istiov1.HTTPRouteDestination{
+						{
+							Destination: &istiov1.Destination{
+								Host: svc.Name,
+								Subset: from.ComponentRef.Name,
 							},
 						},
 					},
 				}
-
-				objMap, err := objToMap(ist)
-				if err != nil {return nil, errors.Wrap(err, "error converting Deployment to map.")}
 				
-				objMap["kind"] = "DestinationRule"
-				objMap["apiVersion"] = "networking.istio.io/v1"
+				vs.VirtualService.Spec.Http = append(vs.VirtualService.Spec.Http, http)
+				
+				// Now per each source deployment (from), we add a subset to the destination rule
+				// Check Destination Rule example
+				dr := dstRules[name]
+				subset := &istiov1.Subset{
+					Name: from.ComponentRef.Name,
+					TrafficPolicy: &istiov1.TrafficPolicy{
+						LoadBalancer: &istiov1.LoadBalancerSettings{
+							LbPolicy: &istiov1.LoadBalancerSettings_Simple{
+								Simple: istiov1.LoadBalancerSettings_LEAST_REQUEST,
+							},
+							LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
+								// failover labels, from this source only
+								FailoverPriority: lo.Keys(labels[fromName].sourceLabels),
+							},
+						},
+						OutlierDetection: &istiov1.OutlierDetection{
+							ConsecutiveErrors:	5,
+							Interval: 				 &duration.Duration{Seconds: 5},
+							BaseEjectionTime: &duration.Duration{Seconds: 30},
+							MaxEjectionPercent: 30,
+						},
+					},
+				}
+				dr.DstRule.Spec.Subsets = append(dr.DstRule.Spec.Subsets, subset)
 
-				name := "dst-" + ist.Name + "-" + to.ProviderRef.Name
-				rand := RandSuffix(name)
-				name = name[0:int(math.Min(float64(len(name)), 20))]
-				name = name + "-" + rand
-
-				obj, err := generateObjectWrapper(name, svc.Namespace, objMap, provCfgNameMap[to.ProviderRef.Name])
-				if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
-
-				manifests = append(manifests, obj)
-				break
+				break // found the matching service, do not expect to have multiple matches
 			}
-		}
+		} 
+		
+		// svc has found and we have created/updated virtual service and destination rule
+	}
+
+	for _, vs := range virtualSvcs {
+		objMap, err := objToMap(vs.VirtualService)
+		if err != nil {return nil, errors.Wrap(err, "error converting VirtualService to map.")}
+		
+		objMap["kind"] = "VirtualService"
+		objMap["apiVersion"] = "networking.istio.io/v1beta1"
+
+		name := vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
+		rand := RandSuffix(name)
+		name = name[0:int(math.Min(float64(len(name)), 25))]
+		name = name + "-" + rand
+
+		obj, err := generateObjectWrapper(name, vs.VirtualService.Namespace, objMap, provCfgNameMap[vs.ProviderCfgName])
+		if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+
+		manifests = append(manifests, obj)
+	}
+
+	for _, dr := range dstRules {
+		objMap, err := objToMap(dr)
+		if err != nil {return nil, errors.Wrap(err, "error converting DestinationRule to map.")}
+		
+		objMap["kind"] = "DestinationRule"
+		objMap["apiVersion"] = "networking.istio.io/v1beta1"
+
+		name := dr.DstRule.Name // svc.Name + "-" + from.ProviderRef.Name
+		rand := RandSuffix(name)
+		name = name[0:int(math.Min(float64(len(name)), 25))]
+		name = name + "-" + rand
+
+		obj, err := generateObjectWrapper(name, dr.DstRule.Namespace, objMap, provCfgNameMap[dr.ProviderCfgName])
+		if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+
+		manifests = append(manifests, obj)
 	}
 
 	return manifests, nil

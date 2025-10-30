@@ -118,7 +118,7 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			if err := r.Create(ctx, unstrObj); err != nil && !apierrors.IsAlreadyExists(err) {
 				return ctrl.Result{}, client.IgnoreAlreadyExists(err)
 			}
-			r.Logger.Info("Created SkyXRD object!", "name", xrd.ComponentRef.Name)
+			// r.Logger.Info("Created SkyXRD object!", "name", xrd.ComponentRef.Name)
 		}
 	}
 
@@ -127,7 +127,7 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
     if err := r.Status().Update(ctx, skyxrd); err != nil {
         return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status")
     }
-		r.Logger.Info("Updated SkyXRD status manifests.", "count", len(manifests))
+		// r.Logger.Info("Updated SkyXRD status manifests.", "count", len(manifests))
 	}
 	
 	return ctrl.Result{}, nil
@@ -153,7 +153,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
-	r.Logger.Info("Generating provider manifests.")
+	// r.Logger.Info("Generating provider manifests.")
 	providersManifests, err := r.generateProviderManifests(appId, ns, deployMap.Component)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
@@ -161,7 +161,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	for _, obj := range providersManifests {
 		manifests = append(manifests, obj)
 	}
-	r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
+	// r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
 
 	depPolicy, err := r.fetchDeploymentPolicy(ns, skyxrd.Spec.DeploymentPolicyRef)
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
@@ -202,7 +202,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
-	r.Logger.Info("Generating SkyK8SCluster manifests.")
+	// r.Logger.Info("Generating SkyK8SCluster manifests.")
 	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
@@ -213,7 +213,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
 
 	// Kubernetes Mesh
-	r.Logger.Info("Generating XKubeMesh manifests.")
+	// r.Logger.Info("Generating XKubeMesh manifests.")
 	skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
