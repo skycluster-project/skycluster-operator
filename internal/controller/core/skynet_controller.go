@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -61,7 +62,8 @@ type priorityLabels struct {
 	// that are added to the target deployment's pod template
 	// we need to keep track of them because these are added to DistinationRule
 	// for failover configuration, and not all of labels
-	sourceLabels map[string]string
+	sourceLabels map[string]map[string]string
+	// sourceLabels map[string]string
 	// Each deployment has its own labels and labels that are added by others
 	// to identify them as potential failover targets
 	allLabels map[string]string
@@ -532,6 +534,8 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 			labels = map[string]string{}
 		}
 		labels["skycluster.io/managed-by"] = "skycluster"
+		labels["skycluster.io/service-name"] = svc.Name
+
 		
 		// selectedProvNames contains the list of provider names selected for deployments
 		// a service manifest must be created for each provider
@@ -588,6 +592,11 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
 			// pod labels get the all labels (its own + added by others for priority/failover)
 			allLabels := labels[deployItemUniqName].allLabels
+			// sourcelabels key is the destination deployment for the current deployment
+			// and the values are labels added to the destination
+			// These labels must be added to the source deployment's pod template
+			sourceLabels := labels[deployItemUniqName].sourceLabels
+			
 
 			lb := newDeploy.Spec.Template.ObjectMeta.Labels
 			// pod labels
@@ -597,7 +606,10 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 					"skycluster.io/component": deployItemUniqName,
 				},
 				allLabels,
-			) 
+			)
+			for _, srcLbls := range sourceLabels {
+				maps.Copy(newDeploy.Spec.Template.ObjectMeta.Labels, srcLbls)
+			} 
 
 			// deployment spec.selector
 			if newDeploy.Spec.Selector == nil {newDeploy.Spec.Selector = &metav1.LabelSelector{}}
@@ -754,13 +766,13 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		if _, ok := labels[fromName]; !ok {
 			labels[fromName] = &priorityLabels{
-				sourceLabels: make(map[string]string),
+				sourceLabels: make(map[string]map[string]string),
 				allLabels:    make(map[string]string),
 			}
 		}
 		if _, ok := labels[toName]; !ok {
 			labels[toName] = &priorityLabels{
-				sourceLabels: make(map[string]string),
+				sourceLabels: make(map[string]map[string]string),
 				allLabels:    make(map[string]string),
 			}
 		}
@@ -772,17 +784,17 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		// must be added to both src and dst
 		// for source as source label and for destination as all label
-		labels[fromName].sourceLabels[labelKey] = fromName + "-" + toName
+		// sourceLabels uses toName as key to filter labels for a specific target
+		// when there are multiple targets from the same source
+		//   e.g., source A targets X and Y
+		if labels[fromName].sourceLabels[toName] == nil {
+			labels[fromName].sourceLabels[toName] = make(map[string]string)
+		}
+		labels[fromName].sourceLabels[toName][labelKey] = fromName + "-" + toName
 		labels[toName].allLabels[labelKey] = fromName + "-" + toName
-	}
-
-	// then, collect backup targets
-	for _, edge := range edges {
-		from := edge.From
-		fromName := from.ComponentRef.Name + "-" + from.ProviderRef.Name
-		to := edge.To
-		toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
-
+		// TODO: this must be added to the backup as well
+		// TODO: backup label must be added to the primary target as well
+		
 		// find backup target for 'from' deployment
 		backups := lo.Filter(cmpnts, func(c hv1a1.SkyService, _ int) bool {
 			return c.ComponentRef.Name == to.ComponentRef.Name && 
@@ -814,7 +826,7 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		if _, ok := labels[bkName]; !ok {
 			labels[bkName] = &priorityLabels{
-				sourceLabels: make(map[string]string),
+				sourceLabels: make(map[string]map[string]string),
 				allLabels:    make(map[string]string),
 			}
 		}
@@ -825,11 +837,15 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		bkKey := "failover-" + fromName + "-" + bkName // backup
 		
 		// must add backup label to source (as source labels)
-		labels[fromName].sourceLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to source
+		if labels[fromName].sourceLabels[toName] == nil {
+			labels[fromName].sourceLabels[toName] = make(map[string]string)
+		}
+		labels[fromName].sourceLabels[toName][bkKey] = fromName + "-" + bkName + "-backup" // add to source
 		// must add backup label to primary target (as all labels)
 		labels[toName].allLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
-		// backup only gets the backup label (as all labels)
-		labels[bkName].allLabels[bkKey] = fromName + "-" + bkName + "-backup"
+		
+		// backup only gets the primary target label and not the backup (hence it has fewer labels)
+		labels[bkName].allLabels[labelKey] = fromName + "-" + toName
 	}
 	return labels
 }
@@ -900,8 +916,11 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 						ProviderCfgName: from.ProviderRef.Name,
 						VirtualService: &istioClient.VirtualService{
 							ObjectMeta: metav1.ObjectMeta{
-								Name:      svc.Name + "-vs",
+								Name:      name,
 								Namespace: svc.Namespace,
+								Labels: map[string]string{
+									"skycluster.io/service-name": svc.Name,
+								},
 							},
 							Spec: istiov1.VirtualService{
 								Hosts:    []string{svc.Name},
@@ -915,7 +934,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 						ProviderCfgName: from.ProviderRef.Name,
 						DstRule: &istioClient.DestinationRule{
 							ObjectMeta: metav1.ObjectMeta{
-								Name:      svc.Name + "-dst-rule",
+								Name:      name,
 								Namespace: svc.Namespace,
 							},
 							Spec: istiov1.DestinationRule{
@@ -955,6 +974,9 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 				dr := dstRules[name]
 				subset := &istiov1.Subset{
 					Name: from.ComponentRef.Name,
+					// Labels: map[string]string{
+					// 	"skycluster.io/component": fromName,
+					// },
 					TrafficPolicy: &istiov1.TrafficPolicy{
 						LoadBalancer: &istiov1.LoadBalancerSettings{
 							LbPolicy: &istiov1.LoadBalancerSettings_Simple{
@@ -962,7 +984,8 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 							},
 							LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
 								// failover labels, from this source only
-								FailoverPriority: lo.Keys(labels[fromName].sourceLabels),
+								FailoverPriority: lo.Keys(labels[fromName].sourceLabels[
+									to.ComponentRef.Name + "-" + to.ProviderRef.Name]),
 							},
 						},
 						OutlierDetection: &istiov1.OutlierDetection{
@@ -989,7 +1012,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 		objMap["kind"] = "VirtualService"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
-		name := "ist-" + vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
+		name := "vs-" + vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
 		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 25))]
 		name = name + "-" + rand
@@ -1007,7 +1030,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 		objMap["kind"] = "DestinationRule"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
-		name := dr.DstRule.Name // svc.Name + "-" + from.ProviderRef.Name
+		name := "dr-" + dr.DstRule.Name // svc.Name + "-" + from.ProviderRef.Name
 		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 25))]
 		name = name + "-" + rand
@@ -1032,23 +1055,6 @@ func generateObjectWrapper(name string, ns string, objAny map[string]any, provid
 		ConfigName: providerConfigName,
 	}
 	return obj, nil
-}
-
-func deepCopyDeployment(src appsv1.Deployment, clearAnnotations bool) *appsv1.Deployment {
-	dest := src.DeepCopy()
-
-	// Clear resource version and UID
-	dest.ResourceVersion = ""
-	dest.UID = ""					 
-	dest.CreationTimestamp = metav1.Time{}
-	dest.Generation = 0
-	dest.ManagedFields = nil
-	dest.OwnerReferences = nil
-	dest.Finalizers = nil
-	dest.Status = appsv1.DeploymentStatus{}
-	if clearAnnotations {dest.Annotations = nil}
-
-	return dest
 }
 
 func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service {
