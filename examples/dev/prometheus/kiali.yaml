@@ -9,14 +9,14 @@ spec:
   deployment:
     service_type: LoadBalancer
   external_services:
-    grafana:
-      url: http://promotheus-central-grafana.monitoring.svc.cluster.local:80
-      internal_url: http://promotheus-central-grafana.monitoring.svc.cluster.local:80
-      auth:
-        insecure_skip_verify: true
-        password: admin
-        type: basic
-        username: admin
+    # grafana:
+    #   url: http://prometheus-grafana.monitoring.svc.cluster.local:80
+    #   internal_url: http://prometheus-grafana.monitoring.svc.cluster.local:80
+    #   auth:
+    #     insecure_skip_verify: true
+    #     password: admin
+    #     type: basic
+    #     username: admin
     prometheus:
       #  Use Thanos Query as the Prometheus data source
       url: http://thanos-query.monitoring.svc.cluster.local:9090

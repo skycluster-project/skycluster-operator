@@ -14,14 +14,14 @@ query:
   ##
   stores: 
     # Static store endpoints from remote clusters
-    - "172.16.254.239:10901"
-    - "10.199.22.198:10901"
+    - "172.17.248.247:10901"
+    - "10.204.60.66:10901"
   containerPorts:
     http: 10902
     grpc: 10901
 
   service:
-    type: ClusterIP
+    type: LoadBalancer
     ports:
       http: 9090
 

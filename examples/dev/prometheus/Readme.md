@@ -18,7 +18,7 @@ KUBECONFIG=/tmp/aws1
 NAME=gke
 helm install $NAME prometheus-community/kube-prometheus-stack \
   -f prometheous-thanos-values.yaml -n monitoring \
-  --create-namespace --kube-context aws
+  --create-namespace --kube-context $NAME
 ```
 
 To change the grafana and prometheus service to use ClusterIP instead of LoadBalancer:
@@ -35,7 +35,7 @@ If you install Prometheus in remote clusters with Thanos sidecar, you can fetch 
 
 ```bash
 # Install in local (centralized) cluster
-NAME=promotheus-central
+NAME=prometheus
 helm install $NAME  prometheus-community/kube-prometheus-stack \
   -f prometheous-values.yaml -n monitoring \
   --create-namespace
@@ -46,7 +46,7 @@ helm repo add bitnami https://charts.bitnami.com/bitnami
 helm search repo bitnami | grep thanos
 # bitnami/thanos   17.3.1  0.39.2
 
-helm install thanos --version="17.3.1" --install \
+helm install thanos --version="17.3.1" --create-namespace \
   --namespace="monitoring" \
   --values thanos-query-values.yaml bitnami/thanos
 ```
@@ -60,8 +60,6 @@ Install Kiali Operator in central cluster using helm, then create Kiali CR:
 
 ```bash
 helm install \
-  --set cr.namespace=monitoring \
-  --set cr.spec.auth.strategy="anonymous" \
   --namespace kiali-operator \
   --create-namespace  kiali-operator kiali/kiali-operator
 
@@ -73,20 +71,22 @@ kubectl apply -f ./kiali.yaml -n monitoring
 # This is the name of AWS cluster
 # get it by:
 kubectl get xkubes.skycluster.io -o  jsonpath="{range .items[*]}{.status.clusterName}{'\n'}{end}"
+# TODO: This only works for GKE names,
+# For AWS you need to get the xkube name: k get xkubes.skycluster.io
 
-CLUSTER_NAME=xk-aws-us-east--4z74l-twfh8
+CLUSTER_NAME=xk-aws-us-east--x0ss9-nqstv
 CONTEXT=aws
-kiali-prepare-remote-cluster.sh \
+./kiali-prepare-remote-cluster.sh \
   --remote-cluster-name $CLUSTER_NAME \
   --process-remote-resources true \
   --process-kiali-secret true \
   --kiali-cluster-namespace istio-system \
   --kiali-cluster-context kind-skycluster --remote-cluster-context $CONTEXT
 
-CLUSTER_NAME=xk-gcp-us-east1-thams-7frd9
+CLUSTER_NAME=xk-gcp-us-east1-cwtmd
 CONTEXT=gke
-kiali-prepare-remote-cluster.sh \
-  --remote-cluster-name gke \
+./kiali-prepare-remote-cluster.sh \
+  --remote-cluster-name $CLUSTER_NAME \
   --process-remote-resources true \
   --process-kiali-secret true \
   --kiali-cluster-namespace istio-system \
