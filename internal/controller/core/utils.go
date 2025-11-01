@@ -250,9 +250,12 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 	// remove unwanted annotations
 	if newDeploy.Annotations != nil {
 		for _, ant := range antToRemove {delete(newDeploy.Annotations, ant)}
-	}
+	} 
 	if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
 		newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)
+	}
+	if newDeploy.Spec.Template.ObjectMeta.Annotations == nil {
+		newDeploy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
 	}
 	if newDeploy.Spec.Selector == nil {
 		newDeploy.Spec.Selector = &metav1.LabelSelector{}

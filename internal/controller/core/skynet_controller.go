@@ -597,6 +597,13 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 			// These labels must be added to the source deployment's pod template
 			// sourceLabels := labels[deployItemUniqName].sourceLabels
 			
+			// annotations (for istio custom buckets)
+			podAnts := newDeploy.Spec.Template.ObjectMeta.Annotations
+			newDeploy.Spec.Template.ObjectMeta.Annotations = lo.Assign(podAnts,
+				map[string]string{
+					"sidecar.istio.io/statsHistogramBuckets": "{\"istiocustom\":[1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,43,46,49,52,55,58,62,66,70,75,80,85,90,95,100,105,110,115,120,125,130,135,140,145,150,155,160,170,180,190,200,210,220,230,240,250,260,270,280,290,300,320,340,360,380,390,400,420,440,460,480,500,550,600,650,700,750,800,850,900,950,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2500,3000,3500,4000,5000,6000,8000,10000,15000,20000,30000,40000,50000,75000,100000,300000,600000,1800000,3600000]}",
+				},
+			)	
 
 			lb := newDeploy.Spec.Template.ObjectMeta.Labels
 			// pod labels
