@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -592,10 +591,11 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
 			// pod labels get the all labels (its own + added by others for priority/failover)
 			allLabels := labels[deployItemUniqName].allLabels
+			
 			// sourcelabels key is the destination deployment for the current deployment
 			// and the values are labels added to the destination
 			// These labels must be added to the source deployment's pod template
-			sourceLabels := labels[deployItemUniqName].sourceLabels
+			// sourceLabels := labels[deployItemUniqName].sourceLabels
 			
 
 			lb := newDeploy.Spec.Template.ObjectMeta.Labels
@@ -607,9 +607,9 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 				},
 				allLabels,
 			)
-			for _, srcLbls := range sourceLabels {
-				maps.Copy(newDeploy.Spec.Template.ObjectMeta.Labels, srcLbls)
-			} 
+			// for _, srcLbls := range sourceLabels {
+			// 	maps.Copy(newDeploy.Spec.Template.ObjectMeta.Labels, srcLbls)
+			// } 
 
 			// deployment spec.selector
 			if newDeploy.Spec.Selector == nil {newDeploy.Spec.Selector = &metav1.LabelSelector{}}
@@ -969,6 +969,11 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 				
 				vs.VirtualService.Spec.Http = append(vs.VirtualService.Spec.Http, http)
 				
+				labelAndKeys := make([]string, 0)
+				for k, v := range labels[fromName].sourceLabels[to.ComponentRef.Name + "-" + to.ProviderRef.Name] {
+					labelAndKeys = append(labelAndKeys, k + "=" + v)
+				}
+
 				// Now per each source deployment (from), we add a subset to the destination rule
 				// Check Destination Rule example
 				dr := dstRules[name]
@@ -984,8 +989,7 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 							},
 							LocalityLbSetting: &istiov1.LocalityLoadBalancerSetting{
 								// failover labels, from this source only
-								FailoverPriority: lo.Keys(labels[fromName].sourceLabels[
-									to.ComponentRef.Name + "-" + to.ProviderRef.Name]),
+								FailoverPriority: labelAndKeys,
 							},
 						},
 						OutlierDetection: &istiov1.OutlierDetection{

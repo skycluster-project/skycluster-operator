@@ -1,0 +1,8 @@
+# namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: micro-pipeline
+  labels:
+    skycluster.io/app-id: testcase1
+    skycluster.io/app-scope: distributed

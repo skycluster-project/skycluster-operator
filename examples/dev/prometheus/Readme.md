@@ -53,6 +53,15 @@ helm install thanos --version="17.3.1" --create-namespace \
 
 Introduce the Thanos remote cluster endpoints using `additional-scrape-configs` secret.
 
+## Grafana Only
+
+```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+helm install grafana grafana/grafana --namespace monitoring \
+  --create-namespace -f grafana-values.yaml
+```
+
 
 ## Kiali Setup
 

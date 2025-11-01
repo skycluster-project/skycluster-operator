@@ -9,14 +9,31 @@ spec:
   deployment:
     service_type: LoadBalancer
   external_services:
-    # grafana:
-    #   url: http://prometheus-grafana.monitoring.svc.cluster.local:80
-    #   internal_url: http://prometheus-grafana.monitoring.svc.cluster.local:80
-    #   auth:
-    #     insecure_skip_verify: true
-    #     password: admin
-    #     type: basic
-    #     username: admin
+    grafana:
+      url: http://grafana.monitoring.svc.cluster.local:80
+      internal_url: http://grafana.monitoring.svc.cluster.local:80
+      auth:
+        insecure_skip_verify: true
+        password: admin
+        type: basic
+        username: admin
+      datasource_uid: ""
+      dashboards:
+      - name: "Istio Service Dashboard"
+        variables:
+          datasource: "var-datasource"
+          namespace: "var-namespace"
+          service: "var-service"
+      - name: "Istio Workload Dashboard"
+        variables:
+          datasource: "var-datasource"          
+          namespace: "var-namespace"
+          workload: "var-workload"
+          datasource: "var-datasource"
+      - name: "Istio Mesh Dashboard"
+      # - name: "Istio Control Plane Dashboard"
+      # - name: "Istio Performance Dashboard"
+      # - name: "Istio Wasm Extension Dashboard"
     prometheus:
       #  Use Thanos Query as the Prometheus data source
       url: http://thanos-query.monitoring.svc.cluster.local:9090

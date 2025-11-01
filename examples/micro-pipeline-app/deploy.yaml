@@ -1,11 +1,4 @@
-# namespace
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: micro-pipeline
-  labels:
-    skycluster.io/app-id: testcase1
-    skycluster.io/app-scope: distributed
+
 ---
 # Redis Deployment
 apiVersion: apps/v1
@@ -82,7 +75,7 @@ spec:
     spec:
       containers:
         - name: processor
-          image: etesami/redis-processor:latest
+          image: etesami/redis-processor:v0.0.5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -144,7 +137,7 @@ spec:
     spec:
       containers:
         - name: aggregator
-          image: etesami/redis-aggregator:latest
+          image: etesami/redis-aggregator:v0.0.5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8001
@@ -210,7 +203,7 @@ spec:
     spec:
       containers:
         - name: producer
-          image: myregistry/producer:latest
+          image: etesami/redis-producer:v0.0.5
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 9000
