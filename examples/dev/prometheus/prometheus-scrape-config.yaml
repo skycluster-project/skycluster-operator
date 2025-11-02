@@ -10,3 +10,18 @@ stringData:
       static_configs:
         - targets: [] 
           # - '10.0.47.150:9090'
+    - job_name: 'icmp_ping'
+      metrics_path: /probe
+      params:
+        module: [icmp_ping]
+      static_configs:
+        - targets:
+          - 54.210.43.118
+          - 35.196.13.85
+      relabel_configs:
+        - source_labels: [__address__]
+          target_label: __param_target
+        - source_labels: [__param_target]
+          target_label: instance
+        - target_label: __address__
+          replacement: 10.0.39.224:9115

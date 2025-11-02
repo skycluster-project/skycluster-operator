@@ -19,6 +19,11 @@ NAME=gke
 helm install $NAME prometheus-community/kube-prometheus-stack \
   -f prometheous-thanos-values.yaml -n monitoring \
   --create-namespace --kube-context $NAME
+
+# For collecting RTTs
+helm install blackbox --create-namespace --namespace="monitoring" \
+  prometheus-community/prometheus-blackbox-exporter -f blackbox-values.yaml \
+  --kube-context $NAME
 ```
 
 To change the grafana and prometheus service to use ClusterIP instead of LoadBalancer:
@@ -49,6 +54,10 @@ helm search repo bitnami | grep thanos
 helm install thanos --version="17.3.1" --create-namespace \
   --namespace="monitoring" \
   --values thanos-query-values.yaml bitnami/thanos
+
+# Backbox for icmp ping
+helm install blackbox --create-namespace --namespace="monitoring" \
+  prometheus-community/prometheus-blackbox-exporter -f blackbox-values.yaml
 ```
 
 Introduce the Thanos remote cluster endpoints using `additional-scrape-configs` secret.

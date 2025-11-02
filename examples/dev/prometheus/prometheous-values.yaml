@@ -26,7 +26,7 @@ alertmanager:
   enabled: false
 
 grafana:
-  enabled: true
+  enabled: false
   adminUser: admin
   adminPassword: admin
   service:
@@ -52,7 +52,8 @@ prometheus:
     volumeMounts: []
 
     additionalScrapeConfigs: []
-
+    
+    # cannot be used with additionalScrapeConfigs above
     additionalScrapeConfigsSecret:
       enabled: true
       name: additional-scrape-configs
