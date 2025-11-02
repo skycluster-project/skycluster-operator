@@ -29,7 +29,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
@@ -91,12 +90,12 @@ func (r *DataflowPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		cur := &policyv1alpha1.DataflowPolicy{}
-		if err := r.Get(ctx, req.NamespacedName, cur); err != nil {
+		r.Logger.Info("Conflict detected, retrying...")
+		curILP := &cv1a1.ILPTask{}
+		if err := r.Get(ctx, req.NamespacedName, curILP); err != nil {
 			return err
 		}
-		cur.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
-		return r.Status().Update(ctx, cur)
+		return r.updateILPTaskRef(ctx, curILP, df.Name, df.GetResourceVersion())
 	}); err != nil {
 		r.Logger.Error(err, "Failed to update DataflowPolicy status.")
 		return ctrl.Result{}, err

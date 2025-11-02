@@ -28,8 +28,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 )
 
@@ -54,13 +53,13 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	key := client.ObjectKey{Namespace: dp.Namespace, Name: dp.Name}
-	ilp := &corev1alpha1.ILPTask{}
+	ilp := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, key, ilp); err != nil {
 		if client.IgnoreNotFound(err) == nil {
-			newILP := &corev1alpha1.ILPTask{
+			newILP := &cv1a1.ILPTask{
 				ObjectMeta: metav1.ObjectMeta{Name: dp.Name, Namespace: dp.Namespace},
-				Spec:       corev1alpha1.ILPTaskSpec{
-					DeploymentPolicyRef: corev1alpha1.DeploymentPolicyRef{
+				Spec:       cv1a1.ILPTaskSpec{
+					DeploymentPolicyRef: cv1a1.DeploymentPolicyRef{
 						LocalObjectReference: corev1.LocalObjectReference{Name: dp.Name},
 						DeploymentPlanResourceVersion: dp.GetResourceVersion(), // to trigger ILPTask reconciliation
 					},
@@ -92,12 +91,12 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		cur := &policyv1alpha1.DeploymentPolicy{}
-		if err := r.Get(ctx, req.NamespacedName, cur); err != nil {
+		r.Logger.Info("Conflict detected, retrying...")
+		curILP := &cv1a1.ILPTask{}
+		if err := r.Get(ctx, req.NamespacedName, curILP); err != nil {
 			return err
 		}
-		cur.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "ReconcileSuccess", "Reconcile successfully.")
-		return r.Status().Update(ctx, cur)
+		return r.updateILPTaskRef(ctx, curILP, dp.Name, dp.GetResourceVersion())
 	}); err != nil {
 		r.Logger.Error(err, "Failed to update DeploymentPolicy status.")
 		return ctrl.Result{}, err
@@ -114,9 +113,9 @@ func (r *DeploymentPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *corev1alpha1.ILPTask, name string, ver string) error {
+func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *cv1a1.ILPTask, name string, ver string) error {
 	orig := ilp.DeepCopy()
-	ilp.Spec.DeploymentPolicyRef = corev1alpha1.DeploymentPolicyRef{
+	ilp.Spec.DeploymentPolicyRef = cv1a1.DeploymentPolicyRef{
 		LocalObjectReference: corev1.LocalObjectReference{Name: name},
 		DeploymentPlanResourceVersion: ver,
 	}

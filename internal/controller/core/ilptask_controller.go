@@ -310,22 +310,6 @@ func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPoli
 	return podName, nil
 }
 
-func (r *ILPTaskReconciler) updateSkyCluster(ctx context.Context, req ctrl.Request, deployPlan hv1a1.DeployMap, result, status string) (*cv1a1.SkyCluster, error) {
-	skyCluster := &cv1a1.SkyCluster{}
-	// It has a same name as the ILPTask
-	if err := r.Get(ctx, client.ObjectKey{
-		Namespace: req.Namespace,
-		Name:      req.Name,
-	}, skyCluster); err != nil {
-		return nil, err
-	}
-	// The deployment plan is a json string
-	skyCluster.Status.Optimization.DeployMap = deployPlan
-	skyCluster.Status.Optimization.Status = status
-	skyCluster.Status.Optimization.Result = result
-	return skyCluster, nil
-}
-
 func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string, error) {
 	type virtualSvcStruct struct {
 		Name 		 string `json:"name,omitempty"`
@@ -862,7 +846,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	initContainers := make([]corev1.Container, 0)
 	initContainers = append(initContainers, corev1.Container{
 		Name:  "prepare-vservices",
-		Image: "etesami/optimizer-helper:latest",
+		Image: "etesami/optimizer-helper:v0.0.4",
 		ImagePullPolicy: corev1.PullIfNotPresent,
 		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{"/vservices"},
