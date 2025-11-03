@@ -26,11 +26,20 @@ for i in "${!LIST[@]}"; do
 
   if [ "$pltf" != "gcp" ]; then
     skycluster xkube config -k "$cluster" > "$cfg"
+
+    # workaround for openstack same cluster name as "default"
+    if [ "$pltf" == "openstack" ]; then
+      cntx_name="op${index}"
+      sed -i "s/: default/: $cntx_name/g" "$cfg"
+    fi
+
     CONTEXT=$(KUBECONFIG="$cfg" kubectl config current-context)
     echo "Context for $cluster: $CONTEXT"
     if [ "$pltf" == "baremetal" ]; then
       cntx_name="br${index}"
-    elif [ "$pltf" == "azure" ]; then
+    elif [ "$pltf" == "openstack" ]; then
+      cntx_name="op${index}"
+    else
       cntx_name="${pltf}${index}"
     fi
     if [ "$CONTEXT" != "$cntx_name" ]; then
@@ -67,3 +76,5 @@ for i in "${!GCP_NAMES[@]}"; do
 done
 
 echo "Reload your shell."
+
+
