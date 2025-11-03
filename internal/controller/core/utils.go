@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -373,4 +374,25 @@ func RandSuffix(s string) string {
 		b[i] = letters[r.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+// 4vCPU-8GB
+// 4vCPU-4GB-3xLABEL
+// use * for any number of chars
+// use ? for a single char
+func isValidComputeProfile(s string) bool {
+	re := regexp.MustCompile(`^(\d+|\*)vCPU-(\d+|\*)GB(\*|-(\d+|\*)x.+)?$`)
+	return re.MatchString(s)
+}
+
+func wildcardComputeProfileMatch(pattern, str string) bool {
+	// Escape regex special chars
+	regex := regexp.QuoteMeta(pattern)
+	// Replace wildcards with regex equivalents
+	regex = strings.ReplaceAll(regex, `\*`, ".*")
+	regex = strings.ReplaceAll(regex, `\?`, ".")
+	// Add anchors
+	regex = "^" + regex + "$"
+	re := regexp.MustCompile(regex)
+	return re.MatchString(str)
 }

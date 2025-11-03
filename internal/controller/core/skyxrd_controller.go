@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -33,7 +34,6 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
@@ -122,27 +122,38 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		}
 	}
 
-	if !reflect.DeepEqual(skyxrd.Status.Manifests, manifests) {
-    skyxrd.Status.Manifests = manifests
-    if err := r.Status().Update(ctx, skyxrd); err != nil {
-        return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status")
-    }
-		// r.Logger.Info("Updated SkyXRD status manifests.", "count", len(manifests))
-	}
+	// Sort manifests:
+	sort.SliceStable(manifests, func(i, j int) bool {
+		if manifests[i].ComponentRef.Kind != manifests[j].ComponentRef.Kind {
+			return manifests[i].ComponentRef.Kind < manifests[j].ComponentRef.Kind
+		}
+		return manifests[i].ComponentRef.Name < manifests[j].ComponentRef.Name
+	})
+
+	changed := !reflect.DeepEqual(skyxrd.Status.Manifests, manifests)
+	r.Logger.Info("Comparing manifests.", "oldCount", len(skyxrd.Status.Manifests), "newCount", len(manifests), "changed", changed)
+
+	if changed {
+
+		// Optionally log content at verbose level
+		// var modified []int
+		// for i := 0; i < min; i++ {
+		// 	if !reflect.DeepEqual(old[i], manifests[i]) {
+		// 		modified = append(modified, i)
+		// 	}
+		// }
+		// r.Logger.Info("Manifests changed", "modifiedIndices", modified)
+		// for _, i := range modified {
+		// 	r.Logger.V(1).Info("Modified manifest", "index", i, "old", fmt.Sprintf("%+v", old[i]), "new", fmt.Sprintf("%+v", manifests[i]))
+		// }
+
+		skyxrd.Status.Manifests = manifests
+		if err := r.Status().Update(ctx, skyxrd); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status")
+		}
+  }
 	
 	return ctrl.Result{}, nil
-}
-
-func (r *SkyXRDReconciler) updateStatusManifests(skyxrd *cv1a1.SkyXRD) error {
-	updateErr := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
-		latest := &cv1a1.SkyXRD{}
-		if err := r.Get(context.TODO(), client.ObjectKey{Namespace: skyxrd.Namespace, Name: skyxrd.Name}, latest); err != nil {
-			return err
-		}
-		latest.Status.Manifests = skyxrd.Status.Manifests // copy prepared status
-		return r.Status().Update(context.TODO(), latest)
-	})
-	return updateErr
 }
 
 func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a1.SkyXRD) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
@@ -188,11 +199,16 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 				// we filter all ComputeProfile (flavors) and use them to create workers in the cluster
 				if _, ok := managedK8sSvcs[pName]; !ok {
 					managedK8sSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
-						return v.Name == "ComputeProfile" || v.Kind == "ComputeProfile"
+						// TODO: use kind instead (i.e. ComputeProfile)
+						// return v.Name == "ComputeProfile" || v.Kind == "ComputeProfile"
+						return isValidComputeProfile(v.Name) || v.Kind == "ComputeProfile"
 					})
 				}
-			} else if vs.Name == "ComputeProfile" || vs.Kind == "ComputeProfile" {
+			} else if isValidComputeProfile(vs.Name) || vs.Kind == "ComputeProfile" {
+				// vs.Name == "ComputeProfile" || vs.Kind == "ComputeProfile" {
 				// TODO: Handle ComputeProfile virtual services
+				// For now, we just log and skip, there is nothing we do for special ComputeProfile services
+				// here, we use it in the optimization to ensure provider offer the required flavors
 				// r.Logger.Info("ComputeProfile virtual service.", "service", vs.Name, "provider", pName)
 			} else {
 				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Name)
@@ -250,9 +266,11 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
+		if p.Platform == "baremetal" { continue } // skip baremetal provider creation
 		id := appId + "-" + pName
 		idx, err := MapToIndex(id, len(provMetadata[p.Platform]))
 		if err != nil { return nil, err }
+		// r.Logger.Info("Generating XProvider manifest.", "provider", pName, "id", idx)
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -266,11 +284,17 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-		if !ok {return nil, errors.New("No secondary zone found")}
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {return nil, errors.New("No secondary zone found")}
 
 		spec := map[string]any{
 			"applicationId": appId,
-			"vpcCidr":       provMetadata[p.Platform][idx].VPCCIDR,
+			"vpcCidr":  func() string {
+				if p.Platform == "aws" || p.Platform == "gcp" || p.Platform == "openstack" {
+					return provMetadata[p.Platform][idx].VPCCIDR
+				}
+				// not supported. Baremetal xprovider expected to be created manually.
+				return ""
+			}(),
 			"gateway": func() map[string]any {
 				fields := make(map[string]any)
 				if p.Platform == "aws" {
@@ -306,12 +330,23 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 				if p.Platform != "openstack" {
 					return nil
 				}
-				return map[string]string{
-					"networkName": "ext-net",
-					"networkId":   "0a23c4ae-98ba-4f3a-8c85-5a7dc614cc4e",
-					"subnetName":  "ext-subnet",
-					"subnetId":    "ae9a8eac-5f6f-4681-98f6-71acf18dcfbb",
+				switch p.Region {
+				case "SCINET":
+					return map[string]string{
+						"networkName": "ext-net",
+						"networkId":   "0a23c4ae-98ba-4f3a-8c85-5a7dc614cc4e",
+						"subnetName":  "ext-subnet",
+						"subnetId":    "ae9a8eac-5f6f-4681-98f6-71acf18dcfbb",
+					}
+				case "VAUGHAN":
+					return map[string]string{
+						"networkName": "ext-net",
+						"networkId":   "ac6641d9-9a20-4796-b95c-24254834c7e8",
+						"subnetName":  "ext-subnet",
+						"subnetId":    "6da2a42c-d746-4a95-aae0-e5807ce0250d",
+					}
 				}
+				return nil
 			}(),
 			"providerRef": map[string]any{
 				"platform": p.Platform,
@@ -382,7 +417,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-		if !ok {return nil, errors.New("No secondary zone found")}
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
 
 		// we need to create a XKube object
 		xrdObj := &unstructured.Unstructured{}
@@ -531,6 +566,11 @@ func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv
 		kName := xkube.ComponentRef.Name
 		clusterNames = append(clusterNames, kName)
 	}
+
+	// need to sort cluster names to ensure consistent naming
+	sort.SliceStable(clusterNames, func(i, j int) bool {
+		return clusterNames[i] < clusterNames[j]
+	})
 	
 	// we need to create a XKube object
 	xrdObj := &unstructured.Unstructured{}
@@ -583,7 +623,7 @@ func (r *SkyXRDReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.Deployme
 // findReqVirtualSvcs(ns, skySrv, dpPolicy)
 func (r *SkyXRDReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
 	if len(virtualServices) == 0 {
-		return nil, nil
+		return nil, nil // no virtual services required
 	}
 
 	virtSvcMap, err := r.fetchVirtualServiceCfgMap(ns, providerRef)
@@ -593,14 +633,17 @@ func (r *SkyXRDReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.
 	var cheapestVirtSvc *pv1a1.VirtualServiceSelector
 	minCost := math.MaxFloat64
 	for _, vs := range virtualServices {
-		
 		cost, err := r.calculateVirtualServiceSetCost(virtSvcMap, vs, providerRef.Zone)
 		if err != nil {return nil, err}
+		if cost < 0 {continue} // unable to calculate cost, skip, maybe not offered?
 
 		if cost < minCost {
 			minCost = cost
 			cheapestVirtSvc = &vs
 		}	
+	}
+	if cheapestVirtSvc == nil {
+		return nil, errors.New("no valid virtual service found" + " for provider " + providerRef.Name)
 	}
 
 	return cheapestVirtSvc, nil
@@ -647,27 +690,45 @@ func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[str
 			}
 		}
 
-	case "ComputeProfile":
+	// TODO: we don't support the kind yet, ideally this should be ComputeProfile
+	// instead of case "default":
+	default:
 		// cmData["flavors.yaml"]
 		var zoneOfferings []cv1a1.ZoneOfferings
 		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
-			
 			for _, zo := range zoneOfferings {
 				if zo.Zone != zone {continue}
 				
 				for _, of := range zo.Offerings {
-					if of.NameLabel != vs.Name {continue}
-					
+					if !wildcardComputeProfileMatch(vs.Name, of.NameLabel) {continue}
 					priceFloat, err := strconv.ParseFloat(of.Price, 64)
 					if err != nil {continue}
 					
 					return priceFloat, nil
 				}
 			}
+		} 
+
+		// try the baremetal flavors
+		var bmOfferings map[string]cv1a1.DeviceZoneSpec
+		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
+			for _, deviceSpec := range bmOfferings {
+				deviceSpecLabel := strconv.Itoa(deviceSpec.Configs.VCPUs) + "vCPU-" + deviceSpec.Configs.RAM + "GB" + func() string {
+					if deviceSpec.Configs.GPU.Count != 0 && deviceSpec.Configs.GPU.Unit != "" {
+						return "-" + strconv.Itoa(deviceSpec.Configs.GPU.Count) + "x" + deviceSpec.Configs.GPU.Unit
+					}
+					return ""
+				}()
+				if !wildcardComputeProfileMatch(vs.Name, deviceSpecLabel) {continue}
+				priceFloat, err := strconv.ParseFloat(deviceSpec.Configs.Price, 64)
+				if err != nil {continue}
+				
+				return priceFloat, nil
+			}
 		}
 	}
-	
-	return -1, errors.New("unable to calculate cost for virtual service set")
+
+	return -1, nil
 }
 
 // dpRef is the deployment plan reference from SkyXRD spec
@@ -688,6 +749,9 @@ func (r *SkyXRDReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyServic
 			for _, vsSet := range cmpnt.VirtualServiceConstraint {
 				cheapestVirtualSvcs, err := r.findCheapestVirtualSvcs(ns, provRef, vsSet.AnyOf)
 				if err != nil {return nil, errors.Wrap(err, "finding cheapest virtual services")}
+				if cheapestVirtualSvcs == nil {
+					return nil, errors.New("no available virtual service found for component " + cmpntRef.Name )
+				}
 				reqVirtualSvcs = append(reqVirtualSvcs, *cheapestVirtualSvcs)
 
 				// if this requested virtual service is a managed Kubernetes
