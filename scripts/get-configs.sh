@@ -1,32 +1,69 @@
 #!/bin/bash
+set -euo pipefail
 
-# Change these values to match your clusters
-AWS=xk-aws-us-east--4z74l
-GCP=xk-gcp-us-east1-thams-zhsn7
-GCP_LOC=us-east1-b
+# collect lists into arrays
+readarray -t LIST < <(skycluster xkube list | awk '{print $1}' | tail -n +2)
+readarray -t PLATFORMS < <(skycluster xkube list | awk '{print $2}' | tail -n +2)
+readarray -t LOCs < <(skycluster xkube list | awk '{print $5}' | tail -n +2)
 
-skycluster xkube config -k $AWS > /tmp/aws1
-if [ $? -eq 0 ]; then
-  AWS_CONTEXT=$(KUBECONFIG=/tmp/aws1 kubectl config get-contexts -o name)
-  echo "AWS Context: $AWS_CONTEXT"
-  KUBECONFIG=/tmp/aws1 kubectl config rename-context $AWS_CONTEXT aws
-  echo "Renamed AWS context to 'aws'"
-else
-  echo "Failed to get AWS kubeconfig. Please ensure skycluster is installed and configured."
+if [ "${#LIST[@]}" -ne "${#LOCs[@]}" ]; then
+  echo "Error: Length of LIST and LOCs do not match." >&2
+  exit 1
 fi
 
-echo "Fetching GCP cluster credentials..."
-KUBECONFIG=/tmp/gcp1 kubectl config delete-context gke || true
-KUBECONFIG=/tmp/gcp1 gcloud container clusters get-credentials "$GCP" --location "$GCP_LOC"
-if [ $? -eq 0 ]; then
-  echo "Fetched GCP cluster credentials. Renaming context..."
-  GCP_CONTEXT=$(KUBECONFIG=/tmp/gcp1 kubectl config get-contexts -o name)
-  echo "GCP Context: $GCP_CONTEXT"
-  KUBECONFIG=/tmp/gcp1 kubectl config rename-context $GCP_CONTEXT gke
-  echo "Renamed GCP context to 'gke'"
-else
-  echo "Failed to get GCP cluster credentials. Please ensure gcloud is installed and configured."
-fi
+mkdir -p /tmp/kubeconfigs
 
-export KUBECONFIG=~/.kube/config:/tmp/gcp1:/tmp/aws1
+# arrays for GCP clusters and their locations
+GCP_NAMES=()
+GCP_LOCS=()
 
+index=1
+for i in "${!LIST[@]}"; do
+  cluster="${LIST[$i]}"
+  loc="${LOCs[$i]}"
+  pltf="${PLATFORMS[$i]}"
+  cfg="/tmp/kubeconfigs/$cluster"
+
+  if [ "$pltf" != "gcp" ]; then
+    skycluster xkube config -k "$cluster" > "$cfg"
+    CONTEXT=$(KUBECONFIG="$cfg" kubectl config current-context)
+    echo "Context for $cluster: $CONTEXT"
+    if [ "$pltf" == "baremetal" ]; then
+      cntx_name="br${index}"
+    elif [ "$pltf" == "azure" ]; then
+      cntx_name="${pltf}${index}"
+    fi
+    if [ "$CONTEXT" != "$cntx_name" ]; then
+      KUBECONFIG="$cfg" kubectl config rename-context "$CONTEXT" "$cntx_name"
+    fi
+  elif [ "$pltf" == "gcp" ]; then
+    GCP_NAMES+=("$cluster")
+    GCP_LOCS+=("$loc")
+  fi
+  index=$((index + 1))
+done
+
+# Fetch credentials for GCP clusters and rename their contexts
+index=1
+for i in "${!GCP_NAMES[@]}"; do
+  gcp_cluster="${GCP_NAMES[$i]}"
+  gcp_loc="${GCP_LOCS[$i]}"
+  cfg="/tmp/kubeconfigs/$gcp_cluster"
+
+  ext_name=$(skycluster xkube list | grep "$gcp_cluster" | awk '{print $6}')
+  echo "Fetching GCP for cluster: $ext_name in $gcp_loc"
+
+  # gcloud will write to KUBECONFIG if set
+  if KUBECONFIG="$cfg" gcloud container clusters get-credentials "$ext_name" --location "$gcp_loc"; then
+    GCP_CONTEXT=$(KUBECONFIG="$cfg" kubectl config current-context)
+    echo "GCP Context for $gcp_cluster: $GCP_CONTEXT"
+    cntx_name="${pltf}${index}"
+    KUBECONFIG="$cfg" kubectl config rename-context "$GCP_CONTEXT" "$cntx_name"
+    echo "Renamed GCP context to '$cntx_name' for $gcp_cluster"
+  else
+    echo "Failed to get GCP cluster credentials for $gcp_cluster. Ensure gcloud is installed and configured." >&2
+  fi
+  index=$((index + 1))
+done
+
+echo "Reload your shell."
