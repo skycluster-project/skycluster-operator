@@ -421,16 +421,16 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 								Price:      off.deployCost,
 						})
 					}
-					// the list can be huge, so sort and limit to top 5 cheapest
-					sort.Slice(additionalVSList, func(i, j int) bool {
-						return additionalVSList[i].Price < additionalVSList[j].Price
-					})
 					// remove duplicates
 					additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
 						return v.Name
 					})
-					if len(additionalVSList) > 5 {
-						additionalVSList = additionalVSList[:5]
+					// the list can be huge, so sort and limit to top 5 cheapest
+					sort.Slice(additionalVSList, func(i, j int) bool {
+						return additionalVSList[i].Price < additionalVSList[j].Price
+					})
+					if len(additionalVSList) > 10 {
+						additionalVSList = additionalVSList[:10]
 					}
 				}
 			}
@@ -438,7 +438,9 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
 			}
 			vsList = append(vsList, altVSList)
-			vsList = append(vsList, additionalVSList)
+			if len(additionalVSList) > 0 {
+				vsList = append(vsList, additionalVSList)
+			}
 		}
 
 		perLocList := make([]locStruct, 0)
@@ -479,7 +481,12 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 			PermittedLocations: perLocList,
 			RequiredLocations:  reqLocList,
 			RequestedVServices: vsList,
-			MaxReplicas:        "-1",
+			MaxReplicas:        func () string {
+				// TODO: receive this from deployment policy
+				if cmpnt.ComponentRef.Name == "central-storage" {return "1"}
+				if cmpnt.ComponentRef.Name == "dashboard" {return "1"}
+				return "-1"
+			}(),
 		})
 	}
 	if len(optTasks) == 0 {
