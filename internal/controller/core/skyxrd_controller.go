@@ -165,7 +165,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
 	// r.Logger.Info("Generating provider manifests.")
-	providersManifests, err := r.generateProviderManifests(appId, ns, deployMap.Component)
+	providersManifests, provToMetadataIdx, err := r.generateProviderManifests(appId, ns, deployMap.Component)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
 	}
@@ -219,7 +219,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
 	// r.Logger.Info("Generating SkyK8SCluster manifests.")
-	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs)
+	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
 	}
@@ -240,7 +240,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 }
 
 // Creates manifest for setup of providers needed for the deployment
-func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cmpnts []hv1a1.SkyService) (map[string]hv1a1.SkyService, error) {
+func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cmpnts []hv1a1.SkyService) (map[string]hv1a1.SkyService, map[string]map[string]int, error) {
 	// We need to group the components based on the providers
 	// and then generate the manifests for each provider
 	// We then return the manifests for each provider
@@ -251,26 +251,25 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		if _, ok := uniqueProviders[providerName]; ok { continue }
 		uniqueProviders[providerName] = cmpnt.ProviderRef
 	}
+	// a map from platform to map[providerName]index in metadata list
+	indexedSortedProviders := buildIndexMap(uniqueProviders)
+	
 	// Now we have all unique providers
 	// We can now generate the manifests for each provider
 	// we use settings corresponding to each provider stored in a configmap (ip ranges, etc.)
 	provMetadata, err := r.loadProviderMetadata()
 	if err != nil {
-		return nil, errors.Wrap(err, "Error loading provider metadata.")
+		return nil, nil, errors.Wrap(err, "Error loading provider metadata.")
 	}
 
 	providerProfiles, err := r.fetchProviderProfilesMap()
 	if err != nil {
-		return nil, errors.Wrap(err, "Error fetching provider profiles.")
+		return nil, nil, errors.Wrap(err, "Error fetching provider profiles.")
 	}
-	
+
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
 		if p.Platform == "baremetal" { continue } // skip baremetal provider creation
-		id := appId + "-" + pName
-		idx, err := MapToIndex(id, len(provMetadata[p.Platform]))
-		if err != nil { return nil, err }
-		// r.Logger.Info("Generating XProvider manifest.", "provider", pName, "id", idx)
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -282,14 +281,15 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		obj.SetName(name)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
-		if !ok {return nil, errors.New("No primary zone found")}
+		if !ok {return nil, nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {return nil, errors.New("No secondary zone found")}
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {return nil, nil, errors.New("No secondary zone found")}
 
 		spec := map[string]any{
 			"applicationId": appId,
 			"vpcCidr":  func() string {
 				if p.Platform == "aws" || p.Platform == "gcp" || p.Platform == "openstack" {
+					idx := indexedSortedProviders[p.Platform][pName]
 					return provMetadata[p.Platform][idx].VPCCIDR
 				}
 				// not supported. Baremetal xprovider expected to be created manually.
@@ -311,6 +311,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 			}(),
 			"subnets": func() []map[string]any {
 				subnets := make([]map[string]any, 0)
+				idx := indexedSortedProviders[p.Platform][pName]
 				for _, sn := range provMetadata[p.Platform][idx].Subnets {
 					subnet := map[string]any{
 						"cidr": sn.CIDR,
@@ -367,7 +368,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 		
 		yamlObj, err := generateYAMLManifest(obj)
 		if err != nil {
-			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+			return nil, nil, errors.Wrap(err, "Error generating YAML manifest.")
 		}
 		manifests[pName] = hv1a1.SkyService{
 			ComponentRef: corev1.ObjectReference{
@@ -387,10 +388,10 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 			},
 		}
 	}
-	return manifests, nil
+	return manifests, indexedSortedProviders, nil
 }
 
-func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector) (map[string]hv1a1.SkyService, error) {
+func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector, provToIdx map[string]map[string]int) (map[string]hv1a1.SkyService, error) {
 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 	// The optimization has decided that for requested workload, this provider is the best fit.
@@ -410,9 +411,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 		})
 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
 		pp := provProfiles[pName]
-		id := appId + "-" + pName
-		idx, err := MapToIndex(id, len(k8sMetadata[pp.Spec.Platform]))
-		if err != nil { return nil, err }
+		idx := provToIdx[pp.Spec.Platform][pName]
 
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {return nil, errors.New("No primary zone found")}
@@ -462,7 +461,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 					f["autoScaling"] = map[string]any{
 						"enabled": false,
 						"minSize": 1,
-						"maxSize": 4,
+						"maxSize": 3,
 					}
 					fields = append(fields, f)
 
@@ -478,13 +477,13 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 					// workers only
 					// manually limit this to prevent charging too much
 					f := make(map[string]any)
-						f["nodeCount"] = 2
+						f["nodeCount"] = 3
 						f["instanceType"] = "2vCPU-4GB"
 						f["publicAccess"] = false
 						f["autoScaling"] = map[string]any{
 							"enabled": true,
 							"minSize": 1,
-							"maxSize": 3,
+							"maxSize": 8,
 					}
 					fields = append(fields, f)
 					// for _, vs := range uniqueProfiles {
@@ -907,3 +906,25 @@ func findSecondaryZone(p cv1a1.ProviderProfile, primary string) string {
 	return ""
 }
 
+func buildIndexMap(pvs map[string]hv1a1.ProviderRefSpec) map[string]map[string]int {
+	typedProviders := make(map[string][]string)
+	for pname, p := range pvs {
+		if typedProviders[p.Platform] == nil {
+			typedProviders[p.Platform] = make([]string, 0)
+		}
+		typedProviders[p.Platform] = append(typedProviders[p.Platform], pname)
+	}
+	for pltf, pnames := range typedProviders {
+		sort.Strings(pnames)
+		typedProviders[pltf] = pnames
+	}
+	provToIdx := make(map[string]map[string]int)
+	for pltf, pnames := range typedProviders {
+		m := make(map[string]int)
+		for id, pname := range pnames {
+			m[pname] = id
+		}
+		provToIdx[pltf] = m
+	}
+	return provToIdx
+}

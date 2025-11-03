@@ -349,17 +349,6 @@ func generateYAMLManifest(obj any) (string, error) {
 	return string(objYAML), nil
 }
 
-// MapToIndex deterministically maps id to an index in [0, n-1].
-// Returns an error if n <= 0.
-func MapToIndex(id string, n int) (int, error) {
-	if n <= 0 {
-		return 0, fmt.Errorf("n must be > 0")
-	}
-	h := fnv.New64a()
-	_, _ = h.Write([]byte(id))
-	return int(h.Sum64() % uint64(n)), nil
-}
-
 func RandSuffix(s string) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	const length = 5
