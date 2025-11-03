@@ -56,12 +56,17 @@ type SkyNetReconciler struct {
 	Logger logr.Logger
 }
 
+type orderedLabels struct {
+	key   string
+	value string
+}
+
 type priorityLabels struct {
 	// sourceLabels are labels for the source component (deployment)
 	// that are added to the target deployment's pod template
 	// we need to keep track of them because these are added to DistinationRule
 	// for failover configuration, and not all of labels
-	sourceLabels map[string]map[string]string
+	sourceLabels map[string][]*orderedLabels
 	// sourceLabels map[string]string
 	// Each deployment has its own labels and labels that are added by others
 	// to identify them as potential failover targets
@@ -142,7 +147,10 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		for _, m := range newObjects {
 			oldObj, ok := oldMap[m.Name]; 
 			if !ok {changed = true; break}
-			if !reflect.DeepEqual(oldObj.Manifest, m.Manifest) {changed = true; break}
+			if !reflect.DeepEqual(oldObj.Manifest, m.Manifest) {
+				r.Logger.Info("Manifest object spec differs.", "name", m.Name)
+				changed = true; break
+			}
 		}
 	}
 
@@ -605,15 +613,26 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 				},
 			)	
 
-			lb := newDeploy.Spec.Template.ObjectMeta.Labels
-			// pod labels
-			newDeploy.Spec.Template.ObjectMeta.Labels = lo.Assign(lb, 
+			lb := lo.Assign(
+				newDeploy.Spec.Template.ObjectMeta.Labels, 
 				map[string]string{
 					"skycluster.io/managed-by": "skycluster",
 					"skycluster.io/component": deployItemUniqName,
 				},
 				allLabels,
 			)
+
+			// sort the labels for consistency
+			keys := make([]string, 0, len(lb))
+			for k := range lb { keys = append(keys, k)}
+			sort.Strings(keys)
+
+			// pod labels
+			newDeploy.Spec.Template.ObjectMeta.Labels = func () map[string]string {
+				sortedMap := make(map[string]string, len(lb))
+				for _, k := range keys {sortedMap[k] = lb[k]}
+				return sortedMap
+			}()
 			// for _, srcLbls := range sourceLabels {
 			// 	maps.Copy(newDeploy.Spec.Template.ObjectMeta.Labels, srcLbls)
 			// } 
@@ -773,13 +792,13 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		if _, ok := labels[fromName]; !ok {
 			labels[fromName] = &priorityLabels{
-				sourceLabels: make(map[string]map[string]string),
+				sourceLabels: make(map[string][]*orderedLabels),
 				allLabels:    make(map[string]string),
 			}
 		}
 		if _, ok := labels[toName]; !ok {
 			labels[toName] = &priorityLabels{
-				sourceLabels: make(map[string]map[string]string),
+				sourceLabels: make(map[string][]*orderedLabels),
 				allLabels:    make(map[string]string),
 			}
 		}
@@ -795,9 +814,14 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		// when there are multiple targets from the same source
 		//   e.g., source A targets X and Y
 		if labels[fromName].sourceLabels[toName] == nil {
-			labels[fromName].sourceLabels[toName] = make(map[string]string)
+			labels[fromName].sourceLabels[toName] = make([]*orderedLabels, 0)
 		}
-		labels[fromName].sourceLabels[toName][labelKey] = fromName + "-" + toName
+
+		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
+			key:   labelKey,
+			value: fromName + "-" + toName,
+		})
+
 		labels[toName].allLabels[labelKey] = fromName + "-" + toName
 		// TODO: this must be added to the backup as well
 		// TODO: backup label must be added to the primary target as well
@@ -833,7 +857,7 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		if _, ok := labels[bkName]; !ok {
 			labels[bkName] = &priorityLabels{
-				sourceLabels: make(map[string]map[string]string),
+				sourceLabels: make(map[string][]*orderedLabels),
 				allLabels:    make(map[string]string),
 			}
 		}
@@ -845,9 +869,12 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		
 		// must add backup label to source (as source labels)
 		if labels[fromName].sourceLabels[toName] == nil {
-			labels[fromName].sourceLabels[toName] = make(map[string]string)
+			labels[fromName].sourceLabels[toName] = make([]*orderedLabels, 0)
 		}
-		labels[fromName].sourceLabels[toName][bkKey] = fromName + "-" + bkName + "-backup" // add to source
+		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
+			key:   bkKey,
+			value: fromName + "-" + bkName + "-backup",
+		})
 		// must add backup label to primary target (as all labels)
 		labels[toName].allLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
 		
@@ -977,8 +1004,8 @@ func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv
 				vs.VirtualService.Spec.Http = append(vs.VirtualService.Spec.Http, http)
 				
 				labelAndKeys := make([]string, 0)
-				for k, v := range labels[fromName].sourceLabels[to.ComponentRef.Name + "-" + to.ProviderRef.Name] {
-					labelAndKeys = append(labelAndKeys, k + "=" + v)
+				for _, kv := range labels[fromName].sourceLabels[to.ComponentRef.Name + "-" + to.ProviderRef.Name] {
+					labelAndKeys = append(labelAndKeys, kv.key + "=" + kv.value)
 				}
 
 				// Now per each source deployment (from), we add a subset to the destination rule
