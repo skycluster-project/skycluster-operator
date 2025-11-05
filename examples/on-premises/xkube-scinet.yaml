@@ -1,0 +1,50 @@
+apiVersion: skycluster.io/v1alpha1
+kind: XKube
+metadata:
+  name: kube-os-scinet
+spec:
+  # Unique identifier for the setup/application
+  applicationId: pipeline-testcase2-dbw50 
+  serviceCidr: 10.82.192.0/18
+  podCidr: 
+    cidr: 10.82.64.0/18	# pod network, must not overlapped with other subnets and xkubes
+  # For openstack it is okay to have a cidr outside of the VPC range
+  
+  controlPlane:
+    instanceType: 8vCPU-32GB
+    # autoScaling:
+    #   enabled: true
+    #   minSize: 1
+    #   maxSize: 1
+    # highAvailability: true
+
+  nodeGroups:
+  # There must be at least one node group with public access
+  # and it is used for gateway nodes
+  # - instanceTypes: "4vCPU-4GB"
+  #   publicAccess: true
+  #   autoScaling: 
+  #     enabled: false
+  #     minSize: 1
+  #     maxSize: 1
+  - instanceType: "4vCPU-4GB"
+    nodeCount: 2
+    publicAccess: false
+    autoScaling: 
+      enabled: false
+      minSize: 1
+      maxSize: 2
+    
+
+  # principal:
+  #   type: servicePrincipal # user | role | serviceAccount | servicePrincipal | managedIdentity
+  #   id: "arn:aws:iam::885707601199:root" # ARN (AWS) | member (GCP) | principalId (Azure)
+  providerRef:
+    platform: openstack
+    region: SCINET
+    zones:
+      # The provider is identified by the primary zone
+      # Secondary zones are used for high availability or services
+      # that require multiple availability zones such as EKS
+      primary: default
+      # secondary: us-east1b

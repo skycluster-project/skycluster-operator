@@ -1,0 +1,32 @@
+apiVersion: skycluster.io/v1alpha1
+kind: XKube
+metadata:
+  name: kube-savi-toronto
+spec:
+  # Unique identifier for the setup/application
+  applicationId: savi-toronto-edge
+  serviceCidr: 172.23.128.0/17
+  podCidr: 
+    cidr: 172.23.0.0/17
+  
+  controlPlane:
+    deviceNodeName: savi-toronto-edge-gw
+
+  nodes:
+  - savi-toronto-edge-jetson-nano1
+  - savi-toronto-edge-jetson-orin1
+  - savi-toronto-edge-jetson-orin2
+  - savi-toronto-edge-jetson-nano2
+  - savi-toronto-edge-jetson-agx-xavier1
+  - savi-toronto-edge-jetson-agx-xavier2
+  - savi-toronto-edge-jetson-agx-xavier3
+    
+  providerRef:
+    platform: baremetal
+    region: toronto
+    zones:
+      # The provider is identified by the primary zone
+      # Secondary zones are used for high availability or services
+      # that require multiple availability zones such as EKS
+      primary: default
+      # secondary: us-east1b

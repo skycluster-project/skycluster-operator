@@ -14,6 +14,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
+      vcpus: 4
       gpu:
         count: 472
         unit: GFLOPS
@@ -39,6 +40,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
+      vcpus: 4
       gpu:
         count: 472
         unit: GFLOPS
@@ -64,6 +66,7 @@ spec:
     configs:
       name: Jetson Nano
       ram: 4GB
+      vcpus: 4
       gpu:
         count: 472
         unit: GFLOPS
@@ -89,6 +92,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
+      vcpus: 4
       gpu:
         count: 4
         unit: TOPS
@@ -113,6 +117,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
+      vcpus: 4
       gpu:
         count: 4
         unit: TOPS
@@ -137,6 +142,7 @@ spec:
     configs:
       name: Google Edge TPU
       ram: 1GB
+      vcpus: 4
       gpu:
         count: 4
         unit: TOPS
@@ -161,6 +167,7 @@ spec:
     configs:
       name: Jetson AGX Orin
       ram: 32GB
+      vcpus: 8
       gpu:
         count: 275
         unit: TOPS
@@ -186,6 +193,7 @@ spec:
     configs:
       name: Jetson AGX Orin
       ram: 32GB
+      vcpus: 8
       gpu:
         count: 275
         unit: TOPS
@@ -211,6 +219,7 @@ spec:
     configs:
       name: Nuc 11
       ram: 6GB
+      vcpus: 8
       gpu:
         count: 52
         unit: TOPS
@@ -236,6 +245,7 @@ spec:
     configs:
       name: Nuc 11
       ram: 6GB
+      vcpus: 8
       gpu:
         count: 52
         unit: TOPS
@@ -261,6 +271,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
+      vcpus: 8
       gpu:
         count: 11
         unit: TFLOPS
@@ -286,6 +297,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
+      vcpus: 8
       gpu:
         count: 11
         unit: TFLOPS
@@ -311,6 +323,7 @@ spec:
     configs:
       name: Jetson AGX Xavier
       ram: 32GB
+      vcpus: 8
       gpu:
         count: 11
         unit: TFLOPS

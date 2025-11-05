@@ -10,11 +10,6 @@ spec:
   offerings:
     - zone: default
       zoneOfferings:
-        - name: m1.tiny
-          nameLabel: 1vCPU-512MB
-          vcpus: 1
-          ram: 512MB
-          price: "0.0005"
         - name: m1.small
           nameLabel: 1vCPU-2GB
           vcpus: 1

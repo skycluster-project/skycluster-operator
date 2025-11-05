@@ -1,0 +1,37 @@
+apiVersion: skycluster.io/v1alpha1
+kind: XProvider
+metadata:
+  name: os-provider-scinet
+  annotations:
+    skycluster.io/external-resources: '[{"apiVersion":"identity.openstack.crossplane.io/v1alpha1","kind":"ProjectV3","id":"1e1c724728544ec2a9058303ddc8f30b"}]'
+spec:
+  # Unique identifier for the setup/application
+  applicationId: redis-pipeline-policies-eaftz
+  # vpcCidr is used region-wide for all services and resources in this VPC
+  vpcCidr: 10.1.0.0/17
+  # Subnet CIDRs should be within the VPC CIDR range
+  externalNetwork:
+    networkName: ext-net
+    networkId: 0a23c4ae-98ba-4f3a-8c85-5a7dc614cc4e
+    subnetName: ext-subnet
+    subnetId: ae9a8eac-5f6f-4681-98f6-71acf18dcfbb
+  subnets:
+    - # Ensure the subnet CIDR range is within the VPC CIDR range
+      # and does not overlap with other subnets and is 
+      # appropriately sized for the expected number of resources
+      cidr: 10.1.0.0/18
+      zone: default
+      default: True
+  gateway:
+    # Flavor is defined as the number of vCPUs and memory
+    flavor: 4vCPU-8GB
+    # volumeType: gp2
+    # volumeSize: 20
+  providerRef:
+    platform: openstack
+    region: SCINET
+    zones:
+      # The provider is identified by the primary zone
+      # Secondary zones are used for high availability or services
+      # that require multiple availability zones such as EKS
+      primary: default

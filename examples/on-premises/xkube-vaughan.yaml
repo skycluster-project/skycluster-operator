@@ -1,0 +1,48 @@
+apiVersion: skycluster.io/v1alpha1
+kind: XKube
+metadata:
+  name: kube-os-vaughan
+spec:
+  # Unique identifier for the setup/application
+  applicationId: pipeline-testcase2-dbw50 
+  serviceCidr: 10.83.192.0/18
+  podCidr: 
+    cidr: 10.83.64.0/18	# pod network, must not overlapped with other subnets and xkubes
+  # For openstack it is okay to have a cidr outside of the VPC range
+  
+  controlPlane:
+    instanceType: 8vCPU-32GB
+    # autoScaling:
+    #   enabled: true
+    #   minSize: 1
+    #   maxSize: 1
+    # highAvailability: true
+
+  nodeGroups:
+  # There must be at least one node group with public access
+  # and it is used for gateway nodes
+  # - instanceTypes: "4vCPU-4GB"
+  #   publicAccess: true
+  #   autoScaling: 
+  #     enabled: false
+  #     minSize: 1
+  #     maxSize: 1
+  - instanceType: "4vCPU-4GB"
+    publicAccess: false
+    autoScaling: 
+      enabled: false
+      minSize: 1
+      maxSize: 1
+    
+
+  # principal:
+  #   type: servicePrincipal # user | role | serviceAccount | servicePrincipal | managedIdentity
+  providerRef:
+    platform: openstack
+    region: VAUGHAN
+    zones:
+      # The provider is identified by the primary zone
+      # Secondary zones are used for high availability or services
+      # that require multiple availability zones such as EKS
+      primary: default
+      # secondary: us-east1b
