@@ -323,6 +323,9 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 					if p.Platform == "baremetal" && sn.Type == "public" {
 						subnet["default"] = true
 					} 
+					if p.Platform == "openstack" {
+						subnet["default"] = true
+					} 
 					subnets = append(subnets, subnet)
 				}
 				return subnets
