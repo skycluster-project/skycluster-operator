@@ -1,0 +1,402 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector-edge
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+      - name: collector
+        image: etesami/airqmon-collector:v0.0.1
+        imagePullPolicy: Always
+        env:
+          # If the LNG and LAT are not set, the collector will select 
+          # a random city to collect data from.
+          # - name: LNG1
+          #   value: "-122.500722"
+          # - name: LAT1
+          #   value: "47.766099"
+          # - name: LNG2
+          #   value: "-122.065675"
+          # - name: LAT2
+          #   value: "47.450380" 
+          - name: TOKEN
+            value: "e9df2b23ac644fb5684ca9b78bfaab0583168cee"
+          - name: SVC_INGESTION_ADDR
+            value: "svc-ingestor"
+          - name: SVC_INGESTION_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "15"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      containers:
+      - name: collector
+        image: etesami/airqmon-collector:v0.0.1
+        imagePullPolicy: Always
+        env:
+          # If the LNG and LAT are not set, the collector will select 
+          # a random city to collect data from.
+          # - name: LNG1
+          #   value: "-122.500722"
+          # - name: LAT1
+          #   value: "47.766099"
+          # - name: LNG2
+          #   value: "-122.065675"
+          # - name: LAT2
+          #   value: "47.450380" 
+          - name: TOKEN
+            value: "e9df2b23ac644fb5684ca9b78bfaab0583168cee"
+          - name: SVC_INGESTION_ADDR
+            value: "svc-ingestor"
+          - name: SVC_INGESTION_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "15"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingestor
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingestor
+  template:
+    metadata:
+      labels:
+        app: ingestor
+    spec:
+      containers:
+      - name: ingestor
+        image: etesami/airqmon-ingestor:v0.0.2
+        imagePullPolicy: Always
+        env:
+          - name: SVC_INGST_ADDR
+            value: "0.0.0.0"
+          - name: SVC_INGST_PORT
+            value: "30051"
+          - name: SVC_STRG_ADDR
+            value: "svc-local-storage"
+          - name: SVC_STRG_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          # For internal RTT calculation
+          - name: UPDATE_FREQUENCY
+            value: "30"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: local-storage
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: local-storage
+  template:
+    metadata:
+      labels:
+        app: local-storage
+    spec:
+      containers:
+      - name: local-storage
+        image: etesami/airqmon-local-storage:v0.0.1
+        imagePullPolicy: Always
+        env:
+          - name: SVC_PROCESSOR_ADDR
+            value: "svc-processor"
+          - name: SVC_PROCESSOR_PORT
+            value: "30051"
+          - name: SVC_STRG_ADDR
+            value: "0.0.0.0"
+          - name: SVC_STRG_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "1"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processor
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: processor
+  template:
+    metadata:
+      labels:
+        app: processor
+    spec:
+      containers:
+      - name: processor
+        image: etesami/airqmon-processor:v0.0.1
+        imagePullPolicy: Always
+        env:
+          - name: SVC_PROCESSOR_ADDR
+            value: "0.0.0.0"
+          - name: SVC_PROCESSOR_PORT
+            value: "30051"
+          - name: SVC_AGGR_STRG_ADDR
+            value: "svc-central-storage"
+          - name: SVC_AGGR_STRG_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "15"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: central-storage
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: central-storage
+  template:
+    metadata:
+      labels:
+        app: central-storage
+    spec:
+      containers:
+      - name: central-storage
+        image: etesami/airqmon-central-storage:v0.0.1
+        imagePullPolicy: Always
+        env:
+          - name: SVC_AGGR_STRG_ADDR
+            value: "0.0.0.0"
+          - name: SVC_AGGR_STRG_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: etesami/airqmon-dashboard:v0.0.1
+        imagePullPolicy: Always
+        env:
+          - name: SVC_AGGR_STRG_ADDR
+            value: "svc-central-storage"
+          - name: SVC_AGGR_STRG_PORT
+            value: "30051"
+          - name: METRIC_ADDR
+            value: "0.0.0.0"
+          - name: METRIC_PORT
+            value: "8001"
+          - name: UPDATE_FREQUENCY
+            value: "20"
+        ports:
+        - containerPort: 8001
+          name: metrics
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-collector
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: collector
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-ingestor
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: ingestor
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 30051
+      targetPort: 30051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-local-storage
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: local-storage
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 30051
+      targetPort: 30051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-processor
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: processor
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 30051
+      targetPort: 30051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-central-storage
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: central-storage
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+    - name: app
+      port: 30051
+      targetPort: 30051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-dashboard
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed
+spec:
+  selector:
+    app: dashboard
+  ports:
+    - name: metrics
+      port: 8001
+      targetPort: 8001
+---

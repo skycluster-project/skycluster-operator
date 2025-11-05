@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: air-quality
+  namespace: monitoring
+  labels:
+    release: op1
+spec:
+  endpoints:
+  - path: /metrics
+    port: metrics
+    scheme: http
+    interval: 7s
+    scrapeTimeout: 4s
+  namespaceSelector:
+    matchNames:
+    - air-quality
+  selector:
+    matchLabels:
+      skycluster.io/managed-by: skycluster

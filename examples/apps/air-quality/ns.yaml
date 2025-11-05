@@ -1,0 +1,8 @@
+# namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+    skycluster.io/app-scope: distributed

@@ -1,0 +1,249 @@
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DataflowPolicy
+metadata:
+  name: pipeline-testcase2
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+spec:
+  dataDependencies:
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector-edge
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      latency: 15ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      latency: 15ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      latency: 30ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      latency: 30ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      latency: 180ms
+      totalDataTransfer: 0.4GB
+      averageDataRate: 0.01GB/s
+    - from:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: dashboard
+      to:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      latency: 180ms
+      totalDataTransfer: 0.5GB
+      averageDataRate: 0.01GB/s
+---
+apiVersion: policy.skycluster.io/v1alpha1
+kind: DeploymentPolicy
+metadata:
+  name: pipeline-testcase2
+  namespace: air-quality
+  labels:
+    skycluster.io/app-id: testcase2
+spec:
+  deploymentPolicies:
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector-edge
+      virtualServiceConstraint:
+      - anyOf:
+        - name: 4vCPU-*GB*
+        # I have to list all available computes in the edge,
+      performanceConstraint:
+        responseTime: 100ms
+      # Let collector be deployed in all supported regions
+      locationConstraint:
+        permitted:
+          - platform: baremetal
+          - platform: openstack
+        required:
+          - anyOf: ####### baremetal
+            - region: toronto
+          - anyOf: ####### savi
+            - region: SCINET
+          - anyOf: ####### savi
+            - region: VAUGHAN
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: collector
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+        # I have to list all available computes in the edge,
+      performanceConstraint:
+        responseTime: 100ms
+      # Let collector be deployed in all supported regions
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+        required:
+          - anyOf: ####### aws
+            - region: us-east-1
+          - anyOf: 
+            - region: us-west-1
+          - anyOf: 
+            - region: eu-south-2
+          - anyOf: 
+            - region: eu-north-1
+          - anyOf: 
+            - region: eu-west-1
+          - anyOf: 
+            - region: ca-central-1
+          - anyOf: 
+            - region: ca-west-1
+          - anyOf: 
+            - region: ap-east-1
+          - anyOf: 
+            - region: ap-northeast-2
+          - anyOf: ####### gcp
+            - region: us-east1
+          - anyOf:
+            - region: us-south1
+          - anyOf: 
+            - region: northamerica-northeast2
+          - anyOf: 
+            - region: us-central1
+          - anyOf: 
+            - region: us-south1
+          # - anyOf: ####### baremetal
+          #   - region: toronto
+          # - anyOf: ####### savi
+          #   - region: SCINET
+          # - anyOf: ####### savi
+          #   - region: VAUGHAN
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: ingestor
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+        # required:
+        #   - anyOf:
+        #     - region: us-east-1
+        #   - anyOf:
+        #     - region: us-east1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: local-storage
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: processor
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+        # required:
+        #   - anyOf:
+        #     - region: us-east-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: central-storage
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+        # required:
+        #   - anyOf:
+        #     - region: us-east-1
+    - componentRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: dashboard
+      virtualServiceConstraint:
+      - anyOf:
+        - name: ManagedKubernetes
+      performanceConstraint:
+        responseTime: 100ms
+      locationConstraint:
+        permitted:
+          - platform: aws
+          - platform: gcp
+          - platform: baremetal
+          - platform: openstack
+        # required:
+        #   - anyOf:
+        #     - region: us-east-1
+---
