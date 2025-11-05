@@ -33,6 +33,17 @@ func GetUnstructuredObject(c client.Client, name, namespace string) (*unstructur
 	return unstructuredObj, nil
 }
 
+func WriteMapToFile(obj *map[string]any, filePath string) error {
+	data, err := yaml.Marshal(obj)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filePath, data, 0644); err != nil {
+		return err
+	}
+	return nil
+}
+
 func WriteObjectToFile(obj *unstructured.Unstructured, filePath string) error {
 	data, err := yaml.Marshal(obj.Object)
 	if err != nil {
