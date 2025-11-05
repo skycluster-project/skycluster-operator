@@ -1,6 +1,8 @@
 package core
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/rand"
@@ -8,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"maps"
 
@@ -363,6 +366,92 @@ func RandSuffix(s string) string {
 		b[i] = letters[r.Intn(len(letters))]
 	}
 	return string(b)
+}
+
+
+// ShortenLabelKey shortens a Kubernetes label key deterministically.
+// If key contains a prefix (prefix/name), the prefix is preserved.
+// The name part is truncated and suffixed with "-<hash>" so the result is <=63 chars
+// and begins/ends with an alphanumeric character.
+func ShortenLabelKey(key string) string {
+	maxNameLen := 45
+	hashLen    := 14
+	nameRE     := regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`)
+
+	parts := strings.SplitN(key, "/", 2)
+	var prefix, name string
+	if len(parts) == 2 {
+		prefix = parts[0]
+		name = parts[1]
+	} else {
+		name = parts[0]
+	}
+
+	// If already valid and within length, return as-is.
+	if len(name) <= maxNameLen && nameRE.MatchString(name) {
+		if prefix == "" {
+			return name
+		}
+		return prefix + "/" + name
+	}
+
+	// Compute hash of the full original key (so prefix changes alter the hash).
+	sum := sha256.Sum256([]byte(key))
+	hash := hex.EncodeToString(sum[:])[:hashLen]
+
+	reserve := 1 + hashLen // "-" + hash
+	maxBase := maxNameLen - reserve
+	if maxBase < 1 {
+		maxBase = 1
+	}
+
+	base := name
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+
+	// Trim trailing non-alphanumeric so final result will end with alnum before adding hash
+	for len(base) > 0 && !isAlnum(rune(base[len(base)-1])) {
+		base = base[:len(base)-1]
+	}
+	// If base becomes empty, pick the first alnum from name or fallback to "a"
+	if len(base) == 0 {
+		found := "a"
+		for _, r := range name {
+			if isAlnum(r) {
+				found = string(r)
+				break
+			}
+		}
+		base = found
+	}
+
+	resultName := base + "-" + hash
+
+	// Ensure starts with alphanumeric
+	if !isAlnum(rune(resultName[0])) {
+		resultName = "a" + resultName
+	}
+	// Ensure it does not exceed maxNameLen (trim if necessary)
+	if len(resultName) > maxNameLen {
+		resultName = resultName[:maxNameLen]
+		// If trimming left a non-alnum at the end, fix it
+		for len(resultName) > 0 && !isAlnum(rune(resultName[len(resultName)-1])) {
+			resultName = resultName[:len(resultName)-1]
+		}
+		if resultName == "" {
+			resultName = "a"
+		}
+	}
+
+	if prefix == "" {
+		return resultName
+	}
+	return prefix + "/" + resultName
+}
+
+func isAlnum(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 // 4vCPU-8GB

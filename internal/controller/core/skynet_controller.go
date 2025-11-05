@@ -126,8 +126,12 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	manifests = append(manifests, manifestsIstio...)
 
 	for _, depObj := range manifests {
-		obj, _ := generateUnstructuredWrapper(depObj, &skynet, r.Scheme)
-		utils.WriteObjectToFile(obj, "/tmp/istio1/"+depObj.Name+".yaml")
+		// obj, _ := generateUnstructuredWrapper(depObj, &skynet, r.Scheme)
+		__obj := map[string]any{}
+		__obj["provider"] = depObj.ProviderRef.ConfigName
+		__obj["manifest"], err = depObj.ManifestAsMap()
+		if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to convert manifest to map for writing to file") }
+		utils.WriteMapToFile(&__obj, "/tmp/istio2/"+depObj.Name+".yaml")
 	}
 
 	// manifests = append(manifests, manifestsIstio...)
@@ -806,7 +810,8 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		// fName := RandSuffix(fromName)
 		// tName := RandSuffix(toName)
 		// labelKey := "failover-" + fName + "-" + tName
-		labelKey := "failover-" + fromName + "-" + toName
+		labelKey := "failover/" + fromName + "-" + toName
+		labelKey = ShortenLabelKey(labelKey)
 
 		// must be added to both src and dst
 		// for source as source label and for destination as all label
@@ -819,10 +824,10 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 
 		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
 			key:   labelKey,
-			value: fromName + "-" + toName,
+			value: ShortenLabelKey(fromName + "-" + toName),
 		})
 
-		labels[toName].allLabels[labelKey] = fromName + "-" + toName
+		labels[toName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
 		// TODO: this must be added to the backup as well
 		// TODO: backup label must be added to the primary target as well
 		
@@ -865,7 +870,8 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		// fName := RandSuffix(fromName)
 		// bName := RandSuffix(bkName) 
 		// bkKey := "failover-" + fName + "-" + bName // backup
-		bkKey := "failover-" + fromName + "-" + bkName // backup
+		bkKey := "failover/" + fromName + "-" + bkName // backup
+		bkKey = ShortenLabelKey(bkKey)
 		
 		// must add backup label to source (as source labels)
 		if labels[fromName].sourceLabels[toName] == nil {
@@ -873,13 +879,13 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 		}
 		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
 			key:   bkKey,
-			value: fromName + "-" + bkName + "-backup",
+			value: ShortenLabelKey(fromName + "-" + bkName) + "-backup",
 		})
 		// must add backup label to primary target (as all labels)
-		labels[toName].allLabels[bkKey] = fromName + "-" + bkName + "-backup" // add to primary target
-		
+		labels[toName].allLabels[bkKey] = ShortenLabelKey(fromName + "-" + bkName) + "-backup" // add to primary target
+
 		// backup only gets the primary target label and not the backup (hence it has fewer labels)
-		labels[bkName].allLabels[labelKey] = fromName + "-" + toName
+		labels[bkName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
 	}
 	return labels
 }
