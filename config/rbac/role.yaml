@@ -110,7 +110,6 @@ rules:
   - svc.skycluster.io
   resources:
   - skyapps
-  - skyk8s
   - skyproviders
   verbs:
   - create
@@ -124,7 +123,6 @@ rules:
   - svc.skycluster.io
   resources:
   - skyapps/finalizers
-  - skyk8s/finalizers
   - skyproviders/finalizers
   verbs:
   - update
@@ -132,17 +130,8 @@ rules:
   - svc.skycluster.io
   resources:
   - skyapps/status
-  - skyk8s/status
   - skyproviders/status
   verbs:
   - get
-  - patch
-  - update
-- apiGroups:
-  - xrds.skycluster.io
-  resources:
-  - skyk8sclusters
-  verbs:
-  - delete
   - patch
   - update

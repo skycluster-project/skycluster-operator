@@ -42,21 +42,13 @@ package svc
 import (
 	"context"
 	"fmt"
-	"strings"
 	"time"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	sv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	ctrlutils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
@@ -81,19 +73,7 @@ var (
 )
 
 func (r *SkyProviderReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-	loggerName := "SkyProvider"
-	logger.Info(fmt.Sprintf("[%s]\t Reconciling SkySetup [%s]", loggerName, req.Name))
-
-	// Fetch the SkySetup instance
-	instance := &sv1a1.SkyProvider{}
-	if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
-		logger.Info(fmt.Sprintf("[%s]\t unable to fetch SkySetup [%s]", loggerName, req.Name))
-		// The object has been deleted and the its dependencies will be deleted
-		// by the garbage collector, if there is nothing to check, we don't need to requeue
-		return ctrl.Result{}, client.IgnoreNotFound(err)
-	}
-
+	
 	// dep := map[string]map[string]string{
 	// 	"skysetup": {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkySetup"},
 	// 	"skygw":    {"group": "xrds.skycluster.io", "version": "v1alpha1", "kind": "SkyGateway"},
@@ -281,169 +261,28 @@ func getScriptData(obj *unstructured.Unstructured) (int64, string, string, error
 	return statusCodeInt, ctrlutils.SafeString(stdOut), ctrlutils.SafeString(stdErr), nil
 }
 
-func setConditionReady(instance *sv1a1.SkyProvider, conditionReason, conditionMessage string) {
-	instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionTrue, conditionReason, conditionMessage, metav1.Now())
-}
-
-func setConditionNotReady(instance *sv1a1.SkyProvider, conditionReason, conditionMessage string) {
-	instance.Status.Conditions = ctrlutils.SetTypedCondition(instance.Status.Conditions, "Ready", metav1.ConditionFalse, conditionReason, conditionMessage, metav1.Now())
-}
-
-// updateCondition updates the condition `conditionTargetName` of the object
-// based on the condition `conditionName` of the given object `obj`
-func updateCondition(instance *sv1a1.SkyProvider, obj *unstructured.Unstructured, conditionName, conditionTargetName string) (*[]metav1.Condition, error) {
-	f1, objCd, err := ctrlutils.GetUnstructuredConditionByType(obj, conditionName)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get Ready condition: %v", err)
-	}
-	if !f1 {
-		instance.Status.Conditions = ctrlutils.SetTypedCondition(
-			instance.Status.Conditions, conditionTargetName,
-			metav1.ConditionFalse,
-			hv1a1.ReasonServiceNotReady,
-			"services is not ready",
-			metav1.Now())
-	} else {
-		instance.Status.Conditions = ctrlutils.SetTypedCondition(
-			instance.Status.Conditions, conditionTargetName,
-			ctrlutils.ParseConditionStatus(objCd["status"]),
-			ctrlutils.SafeString(objCd["reason"]),
-			ctrlutils.SafeString(objCd["message"]),
-			metav1.Now())
-	}
-	return &instance.Status.Conditions, nil
-}
-
-func determineShouldUpdate(instance *sv1a1.SkyProvider, statusCode int64) bool {
-	f, objReadyCd := ctrlutils.GetTypedCondition(instance.Status.Conditions, "Ready")
-	// If  we don't have the ready condition set to True
-	// or not updated according to the status code
-	// we proceed to update the status of the current object
-	if !f {
-		return true
-	} else {
-		if statusCode == 0 && objReadyCd.Status != "True" {
-			return true
-		}
-		if statusCode != 0 && objReadyCd.Status == "True" {
-			return true
-		}
-	}
-	return false
-}
 
 // incrementRetriesAndDelete increments the retries counter and delete the list of objects
 // if the retries counter is greater than the maximum number of retries
-func (r *SkyProviderReconciler) incrementRetriesAndDelete(instance *sv1a1.SkyProvider, objs ...*unstructured.Unstructured) error {
-	instance.Status.Retries++
-	if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
-		if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
-			// if any data should be reused, we should handle it here
-			// Delete the list of objects
-			// TODO: Uncomment the following code
-			// for _, obj := range objs {
-			// 	if err := r.Delete(context.Background(), obj); err != nil {
-			// 		return err
-			// 	}
-			// }
-		}
-		// Reset the retries counter
-		instance.Status.Retries = 0
-	}
-	if err := r.Status().Update(context.Background(), instance); err != nil {
-		return err
-	}
-	return nil
-}
+// func (r *SkyProviderReconciler) incrementRetriesAndDelete(instance *sv1a1.SkyProvider, objs ...*unstructured.Unstructured) error {
+// 	instance.Status.Retries++
+// 	if instance.Status.Retries > instance.Spec.Monitoring.Schedule.Retries {
+// 		if strings.ToLower(instance.Spec.Monitoring.FailureAction) == "recreate" {
+// 			// if any data should be reused, we should handle it here
+// 			// Delete the list of objects
+// 			// TODO: Uncomment the following code
+// 			// for _, obj := range objs {
+// 			// 	if err := r.Delete(context.Background(), obj); err != nil {
+// 			// 		return err
+// 			// 	}
+// 			// }
+// 		}
+// 		// Reset the retries counter
+// 		instance.Status.Retries = 0
+// 	}
+// 	if err := r.Status().Update(context.Background(), instance); err != nil {
+// 		return err
+// 	}
+// 	return nil
+// }
 
-func (r *SkyProviderReconciler) getCreateScriptObject(instance *sv1a1.SkyProvider, obj *unstructured.Unstructured, reqNsN types.NamespacedName) (*unstructured.Unstructured, error) {
-	pConfigName, err := getProviderCfgName(obj)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get providerConfig name: %v", err)
-	}
-	// Now we can create Script object using unstructured object
-	scObj := &unstructured.Unstructured{}
-	scObj.SetGroupVersionKind(schema.GroupVersionKind{
-		Group: "xrds.skycluster.io", Version: "v1alpha1", Kind: "Script",
-	})
-	if err := r.Get(context.Background(), reqNsN, scObj); err != nil {
-		scObj.SetName(instance.Name)
-		scObj.SetNamespace(instance.Namespace)
-		scObj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
-		scObj.Object["spec"] = map[string]any{
-			"forProvider": map[string]any{
-				"statusCheckScript": instance.Spec.Monitoring.CheckCommand,
-				"sudoEnabled":       true,
-			},
-			"providerConfigRef": map[string]any{
-				"name": pConfigName,
-			},
-		}
-		// set owner reference
-		if err := r.setOwnerandCreate(scObj, instance); err != nil {
-			return nil, fmt.Errorf("unable to create Script object: %v", err)
-		}
-		return scObj, nil
-	}
-	// if the pConfigName is not as same as the one set in scObj,
-	// we should update it
-	if u, err := ctrlutils.UpdateNestedValue(scObj.Object, pConfigName, "spec", "providerConfigRef", "name"); err != nil {
-		return nil, fmt.Errorf("unable to update providerConfigRef: %v", err)
-	} else if u {
-		if err := r.Update(context.Background(), scObj); err != nil {
-			return nil, fmt.Errorf("unable to update Script object: %v", err)
-		}
-	}
-	return scObj, nil
-}
-
-// setOwnerandCreate sets the owner reference and creates the object
-func (r *SkyProviderReconciler) setOwnerandCreate(obj *unstructured.Unstructured, instance *sv1a1.SkyProvider) error {
-	// set owner reference
-	if err := ctrl.SetControllerReference(instance, obj, r.Scheme); err != nil {
-		return fmt.Errorf("unable to set owner reference for object: %v", err)
-	}
-	if err := r.Create(context.Background(), obj); client.IgnoreAlreadyExists(err) != nil {
-		return fmt.Errorf("unable to create object: %v", err)
-	}
-	return nil
-}
-
-// createSkySetup creates the SkySetup object
-func (r *SkyProviderReconciler) createSkySetup(instance *sv1a1.SkyProvider, obj *unstructured.Unstructured) error {
-	obj.SetName(instance.Name)
-	obj.SetNamespace(instance.Namespace)
-	obj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
-	obj.Object["spec"] = map[string]any{
-		"forProvider": map[string]string{
-			"vpcCidr": instance.Spec.ProviderGateway.VpcCidr,
-		},
-		"providerRef": instance.Spec.ProviderRef,
-	}
-	if err := r.setOwnerandCreate(obj, instance); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (r *SkyProviderReconciler) createSkyGateway(instance *sv1a1.SkyProvider, obj *unstructured.Unstructured) error {
-	obj.SetName(instance.Name)
-	obj.SetNamespace(instance.Namespace)
-	obj.SetLabels(ctrlutils.MergeStringMaps(instance.Labels, addDefaultLabels(instance.Spec.ProviderRef)))
-	obj.Object["spec"] = generateProviderGwSpec(instance.Spec)
-	if err := r.setOwnerandCreate(obj, instance); err != nil {
-		return err
-	}
-	return nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *SkyProviderReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&sv1a1.SkyProvider{}).
-		Named("svc-skyprovider").
-		WithOptions(controller.Options{
-			RateLimiter: newCustomRateLimiter(),
-		}).
-		Complete(r)
-}

@@ -13,7 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	ctrlutils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
@@ -132,64 +131,6 @@ func getProviderCfgName(obj *unstructured.Unstructured) (string, error) {
 		return "", fmt.Errorf("providerConfig name is not of type string")
 	}
 	return pConfigName.(string), nil
-}
-
-// generateProviderGwSpec generates the provider gateway spec for the given provider spec
-func generateProviderGwSpec(spec svcv1alpha1.SkyProviderSpec) map[string]any {
-	forProvider := make(map[string]any)
-
-	// Gateway
-	gateway := make(map[string]any)
-	if spec.ProviderGateway.Flavor != "" {
-		gateway["flavor"] = spec.ProviderGateway.Flavor
-	}
-	if spec.ProviderGateway.PublicKey != "" {
-		gateway["publicKey"] = spec.ProviderGateway.PublicKey
-	}
-	if len(gateway) > 0 {
-		forProvider["gateway"] = gateway
-	}
-
-	// Overlay
-	overlay := make(map[string]any)
-	if spec.ProviderGateway.Overlay.Host != "" {
-		overlay["host"] = spec.ProviderGateway.Overlay.Host
-	}
-	if spec.ProviderGateway.Overlay.Port != 0 {
-		overlay["port"] = spec.ProviderGateway.Overlay.Port
-	}
-	if spec.ProviderGateway.Overlay.Token != "" {
-		overlay["token"] = spec.ProviderGateway.Overlay.Token
-	}
-	if len(overlay) > 0 {
-		forProvider["overlay"] = overlay
-	}
-
-	// ProviderRef
-	providerRef := make(map[string]any)
-	if spec.ProviderRef.Platform != "" {
-		providerRef["platform"] = spec.ProviderRef.Platform
-	}
-	if spec.ProviderRef.Name != "" {
-		providerRef["name"] = spec.ProviderRef.Name
-	}
-	if spec.ProviderRef.Type != "" {
-		providerRef["type"] = spec.ProviderRef.Type
-	}
-	if spec.ProviderRef.Zone != "" {
-		providerRef["zone"] = spec.ProviderRef.Zone
-	}
-	if spec.ProviderRef.Region != "" {
-		providerRef["region"] = spec.ProviderRef.Region
-	}
-	if spec.ProviderRef.RegionAlias != "" {
-		providerRef["regionAlias"] = spec.ProviderRef.RegionAlias
-	}
-
-	return map[string]any{
-		"forProvider": forProvider,
-		"providerRef": providerRef,
-	}
 }
 
 // addDefaultLabels return the default skycluster labels

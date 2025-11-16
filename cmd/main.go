@@ -44,7 +44,6 @@ import (
 	"github.com/samber/lo"
 
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
-	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
@@ -74,7 +73,6 @@ func init() {
 
 	utilruntime.Must(cv1a1.AddToScheme(scheme))
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(svcv1alpha1.AddToScheme(scheme))
 	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
 
 	// Add unstructured types to the scheme to allow dynamic handling of custom resources

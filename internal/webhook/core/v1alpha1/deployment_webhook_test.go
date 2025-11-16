@@ -19,26 +19,16 @@ package v1alpha1
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	// TODO (user): Add any additional imports if needed
 )
 
 var _ = Describe("Deployment Webhook", func() {
 	var (
-		obj       *corev1alpha1.Deployment
-		oldObj    *corev1alpha1.Deployment
 		defaulter DeploymentCustomDefaulter
 	)
 
 	BeforeEach(func() {
-		obj = &corev1alpha1.Deployment{}
-		oldObj = &corev1alpha1.Deployment{}
 		defaulter = DeploymentCustomDefaulter{}
 		Expect(defaulter).NotTo(BeNil(), "Expected defaulter to be initialized")
-		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
-		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
-		// TODO (user): Add any setup logic common to all tests
 	})
 
 	AfterEach(func() {
