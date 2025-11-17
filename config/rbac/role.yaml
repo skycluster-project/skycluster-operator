@@ -7,7 +7,7 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - skyxrds
+  - atlass
   verbs:
   - create
   - delete
@@ -19,13 +19,13 @@ rules:
 - apiGroups:
   - ""
   resources:
-  - skyxrds/finalizers
+  - atlass/finalizers
   verbs:
   - update
 - apiGroups:
   - ""
   resources:
-  - skyxrds/status
+  - atlass/status
   verbs:
   - get
   - patch

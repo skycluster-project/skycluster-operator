@@ -132,8 +132,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if status.Result != "" && status.DataflowResourceVersion == currDFRV && status.DeploymentPlanResourceVersion == currDPRV {
 		r.Logger.Info("ILPTask already processed and references unchanged. Skipping optimization.")
 		// generate skyXRD object
-		if err := r.ensureSkyXRD(task, appId1, status.DeployMap); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
+		if err := r.ensureAtlas(task, appId1, status.DeployMap); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 		}
 		if err := r.ensureSkyNet(task, appId1, status.DeployMap); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
@@ -185,8 +185,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
 
 						// generate skyXRD object
-						if err = r.ensureSkyXRD(task, appId1, deployPlan); err != nil {
-							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyXRD after optimization")
+						if err = r.ensureAtlas(task, appId1, deployPlan); err != nil {
+							return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 						}
 						if err = r.ensureSkyNet(task, appId1, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
@@ -1123,50 +1123,50 @@ func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, depl
 		}
 		// set owner reference to ILPTask
 		if err := ctrl.SetControllerReference(task, obj, r.Scheme); err != nil {
-			return errors.Wrapf(err, "failed to set owner reference for SkyXRD for ILPTask %s", task.Name)
+			return errors.Wrapf(err, "failed to set owner reference for Atlas for ILPTask %s", task.Name)
 		}
 		if err := r.Create(context.TODO(), obj); err != nil {
-			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)
+			return errors.Wrapf(err, "failed to create Atlas for ILPTask %s", task.Name)
 		}
 	}
 
 	return nil
 }
 
-func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
-	obj := &cv1a1.SkyXRDList{}
+func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
+	obj := &cv1a1.AtlasList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
 		"skycluster.io/app-id": appId,
 	}); err != nil {
-		return errors.Wrapf(err, "failed to list SkyXRDs for ILPTask %s", task.Name)
+		return errors.Wrapf(err, "failed to list Atlass for ILPTask %s", task.Name)
 	}
 	if len(obj.Items) > 1 {
-		return fmt.Errorf("multiple SkyXRDs found for ILPTask %s and appId %s", task.Name, appId)
+		return fmt.Errorf("multiple Atlass found for ILPTask %s and appId %s", task.Name, appId)
 	}
 	if len(obj.Items) > 0 { // already exists, update if necessary
 		obj := &obj.Items[0]
 		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
-			r.Logger.Info("Updating existing SkyXRD with new deployment plan", "SkyXRD", obj.Name)
+			r.Logger.Info("Updating existing Atlas with new deployment plan", "Atlas", obj.Name)
 			obj.Spec.DeployMap = deployPlan
 			obj.Spec.Approve = false
 			if err := r.Update(context.TODO(), obj); err != nil {
-				return errors.Wrapf(err, "failed to update SkyXRD for ILPTask %s", task.Name)
+				return errors.Wrapf(err, "failed to update Atlas for ILPTask %s", task.Name)
 			}
-			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "SkyXRD pending approval")
+			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "Atlas pending approval")
 			if err := r.Status().Update(context.TODO(), obj); err != nil {
-				return errors.Wrapf(err, "failed to update SkyXRD status for ILPTask %s", task.Name)
+				return errors.Wrapf(err, "failed to update Atlas status for ILPTask %s", task.Name)
 			}
 		}
 		return nil
 	} else { // try to create
-		r.Logger.Info("Creating new SkyXRD for deployment plan", "ILPTask", task.Name)
-		obj := &cv1a1.SkyXRD{
+		r.Logger.Info("Creating new Atlas for deployment plan", "ILPTask", task.Name)
+		obj := &cv1a1.Atlas{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: task.Name + "-" + RandSuffix(task.Name),
 				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
-			Spec: cv1a1.SkyXRDSpec{
+			Spec: cv1a1.AtlasSpec{
 				Approve: false,
 				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
 				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
@@ -1175,10 +1175,10 @@ func (r *ILPTaskReconciler) ensureSkyXRD(task *cv1a1.ILPTask, appId string, depl
 		}
 		// set owner reference to ILPTask
 		if err := ctrl.SetControllerReference(task, obj, r.Scheme); err != nil {
-			return errors.Wrapf(err, "failed to set owner reference for SkyXRD for ILPTask %s", task.Name)
+			return errors.Wrapf(err, "failed to set owner reference for Atlas for ILPTask %s", task.Name)
 		}
 		if err := r.Create(context.TODO(), obj); err != nil {
-			return errors.Wrapf(err, "failed to create SkyXRD for ILPTask %s", task.Name)
+			return errors.Wrapf(err, "failed to create Atlas for ILPTask %s", task.Name)
 		}
 	}
 

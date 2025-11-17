@@ -4,29 +4,29 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: skyxrds.core.skycluster.io
+  name: atlass.core.skycluster.io
 spec:
   group: core.skycluster.io
   names:
-    kind: SkyXRD
-    listKind: SkyXRDList
-    plural: skyxrds
-    singular: skyxrd
+    kind: Atlas
+    listKind: AtlasList
+    plural: atlass
+    singular: atlas
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: Indicates if the SkyXRD is approved
+    - description: Indicates if the Atlas is approved
       jsonPath: .spec.approve
       name: Approved
       type: boolean
-    - description: Indicates if the SkyXRD is ready
+    - description: Indicates if the Atlas is ready
       jsonPath: .status.ready
       name: Ready
       type: boolean
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SkyXRD is the Schema for the skyxrds API.
+        description: Atlas is the Schema for the atlass API.
         properties:
           apiVersion:
             description: |-
@@ -46,7 +46,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SkyXRDSpec defines the desired state of SkyXRD.
+            description: AtlasSpec defines the desired state of Atlas.
             properties:
               approve:
                 description: Manifests is a list of manifests to apply to the cluster
@@ -478,7 +478,7 @@ spec:
             - approve
             type: object
           status:
-            description: SkyXRDStatus defines the observed state of SkyXRD.
+            description: AtlasStatus defines the observed state of Atlas.
             properties:
               conditions:
                 items:

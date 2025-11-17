@@ -23,8 +23,8 @@ import (
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
-// SkyXRDSpec defines the desired state of SkyXRD.
-type SkyXRDSpec struct {
+// AtlasSpec defines the desired state of Atlas.
+type AtlasSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
 	Approve bool `json:"approve"`
 	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
@@ -32,42 +32,42 @@ type SkyXRDSpec struct {
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
 }
 
-// SkyXRDStatus defines the observed state of SkyXRD.
-type SkyXRDStatus struct {
+// AtlasStatus defines the observed state of Atlas.
+type AtlasStatus struct {
 	Manifests  []hv1a1.SkyService `json:"manifests,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the SkyXRD is approved"
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyXRD is ready"
+// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the Atlas is approved"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the Atlas is ready"
 
-// SkyXRD is the Schema for the skyxrds API.
-type SkyXRD struct {
+// Atlas is the Schema for the atlass API.
+type Atlas struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   SkyXRDSpec   `json:"spec,omitempty"`
-	Status SkyXRDStatus `json:"status,omitempty"`
+	Spec   AtlasSpec   `json:"spec,omitempty"`
+	Status AtlasStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyXRD is ready"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the Atlas is ready"
 
-// SkyXRDList contains a list of SkyXRD.
-type SkyXRDList struct {
+// AtlasList contains a list of Atlas.
+type AtlasList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SkyXRD `json:"items"`
+	Items           []Atlas `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SkyXRD{}, &SkyXRDList{})
+	SchemeBuilder.Register(&Atlas{}, &AtlasList{})
 }
 
 // helper to set a condition
-func (s *SkyXRDStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+func (s *AtlasStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
 		Type:    string(condition),
 		Status:  status,

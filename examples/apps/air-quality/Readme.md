@@ -20,7 +20,7 @@ Default settings to deploy application is set to `false`. Fetch the deployment p
 
 ```bash
 NS=air-quality
-kubectl -n $NS get skyxrds -o json | jq '.items[0]' > /tmp/xrd.json; 
+kubectl -n $NS get atlass -o json | jq '.items[0]' > /tmp/xrd.json; 
 for i in $(seq 0 $(( $(jq '.status.manifests|length' /tmp/xrd.json)-1 ))); do   
   jq -r ".status.manifests[$i].manifest" /tmp/xrd.json > manifest-$i.yaml; 
 done
@@ -30,8 +30,8 @@ Once ready deploy the manifests:
 
 ```bash
 NS=air-quality
-NAME=$(kubectl get skyxrds -n $NS -o jsonpath="{.items[0].metadata.name}")$
-kubectl patch -n $NS skyxrds $NAME -p '{"spec":{"approve":true}}' --type=merge
+NAME=$(kubectl get atlass -n $NS -o jsonpath="{.items[0].metadata.name}")$
+kubectl patch -n $NS atlass $NAME -p '{"spec":{"approve":true}}' --type=merge
 ```
 
 Then get the modified deployment plan ready to be deployed across different domains:

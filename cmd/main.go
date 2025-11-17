@@ -259,12 +259,12 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&corecontroller.SkyXRDReconciler{
+	if err = (&corecontroller.AtlasReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger: zap.New(pkglog.CustomLogger()).WithName("[SkyXRD]"),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyXRD")
+		setupLog.Error(err, "unable to create controller", "controller", "Atlas")
 		os.Exit(1)
 	}
 	if err = (&policycontroller.DataflowPolicyReconciler{

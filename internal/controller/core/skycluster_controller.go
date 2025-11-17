@@ -75,11 +75,11 @@ import (
 // Read DeploymentPolicy and DataflowPolicy, plus ConfigMaps that describe "flavors".
 // For each entry in the deployment policy, fetch the referenced component (Deployment or other CR) as an unstructured object, extract resource/location constraints and "virtual services", and append a corresponding SkyComponent entry to SkyCluster.Spec.SkyComponents.
 // Create an ILPTask owned by the SkyCluster to run an optimization over the SkyComponents; ILPTask updates SkyCluster.Status with a deployment plan when finished.
-// If the ILPTask result is "Optimal", generate manifests (deploy map) and create/own SkyXRD and SkyApp objects containing those manifests to drive the actual deployment, then set SkyCluster ready.
+// If the ILPTask result is "Optimal", generate manifests (deploy map) and create/own Atlas and SkyApp objects containing those manifests to drive the actual deployment, then set SkyCluster ready.
 // Resource relationships:
 
 // SkyCluster references DeploymentPolicy and DataflowPolicy by name (must match).
-// SkyCluster becomes owner/controller of ILPTask, and (on success) of SkyXRD and SkyApp.
+// SkyCluster becomes owner/controller of ILPTask, and (on success) of Atlas and SkyApp.
 // It reads/links to cluster objects (Deployments and other components) via ObjectReferences inside SkyCluster.Spec.SkyComponents.
 // Uses ConfigMaps (flavor definitions) to match resource requirements to flavors.
 // Current effective behavior: only the initial validation and condition-setting run; the optimization/creation logic is present but commented out.
@@ -232,7 +232,7 @@ func (r *SkyClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 // 	xrdObj.SetNamespace(req.Namespace)
 // 	// TODO: There may be issues with names containing "."
 // 	// and we keep the original name in the labels
-// 	// Also, the SkyXRD object contains the original name
+// 	// Also, the Atlas object contains the original name
 // 	xrdObj.SetName(component.ComponentRef.Name)
 
 

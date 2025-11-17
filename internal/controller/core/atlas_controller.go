@@ -44,8 +44,8 @@ import (
 	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
 
-// SkyXRDReconciler reconciles a SkyXRD object
-type SkyXRDReconciler struct {
+// AtlasReconciler reconciles a Atlas object
+type AtlasReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Logger logr.Logger
@@ -78,26 +78,26 @@ type PodCidrSpec struct {
 }
 
 
-// +kubebuilder:rbac:groups=core,resources=skyxrds,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=skyxrds/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core,resources=skyxrds/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core,resources=atlass,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=atlass/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core,resources=atlass/finalizers,verbs=update
 
-func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciler started")
 
 	// Fetch the object
-	skyxrd := &cv1a1.SkyXRD{}
-	if err := r.Get(ctx, req.NamespacedName, skyxrd); err != nil {
-		r.Logger.Info("SkyXRD not found.")
+	atlas := &cv1a1.Atlas{}
+	if err := r.Get(ctx, req.NamespacedName, atlas); err != nil {
+		r.Logger.Info("Atlas not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	manifests, _,  err := r.createManifests(req.Name, req.Namespace, skyxrd)
+	manifests, _,  err := r.createManifests(req.Name, req.Namespace, atlas)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "error creating manifests.")
 	}
 	
-	if skyxrd.Spec.Approve {
+	if atlas.Spec.Approve {
 		for _, xrd := range manifests {
 			var obj map[string]any
 			if err := yaml.Unmarshal([]byte(xrd.Manifest), &obj); err != nil {
@@ -112,13 +112,13 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 			unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
 			unstrObj.SetKind(xrd.ComponentRef.Kind)
 			unstrObj.SetGenerateName(fmt.Sprintf("%s-", xrd.ComponentRef.Name))
-			// if err := ctrl.SetControllerReference(skyxrd, unstrObj, r.Scheme); err != nil {
+			// if err := ctrl.SetControllerReference(atlas, unstrObj, r.Scheme); err != nil {
 			// 	return ctrl.Result{}, errors.Wrap(err, "error setting controller reference.")
 			// }
 			if err := r.Create(ctx, unstrObj); err != nil && !apierrors.IsAlreadyExists(err) {
 				return ctrl.Result{}, client.IgnoreAlreadyExists(err)
 			}
-			// r.Logger.Info("Created SkyXRD object!", "name", xrd.ComponentRef.Name)
+			// r.Logger.Info("Created Atlas object!", "name", xrd.ComponentRef.Name)
 		}
 	}
 
@@ -130,8 +130,8 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		return manifests[i].ComponentRef.Name < manifests[j].ComponentRef.Name
 	})
 
-	changed := !reflect.DeepEqual(skyxrd.Status.Manifests, manifests)
-	r.Logger.Info("Comparing manifests.", "oldCount", len(skyxrd.Status.Manifests), "newCount", len(manifests), "changed", changed)
+	changed := !reflect.DeepEqual(atlas.Status.Manifests, manifests)
+	r.Logger.Info("Comparing manifests.", "oldCount", len(atlas.Status.Manifests), "newCount", len(manifests), "changed", changed)
 
 	if changed {
 
@@ -147,17 +147,17 @@ func (r *SkyXRDReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 		// 	r.Logger.V(1).Info("Modified manifest", "index", i, "old", fmt.Sprintf("%+v", old[i]), "new", fmt.Sprintf("%+v", manifests[i]))
 		// }
 
-		skyxrd.Status.Manifests = manifests
-		if err := r.Status().Update(ctx, skyxrd); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "error updating SkyXRD status")
+		atlas.Status.Manifests = manifests
+		if err := r.Status().Update(ctx, atlas); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error updating Atlas status")
 		}
   }
 	
 	return ctrl.Result{}, nil
 }
 
-func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a1.SkyXRD) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
-	deployMap := skyxrd.Spec.DeployMap
+func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.Atlas) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
+	deployMap := atlas.Spec.DeployMap
 	manifests := make([]hv1a1.SkyService, 0)
 	
 	// ######### Providers
@@ -174,7 +174,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 	}
 	// r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
 
-	depPolicy, err := r.fetchDeploymentPolicy(ns, skyxrd.Spec.DeploymentPolicyRef)
+	depPolicy, err := r.fetchDeploymentPolicy(ns, atlas.Spec.DeploymentPolicyRef)
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
 
 	requiredVirtSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
@@ -240,7 +240,7 @@ func (r *SkyXRDReconciler) createManifests(appId string, ns string, skyxrd *cv1a
 }
 
 // Creates manifest for setup of providers needed for the deployment
-func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cmpnts []hv1a1.SkyService) (map[string]hv1a1.SkyService, map[string]map[string]int, error) {
+func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmpnts []hv1a1.SkyService) (map[string]hv1a1.SkyService, map[string]map[string]int, error) {
 	// We need to group the components based on the providers
 	// and then generate the manifests for each provider
 	// We then return the manifests for each provider
@@ -394,7 +394,7 @@ func (r *SkyXRDReconciler) generateProviderManifests(appId string, ns string, cm
 	return manifests, indexedSortedProviders, nil
 }
 
-func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector, provToIdx map[string]map[string]int) (map[string]hv1a1.SkyService, error) {
+func (r *AtlasReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector, provToIdx map[string]map[string]int) (map[string]hv1a1.SkyService, error) {
 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 	// The optimization has decided that for requested workload, this provider is the best fit.
@@ -561,7 +561,7 @@ func (r *SkyXRDReconciler) generateMgmdK8sManifests(appId string, svcList map[st
 }
 
 // only one mesh per application
-func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
+func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
 	
 	clusterNames := make([]string, 0)
 	for _, xkube := range xKubeList {
@@ -613,8 +613,8 @@ func (r *SkyXRDReconciler) generateK8sMeshManifests(appId string, xKubeList []hv
 }
 
 
-// dpRef is the deployment plan reference from SkyXRD spec
-func (r *SkyXRDReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.DeploymentPolicyRef) (*pv1a1.DeploymentPolicy, error) {
+// dpRef is the deployment plan reference from Atlas spec
+func (r *AtlasReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.DeploymentPolicyRef) (*pv1a1.DeploymentPolicy, error) {
 	dp := &pv1a1.DeploymentPolicy{}
 	err := r.Get(context.TODO(), client.ObjectKey{Namespace: ns, Name: dpRef.Name}, dp)
 	if err != nil {return nil, err}
@@ -623,7 +623,7 @@ func (r *SkyXRDReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.Deployme
 
 // dpPolicy := r.fetchDeploymentPolicy(ns, dpRef)
 // findReqVirtualSvcs(ns, skySrv, dpPolicy)
-func (r *SkyXRDReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
+func (r *AtlasReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
 	if len(virtualServices) == 0 {
 		return nil, nil // no virtual services required
 	}
@@ -651,7 +651,7 @@ func (r *SkyXRDReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.
 	return cheapestVirtSvc, nil
 }
 
-func (r *SkyXRDReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a1.ProviderRefSpec) (map[string]string, error) {
+func (r *AtlasReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a1.ProviderRefSpec) (map[string]string, error) {
 	cm := &corev1.ConfigMapList{}
 	if err := r.List(context.Background(), cm, client.MatchingLabels{
 		"skycluster.io/config-type": "provider-profile",
@@ -668,7 +668,7 @@ func (r *SkyXRDReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a
 
 // virtSvcMap := fetchVirtualServiceCfgMap(ns, providerRef)
 // calculateVirtualServiceSetCost(virtSvcMap, virtualService, zone)
-func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
+func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
 	
 	// limited number of virtual services are supported: ManagedKubernetes, ComputeProfile
 	switch vs.Name {
@@ -733,9 +733,9 @@ func (r *SkyXRDReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[str
 	return -1, nil
 }
 
-// dpRef is the deployment plan reference from SkyXRD spec
+// dpRef is the deployment plan reference from Atlas spec
 // skySrvc is the SkyService component for which we are finding required virtual services
-func (r *SkyXRDReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyService, dpPolicy pv1a1.DeploymentPolicy) ([]pv1a1.VirtualServiceSelector, error) {
+func (r *AtlasReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyService, dpPolicy pv1a1.DeploymentPolicy) ([]pv1a1.VirtualServiceSelector, error) {
 	// parse the deployment plan to find required virtual services for the component
 	cmpntRef := skySrvc.ComponentRef
 	provRef := skySrvc.ProviderRef
@@ -829,7 +829,7 @@ func (r *SkyXRDReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyServic
 
 // Load static metadata about providers from configmaps
 // key: platform name, value: list of provider metadata
-func (r *SkyXRDReconciler) loadProviderMetadata() (map[string][]providerMetadata, error) {
+func (r *AtlasReconciler) loadProviderMetadata() (map[string][]providerMetadata, error) {
 	providerData, err := r.fetchProviderMetadataMap()
 	if err != nil {
 		return nil, errors.Wrap(err, "fetching provider metadata map")
@@ -849,7 +849,7 @@ func (r *SkyXRDReconciler) loadProviderMetadata() (map[string][]providerMetadata
 
 // Load static metadata about providers from configmaps and return as a map
 // key: platform name, value: yaml string
-func (r *SkyXRDReconciler) fetchProviderMetadataMap() (map[string]string, error) {
+func (r *AtlasReconciler) fetchProviderMetadataMap() (map[string]string, error) {
 	cmList := &corev1.ConfigMapList{}
 	if err := r.List(context.Background(), cmList, client.MatchingLabels{
 		"skycluster.io/config-type": "provider-metadata-e2e",
@@ -872,7 +872,7 @@ func (r *SkyXRDReconciler) fetchProviderMetadataMap() (map[string]string, error)
 }
 
 // Fetch all provider profiles and return as a map
-func (r *SkyXRDReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
+func (r *AtlasReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
 	ppList := &cv1a1.ProviderProfileList{}
 	if err := r.List(context.Background(), ppList); err != nil {
 		return nil, errors.Wrap(err, "listing provider profiles")
@@ -892,10 +892,10 @@ func (r *SkyXRDReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provider
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SkyXRDReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AtlasReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cv1a1.SkyXRD{}).
-		Named("core-skyxrd").
+		For(&cv1a1.Atlas{}).
+		Named("core-atlas").
 		WithOptions(controller.Options{
 			RateLimiter: newCustomRateLimiter(),
 		}).
