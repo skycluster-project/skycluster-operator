@@ -75,6 +75,33 @@ for i in "${!GCP_NAMES[@]}"; do
   index=$((index + 1))
 done
 
-echo "Reload your shell."
+echo "All kubeconfigs are stored in /tmp/kubeconfigs"
+
+BLOCK='
+# Add all kubeconfig files from /tmp/kubeconfigs to KUBECONFIG if folder exists
+if [ -d "/tmp/kubeconfigs" ]; then
+    # Build colon-separated list of all files in /tmp/kubeconfigs
+    CONFIGS=$(find /tmp/kubeconfigs -type f | tr "\n" ":" | sed "s/:$//")
+    
+    # Include default kubeconfig
+    if [ -z "$KUBECONFIG" ]; then
+        export KUBECONFIG="$HOME/.kube/config:$CONFIGS"
+    else
+        export KUBECONFIG="$KUBECONFIG:$CONFIGS"
+    fi
+fi
+'
+
+BASHRC="$HOME/.bashrc"
+
+# Check if the block is already present
+if ! grep -Fxq "# Add /tmp/kubeconfig to KUBECONFIG if it exists" "$BASHRC"; then
+    echo -e "\n$BLOCK" >> "$BASHRC"
+    echo "Block added to $BASHRC"
+else
+    echo "Block already exists in $BASHRC"
+fi
+
+echo "Reload your shell to apply changes."
 
 
