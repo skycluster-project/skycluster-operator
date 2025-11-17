@@ -49,8 +49,8 @@ import (
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
-// SkyNetReconciler reconciles a SkyNet object
-type SkyNetReconciler struct {
+// AtlasMeshReconciler reconciles a AtlasMesh object
+type AtlasMeshReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Logger logr.Logger
@@ -73,27 +73,27 @@ type priorityLabels struct {
 	allLabels map[string]string
 }
 
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=skynets,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=skynets/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=skynets/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs/finalizers,verbs=update
 
-func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciler started")
 
 	// Fetch the object
-	var skynet cv1a1.SkyNet
-	if err := r.Get(ctx, req.NamespacedName, &skynet); err != nil {
-		r.Logger.Info("SkyNet resource not found. Ignoring since object must be deleted")
+	var atlasmesh cv1a1.AtlasMesh
+	if err := r.Get(ctx, req.NamespacedName, &atlasmesh); err != nil {
+		r.Logger.Info("AtlasMesh resource not found. Ignoring since object must be deleted")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	provCfgNameMap, err := r.getProviderConfigNameMap(skynet)
+	provCfgNameMap, err := r.getProviderConfigNameMap(atlasmesh)
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
 	}
 	r.Logger.Info("Fetched provider config name map.", "count", len(provCfgNameMap))
 
-	appId, ok := skynet.Labels["skycluster.io/app-id"]
+	appId, ok := atlasmesh.Labels["skycluster.io/app-id"]
 	if !ok || appId == "" {
 		return ctrl.Result{}, errors.New("missing required label: skycluster.io/app-id")
 	}
@@ -105,28 +105,28 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	// submit them to the remote cluster using Kubernetes Provider (object)
 	// Manifest are submitted through "Object" CRD from Crossplane
 
-	nsManifests, err := r.generateNamespaceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	nsManifests, err := r.generateNamespaceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate namespace manifests") }
 	manifests = append(manifests, nsManifests...)
 
-	cdManifests, err := r.generateConfigDataManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	cdManifests, err := r.generateConfigDataManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate config data manifests") }
 	manifests = append(manifests, cdManifests...)
 
-	depManifests, err := r.generateDeployManifests(skynet.Namespace, skynet.Spec.DeployMap, provCfgNameMap)
+	depManifests, err := r.generateDeployManifests(atlasmesh.Namespace, atlasmesh.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
 	manifests = append(manifests, depManifests...)
 
-	svcManifests, err := r.generateServiceManifests(skynet.Namespace, appId, skynet.Spec.DeployMap.Component, provCfgNameMap)
+	svcManifests, err := r.generateServiceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
 	manifests = append(manifests, svcManifests...)
 
-	manifestsIstio, err := r.generateIstioConfig(skynet.Namespace, appId, skynet.Spec.DeployMap, provCfgNameMap)
+	manifestsIstio, err := r.generateIstioConfig(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap, provCfgNameMap)
 	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
 	manifests = append(manifests, manifestsIstio...)
 
 	for _, depObj := range manifests {
-		// obj, _ := generateUnstructuredWrapper(depObj, &skynet, r.Scheme)
+		// obj, _ := generateUnstructuredWrapper(depObj, &atlasmesh, r.Scheme)
 		__obj := map[string]any{}
 		__obj["provider"] = depObj.ProviderRef.ConfigName
 		__obj["manifest"], err = depObj.ManifestAsMap()
@@ -136,14 +136,14 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 
 	// manifests = append(manifests, manifestsIstio...)
 
-	oldMap := make(map[string]hv1a1.SkyObject, len(skynet.Status.Objects))
-	for _, o := range skynet.Status.Objects {oldMap[o.Name] = o}
+	oldMap := make(map[string]hv1a1.SkyObject, len(atlasmesh.Status.Objects))
+	for _, o := range atlasmesh.Status.Objects {oldMap[o.Name] = o}
 
 	newObjects := make([]hv1a1.SkyObject, 0, len(manifests))
 	for _, m := range manifests {newObjects = append(newObjects, *m)}	
 	
 	changed := false
-	r.Logger.Info("Reconciling SkyNet manifests.", "oldCount", len(oldMap), "newCount", len(newObjects))
+	r.Logger.Info("Reconciling AtlasMesh manifests.", "oldCount", len(oldMap), "newCount", len(newObjects))
 
 	if len(oldMap) != len(newObjects) {
 		changed = true
@@ -159,19 +159,19 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	}
 
 	if changed {
-		skynet.Status.Objects = newObjects
-		if err := r.Status().Update(ctx, &skynet); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "error updating SkyNet status")
+		atlasmesh.Status.Objects = newObjects
+		if err := r.Status().Update(ctx, &atlasmesh); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "error updating AtlasMesh status")
 		}
-		r.Logger.Info("Updated SkyNet status objects.", "count", len(skynet.Status.Objects))
+		r.Logger.Info("Updated AtlasMesh status objects.", "count", len(atlasmesh.Status.Objects))
 	}
 
 	// TODO: must check for deleted manifests and delete them from the remote clusters
 	// For now, we only support adding new manifests
-	if skynet.Spec.Approve {
+	if atlasmesh.Spec.Approve {
 		r.Logger.Info("Approval given, creating manifest objects in the cluster.")
 		for _, m := range manifests {
-			obj, err := generateUnstructuredWrapper(m, &skynet, r.Scheme)
+			obj, err := generateUnstructuredWrapper(m, &atlasmesh, r.Scheme)
 			if err != nil {return ctrl.Result{}, errors.Wrap(err, "failed to generate unstructured wrapper")}
 
 			// Write the objects to disk for debugging
@@ -214,7 +214,7 @@ func (r *SkyNetReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctr
 	return ctrl.Result{}, nil
 }
 
-func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.SkyNet, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
+func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.AtlasMesh, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
 	
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -247,7 +247,7 @@ func equalManifests(a, b interface{}) bool {
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
 // it returns a map of provider profile name to provider config name
 // the local cluster is mapped to "local" key
-func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[string]string, error) {
+func (r *AtlasMeshReconciler) getProviderConfigNameMap(atlasmesh cv1a1.AtlasMesh) (map[string]string, error) {
 	provProfiles, err := r.fetchProviderProfilesMap()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch provider profiles")
@@ -320,7 +320,7 @@ func (r *SkyNetReconciler) getProviderConfigNameMap(skynet cv1a1.SkyNet) (map[st
 
 // get the deployments' namespaces and generate namespace manifests
 // namespaces must be generated for all clusters
-func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 
 	manifests := make([]*hv1a1.SkyObject, 0)
 	selectedProvNames := make([]string, 0)
@@ -432,7 +432,7 @@ func (r *SkyNetReconciler) generateConfigDataManifests(ns string, appId string, 
 	return manifests, nil
 }
 
-func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyObject, 0)
 	selectedNs := make([]string, 0)
@@ -516,7 +516,7 @@ func (r *SkyNetReconciler) generateNamespaceManifests(ns string, appId string, c
 	return manifests, nil
 }
 
-func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyObject, 0)
 	selectedProvNames := make([]string, 0)
@@ -575,7 +575,7 @@ func (r *SkyNetReconciler) generateServiceManifests(ns string, appId string, cmp
 
 // generateDeployManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyObject, 0)
 	cmpnts := dpMap.Component
@@ -685,7 +685,7 @@ func (r *SkyNetReconciler) generateDeployManifests(ns string, dpMap hv1a1.Deploy
 }
 
 // List all registered provider profiles
-func (r *SkyNetReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
+func (r *AtlasMeshReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
 	ppList := &cv1a1.ProviderProfileList{}
 	if err := r.List(context.Background(), ppList); err != nil {
 		return nil, errors.Wrap(err, "listing provider profiles")
@@ -890,7 +890,7 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 	return labels
 }
 
-func (r *SkyNetReconciler) generateIstioConfig(ns string, appId string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
 	manifests := make([]*hv1a1.SkyObject, 0)
 
 	edges := dpMap.Edges
@@ -1127,9 +1127,9 @@ func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *SkyNetReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *AtlasMeshReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&cv1a1.SkyNet{}).
-		Named("core-skynet").
+		For(&cv1a1.AtlasMesh{}).
+		Named("core-atlasmesh").
 		Complete(r)
 }

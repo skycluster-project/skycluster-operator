@@ -23,59 +23,59 @@ import (
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
-// SkyNetSpec defines the desired state of SkyNet
-type SkyNetSpec struct {
+// AtlasMeshSpec defines the desired state of AtlasMesh
+type AtlasMeshSpec struct {
 	Approve bool `json:"approve"`
 	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
 	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
 }
 
-// SkyNetStatus defines the observed state of SkyNet.
-type SkyNetStatus struct {
+// AtlasMeshStatus defines the observed state of AtlasMesh.
+type AtlasMeshStatus struct {
 	Objects   []hv1a1.SkyObject   `json:"objects,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the SkyNet is approved"
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyNet is ready"
+// +kubebuilder:printcolumn:name="Approved",type="boolean",JSONPath=".spec.approve",description="Indicates if the AtlasMesh is approved"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the AtlasMesh is ready"
 
-// SkyNet is the Schema for the skynets API
-type SkyNet struct {
+// AtlasMesh is the Schema for the atlasmeshs API
+type AtlasMesh struct {
 	metav1.TypeMeta `json:",inline"`
 
 	// metadata is a standard object metadata
 	// +optional
 	metav1.ObjectMeta `json:"metadata,omitempty,omitzero"`
 
-	// spec defines the desired state of SkyNet
+	// spec defines the desired state of AtlasMesh
 	// +required
-	Spec SkyNetSpec `json:"spec"`
+	Spec AtlasMeshSpec `json:"spec"`
 
-	// status defines the observed state of SkyNet
+	// status defines the observed state of AtlasMesh
 	// +optional
-	Status SkyNetStatus `json:"status,omitempty,omitzero"`
+	Status AtlasMeshStatus `json:"status,omitempty,omitzero"`
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the SkyNet is ready"
+// +kubebuilder:printcolumn:name="Ready",type="boolean",JSONPath=".status.ready",description="Indicates if the AtlasMesh is ready"
 
-// SkyNetList contains a list of SkyNet
-type SkyNetList struct {
+// AtlasMeshList contains a list of AtlasMesh
+type AtlasMeshList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []SkyNet `json:"items"`
+	Items           []AtlasMesh `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&SkyNet{}, &SkyNetList{})
+	SchemeBuilder.Register(&AtlasMesh{}, &AtlasMeshList{})
 }
 
 
 // helper to set a condition
-func (s *SkyNetStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
+func (s *AtlasMeshStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
 		Type:    string(condition),
 		Status:  status,

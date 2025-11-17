@@ -4,29 +4,29 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.18.0
-  name: skynets.core.skycluster.io
+  name: atlasmeshs.core.skycluster.io
 spec:
   group: core.skycluster.io
   names:
-    kind: SkyNet
-    listKind: SkyNetList
-    plural: skynets
-    singular: skynet
+    kind: AtlasMesh
+    listKind: AtlasMeshList
+    plural: atlasmeshs
+    singular: atlasmesh
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: Indicates if the SkyNet is approved
+    - description: Indicates if the AtlasMesh is approved
       jsonPath: .spec.approve
       name: Approved
       type: boolean
-    - description: Indicates if the SkyNet is ready
+    - description: Indicates if the AtlasMesh is ready
       jsonPath: .status.ready
       name: Ready
       type: boolean
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SkyNet is the Schema for the skynets API
+        description: AtlasMesh is the Schema for the atlasmeshs API
         properties:
           apiVersion:
             description: |-
@@ -46,7 +46,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: spec defines the desired state of SkyNet
+            description: spec defines the desired state of AtlasMesh
             properties:
               approve:
                 type: boolean
@@ -477,7 +477,7 @@ spec:
             - approve
             type: object
           status:
-            description: status defines the observed state of SkyNet
+            description: status defines the observed state of AtlasMesh
             properties:
               conditions:
                 items:

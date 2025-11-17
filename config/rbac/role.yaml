@@ -40,7 +40,7 @@ rules:
   - latencies
   - providerprofiles
   - skyclusters
-  - skynets
+  - atlasmeshs
   verbs:
   - create
   - delete
@@ -59,7 +59,7 @@ rules:
   - latencies/finalizers
   - providerprofiles/finalizers
   - skyclusters/finalizers
-  - skynets/finalizers
+  - atlasmeshs/finalizers
   verbs:
   - update
 - apiGroups:
@@ -72,7 +72,7 @@ rules:
   - latencies/status
   - providerprofiles/status
   - skyclusters/status
-  - skynets/status
+  - atlasmeshs/status
   verbs:
   - get
   - patch

@@ -19,7 +19,7 @@ SkyCluster is a custom resource that defines the desired state of SkyCluster per
 which contains the deployment reference and data flow reference.
 Additionally it contains all selected providers and their configurations.
 SkyCluster also contains the application components, including the deployments
-and all sky components (e.g. SkyVM, SkyDB, SkyStorage, SkyNetwork, etc.)
+and all sky components (e.g. SkyVM, SkyDB, SkyStorage, AtlasMeshwork, etc.)
 
 Once the dataflow and deployment policies are created, the SkyCluster controller
 reconciler get all deployments and sky components label with skycluster.io

@@ -135,8 +135,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		if err := r.ensureAtlas(task, appId1, status.DeployMap); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 		}
-		if err := r.ensureSkyNet(task, appId1, status.DeployMap); err != nil {
-			return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
+		if err := r.ensureAtlasMesh(task, appId1, status.DeployMap); err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to ensure AtlasMesh after optimization")
 		}
 		return ctrl.Result{}, nil
 	}
@@ -188,8 +188,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						if err = r.ensureAtlas(task, appId1, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 						}
-						if err = r.ensureSkyNet(task, appId1, deployPlan); err != nil {
-							return ctrl.Result{}, errors.Wrap(err, "failed to ensure SkyNet after optimization")
+						if err = r.ensureAtlasMesh(task, appId1, deployPlan); err != nil {
+							return ctrl.Result{}, errors.Wrap(err, "failed to ensure AtlasMesh after optimization")
 						}
 					}
 				} else {
@@ -1080,41 +1080,41 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 
-func (r *ILPTaskReconciler) ensureSkyNet(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
-	obj := &cv1a1.SkyNetList{}
+func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
+	obj := &cv1a1.AtlasMeshList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
 		"skycluster.io/app-id": appId,
 	}); err != nil {
-		return errors.Wrapf(err, "failed to list SkyNets for ILPTask %s", task.Name)
+		return errors.Wrapf(err, "failed to list AtlasMeshs for ILPTask %s", task.Name)
 	}
 	if len(obj.Items) > 1 {
-		return fmt.Errorf("multiple SkyNets found for ILPTask %s and appId %s", task.Name, appId)
+		return fmt.Errorf("multiple AtlasMeshs found for ILPTask %s and appId %s", task.Name, appId)
 	}
 	if len(obj.Items) > 0 {
 		// already exists, update if necessary
 		obj := &obj.Items[0]
 		if !reflect.DeepEqual(obj.Spec.DeployMap, deployPlan) {
-			r.Logger.Info("Updating existing SkyNet with new deployment plan", "SkyNet", obj.Name)
+			r.Logger.Info("Updating existing AtlasMesh with new deployment plan", "AtlasMesh", obj.Name)
 			obj.Spec.DeployMap = deployPlan
 			obj.Spec.Approve = false
 			if err := r.Update(context.TODO(), obj); err != nil {
-				return errors.Wrapf(err, "failed to update SkyNet for ILPTask %s", task.Name)
+				return errors.Wrapf(err, "failed to update AtlasMesh for ILPTask %s", task.Name)
 			}
-			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "SkyNet pending approval")
+			obj.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "PendingApproval", "AtlasMesh pending approval")
 			if err := r.Status().Update(context.TODO(), obj); err != nil {
-				return errors.Wrapf(err, "failed to update SkyNet status for ILPTask %s", task.Name)
+				return errors.Wrapf(err, "failed to update AtlasMesh status for ILPTask %s", task.Name)
 			}
 		}
 		return nil
 	} else { // try to create
-		r.Logger.Info("Creating new SkyNet for deployment plan", "ILPTask", task.Name)
-		obj := &cv1a1.SkyNet{
+		r.Logger.Info("Creating new AtlasMesh for deployment plan", "ILPTask", task.Name)
+		obj := &cv1a1.AtlasMesh{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: task.Name + "-" + RandSuffix(task.Name),
 				Labels: map[string]string{"skycluster.io/app-id": appId},
 				Namespace:    task.Namespace,
 			},
-			Spec: cv1a1.SkyNetSpec{
+			Spec: cv1a1.AtlasMeshSpec{
 				Approve: false,
 				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
 				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,

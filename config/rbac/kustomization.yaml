@@ -55,9 +55,9 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the skycluster-operator itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
-- core_skynet_admin_role.yaml
-- core_skynet_editor_role.yaml
-- core_skynet_viewer_role.yaml
+- core_atlasmesh_admin_role.yaml
+- core_atlasmesh_editor_role.yaml
+- core_atlasmesh_viewer_role.yaml
 - core_latency_admin_role.yaml
 - core_latency_editor_role.yaml
 - core_latency_viewer_role.yaml

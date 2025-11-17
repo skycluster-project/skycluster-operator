@@ -362,12 +362,12 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.SkyNetReconciler{
+	if err := (&corecontroller.AtlasMeshReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger: zap.New(pkglog.CustomLogger()).WithName("[SkyNet]"),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "SkyNet")
+		setupLog.Error(err, "unable to create controller", "controller", "AtlasMesh")
 		os.Exit(1)
 	}
 	// if err := (&corecontroller.LatencyReconciler{

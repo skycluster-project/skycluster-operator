@@ -39,7 +39,7 @@ Then get the modified deployment plan ready to be deployed across different doma
 ```bash
 # get the names
 NS=air-quality
-kubectl -n $NS get skynets -o json | jq '.items[0]' > /tmp/app.json; 
+kubectl -n $NS get atlasmeshs -o json | jq '.items[0]' > /tmp/app.json; 
 for i in $(seq 0 $(( $(jq '.status.objects|length' /tmp/app.json)-1 ))); do 
   jq -r ".status.objects[$i].name" /tmp/app.json; 
 done
@@ -54,6 +54,6 @@ Once ready approve the changes to be applied:
 
 ```bash
 NS=air-quality
-NAME=$(kubectl get skynets -n $NS -o jsonpath="{.items[0].metadata.name}")
-kubectl patch -n $NS skynets $NAME -p '{"spec":{"approve":false}}' --type=merge
+NAME=$(kubectl get atlasmeshs -n $NS -o jsonpath="{.items[0].metadata.name}")
+kubectl patch -n $NS atlasmeshs $NAME -p '{"spec":{"approve":false}}' --type=merge
 ```
