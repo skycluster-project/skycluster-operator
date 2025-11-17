@@ -33,6 +33,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - atlasmeshs
   - devicenodes
   - ilptasks
   - images
@@ -40,7 +41,6 @@ rules:
   - latencies
   - providerprofiles
   - skyclusters
-  - atlasmeshs
   verbs:
   - create
   - delete
@@ -52,6 +52,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
+  - atlasmeshs/finalizers
   - devicenodes/finalizers
   - ilptasks/finalizers
   - images/finalizers
@@ -59,12 +60,12 @@ rules:
   - latencies/finalizers
   - providerprofiles/finalizers
   - skyclusters/finalizers
-  - atlasmeshs/finalizers
   verbs:
   - update
 - apiGroups:
   - core.skycluster.io
   resources:
+  - atlasmeshs/status
   - devicenodes/status
   - ilptasks/status
   - images/status
@@ -72,7 +73,6 @@ rules:
   - latencies/status
   - providerprofiles/status
   - skyclusters/status
-  - atlasmeshs/status
   verbs:
   - get
   - patch

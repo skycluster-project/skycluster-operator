@@ -10,7 +10,6 @@ resources:
 - bases/core.skycluster.io_skyclusters.yaml
 - bases/core.skycluster.io_ilptasks.yaml
 - bases/core.skycluster.io_atlass.yaml
-- bases/svc.skycluster.io_skyproviders.yaml
 - bases/core.skycluster.io_images.yaml
 - bases/core.skycluster.io_instancetypes.yaml
 - bases/core.skycluster.io_providerprofiles.yaml
