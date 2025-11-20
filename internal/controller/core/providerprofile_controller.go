@@ -823,7 +823,7 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 	switch platform {
 	case "aws":
 		for _, z := range zoneNames {
-			zo := buildZoneOfferings(z, []string{"t3.", "m5.", "p3.", "p5.", "g5."})
+			zo := buildZoneOfferings(z, []string{"t3.", "m5.", "p3.", "p5.", "g5.", "g6.", "g6e.", "p4d", "p3dn"})
 			zoneOfferings = append(zoneOfferings, zo)
 		}
 		// "m5", "m6g", "c5", "c6g", "r5", "r6g"
@@ -834,7 +834,7 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 		}
 	case "gcp":
 		for _, z := range zoneNames {
-			zo := buildZoneOfferings(z, []string{"e2", "n1"})
+			zo := buildZoneOfferings(z, []string{"e2", "n1", "g2", "a2"})
 			zoneOfferings = append(zoneOfferings, zo)
 		}
 	default:
