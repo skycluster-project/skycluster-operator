@@ -1,0 +1,3332 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: atlas.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: Atlas
+    listKind: AtlasList
+    plural: atlas
+    singular: atlas
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Indicates if the Atlas is approved
+      jsonPath: .spec.approve
+      name: Approved
+      type: boolean
+    - description: Indicates if the Atlas is ready
+      jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Atlas is the Schema for the atlass API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AtlasSpec defines the desired state of Atlas.
+            properties:
+              approve:
+                description: Manifests is a list of manifests to apply to the cluster
+                type: boolean
+              dataflowPolicyRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              deployPlan:
+                properties:
+                  components:
+                    items:
+                      properties:
+                        componentRef:
+                          description: ObjectReference contains enough information
+                            to let you inspect or modify the referred object.
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: |-
+                                If referring to a piece of an object instead of an entire object, this string
+                                should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container within a pod, this would take on a value like:
+                                "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                the event) or if no container name is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                referencing a part of an object.
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the referent.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            name:
+                              description: |-
+                                Name of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                              type: string
+                            resourceVersion:
+                              description: |-
+                                Specific resourceVersion to which this reference is made, if any.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                              type: string
+                            uid:
+                              description: |-
+                                UID of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        conditions:
+                          items:
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
+                            properties:
+                              lastTransitionTime:
+                                description: |-
+                                  lastTransitionTime is the last time the condition transitioned from one status to another.
+                                  This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                format: date-time
+                                type: string
+                              message:
+                                description: |-
+                                  message is a human readable message indicating details about the transition.
+                                  This may be an empty string.
+                                maxLength: 32768
+                                type: string
+                              observedGeneration:
+                                description: |-
+                                  observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                  For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                  with respect to the current state of the instance.
+                                format: int64
+                                minimum: 0
+                                type: integer
+                              reason:
+                                description: |-
+                                  reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                  Producers of specific condition types may define expected values and meanings for this field,
+                                  and whether the values are considered a guaranteed API.
+                                  The value should be a CamelCase string.
+                                  This field may not be empty.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                type: string
+                              status:
+                                description: status of the condition, one of True,
+                                  False, Unknown.
+                                enum:
+                                - "True"
+                                - "False"
+                                - Unknown
+                                type: string
+                              type:
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
+                                maxLength: 316
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                type: string
+                            required:
+                            - lastTransitionTime
+                            - message
+                            - reason
+                            - status
+                            - type
+                            type: object
+                          type: array
+                        manifest:
+                          type: string
+                        providerRef:
+                          properties:
+                            configName:
+                              type: string
+                            name:
+                              type: string
+                            platform:
+                              type: string
+                            region:
+                              type: string
+                            regionAlias:
+                              type: string
+                            type:
+                              type: string
+                            zone:
+                              type: string
+                          type: object
+                      required:
+                      - componentRef
+                      type: object
+                    type: array
+                  edges:
+                    items:
+                      properties:
+                        from:
+                          properties:
+                            componentRef:
+                              description: ObjectReference contains enough information
+                                to let you inspect or modify the referred object.
+                              properties:
+                                apiVersion:
+                                  description: API version of the referent.
+                                  type: string
+                                fieldPath:
+                                  description: |-
+                                    If referring to a piece of an object instead of an entire object, this string
+                                    should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                    For example, if the object reference is to a container within a pod, this would take on a value like:
+                                    "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                    the event) or if no container name is specified "spec.containers[2]" (container with
+                                    index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                    referencing a part of an object.
+                                  type: string
+                                kind:
+                                  description: |-
+                                    Kind of the referent.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  description: |-
+                                    Name of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                  type: string
+                                resourceVersion:
+                                  description: |-
+                                    Specific resourceVersion to which this reference is made, if any.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                  type: string
+                                uid:
+                                  description: |-
+                                    UID of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            conditions:
+                              items:
+                                description: Condition contains details for one aspect
+                                  of the current state of this API Resource.
+                                properties:
+                                  lastTransitionTime:
+                                    description: |-
+                                      lastTransitionTime is the last time the condition transitioned from one status to another.
+                                      This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                    format: date-time
+                                    type: string
+                                  message:
+                                    description: |-
+                                      message is a human readable message indicating details about the transition.
+                                      This may be an empty string.
+                                    maxLength: 32768
+                                    type: string
+                                  observedGeneration:
+                                    description: |-
+                                      observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                      with respect to the current state of the instance.
+                                    format: int64
+                                    minimum: 0
+                                    type: integer
+                                  reason:
+                                    description: |-
+                                      reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                      Producers of specific condition types may define expected values and meanings for this field,
+                                      and whether the values are considered a guaranteed API.
+                                      The value should be a CamelCase string.
+                                      This field may not be empty.
+                                    maxLength: 1024
+                                    minLength: 1
+                                    pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                    type: string
+                                  status:
+                                    description: status of the condition, one of True,
+                                      False, Unknown.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: type of condition in CamelCase or
+                                      in foo.example.com/CamelCase.
+                                    maxLength: 316
+                                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                    type: string
+                                required:
+                                - lastTransitionTime
+                                - message
+                                - reason
+                                - status
+                                - type
+                                type: object
+                              type: array
+                            manifest:
+                              type: string
+                            providerRef:
+                              properties:
+                                configName:
+                                  type: string
+                                name:
+                                  type: string
+                                platform:
+                                  type: string
+                                region:
+                                  type: string
+                                regionAlias:
+                                  type: string
+                                type:
+                                  type: string
+                                zone:
+                                  type: string
+                              type: object
+                          required:
+                          - componentRef
+                          type: object
+                        latency:
+                          type: string
+                        to:
+                          properties:
+                            componentRef:
+                              description: ObjectReference contains enough information
+                                to let you inspect or modify the referred object.
+                              properties:
+                                apiVersion:
+                                  description: API version of the referent.
+                                  type: string
+                                fieldPath:
+                                  description: |-
+                                    If referring to a piece of an object instead of an entire object, this string
+                                    should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                    For example, if the object reference is to a container within a pod, this would take on a value like:
+                                    "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                    the event) or if no container name is specified "spec.containers[2]" (container with
+                                    index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                    referencing a part of an object.
+                                  type: string
+                                kind:
+                                  description: |-
+                                    Kind of the referent.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  description: |-
+                                    Name of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                  type: string
+                                resourceVersion:
+                                  description: |-
+                                    Specific resourceVersion to which this reference is made, if any.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                  type: string
+                                uid:
+                                  description: |-
+                                    UID of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            conditions:
+                              items:
+                                description: Condition contains details for one aspect
+                                  of the current state of this API Resource.
+                                properties:
+                                  lastTransitionTime:
+                                    description: |-
+                                      lastTransitionTime is the last time the condition transitioned from one status to another.
+                                      This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                    format: date-time
+                                    type: string
+                                  message:
+                                    description: |-
+                                      message is a human readable message indicating details about the transition.
+                                      This may be an empty string.
+                                    maxLength: 32768
+                                    type: string
+                                  observedGeneration:
+                                    description: |-
+                                      observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                      with respect to the current state of the instance.
+                                    format: int64
+                                    minimum: 0
+                                    type: integer
+                                  reason:
+                                    description: |-
+                                      reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                      Producers of specific condition types may define expected values and meanings for this field,
+                                      and whether the values are considered a guaranteed API.
+                                      The value should be a CamelCase string.
+                                      This field may not be empty.
+                                    maxLength: 1024
+                                    minLength: 1
+                                    pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                    type: string
+                                  status:
+                                    description: status of the condition, one of True,
+                                      False, Unknown.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: type of condition in CamelCase or
+                                      in foo.example.com/CamelCase.
+                                    maxLength: 316
+                                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                    type: string
+                                required:
+                                - lastTransitionTime
+                                - message
+                                - reason
+                                - status
+                                - type
+                                type: object
+                              type: array
+                            manifest:
+                              type: string
+                            providerRef:
+                              properties:
+                                configName:
+                                  type: string
+                                name:
+                                  type: string
+                                platform:
+                                  type: string
+                                region:
+                                  type: string
+                                regionAlias:
+                                  type: string
+                                type:
+                                  type: string
+                                zone:
+                                  type: string
+                              type: object
+                          required:
+                          - componentRef
+                          type: object
+                      required:
+                      - from
+                      - to
+                      type: object
+                    type: array
+                type: object
+              deploymentPlanRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - approve
+            type: object
+          status:
+            description: AtlasStatus defines the observed state of Atlas.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              manifests:
+                items:
+                  properties:
+                    componentRef:
+                      description: ObjectReference contains enough information to
+                        let you inspect or modify the referred object.
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    conditions:
+                      items:
+                        description: Condition contains details for one aspect of
+                          the current state of this API Resource.
+                        properties:
+                          lastTransitionTime:
+                            description: |-
+                              lastTransitionTime is the last time the condition transitioned from one status to another.
+                              This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                            format: date-time
+                            type: string
+                          message:
+                            description: |-
+                              message is a human readable message indicating details about the transition.
+                              This may be an empty string.
+                            maxLength: 32768
+                            type: string
+                          observedGeneration:
+                            description: |-
+                              observedGeneration represents the .metadata.generation that the condition was set based upon.
+                              For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                              with respect to the current state of the instance.
+                            format: int64
+                            minimum: 0
+                            type: integer
+                          reason:
+                            description: |-
+                              reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                              Producers of specific condition types may define expected values and meanings for this field,
+                              and whether the values are considered a guaranteed API.
+                              The value should be a CamelCase string.
+                              This field may not be empty.
+                            maxLength: 1024
+                            minLength: 1
+                            pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                            type: string
+                          status:
+                            description: status of the condition, one of True, False,
+                              Unknown.
+                            enum:
+                            - "True"
+                            - "False"
+                            - Unknown
+                            type: string
+                          type:
+                            description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                            maxLength: 316
+                            pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                            type: string
+                        required:
+                        - lastTransitionTime
+                        - message
+                        - reason
+                        - status
+                        - type
+                        type: object
+                      type: array
+                    manifest:
+                      type: string
+                    providerRef:
+                      properties:
+                        configName:
+                          type: string
+                        name:
+                          type: string
+                        platform:
+                          type: string
+                        region:
+                          type: string
+                        regionAlias:
+                          type: string
+                        type:
+                          type: string
+                        zone:
+                          type: string
+                      type: object
+                  required:
+                  - componentRef
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: atlasmeshes.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: AtlasMesh
+    listKind: AtlasMeshList
+    plural: atlasmeshes
+    singular: atlasmesh
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: Indicates if the AtlasMesh is approved
+      jsonPath: .spec.approve
+      name: Approved
+      type: boolean
+    - description: Indicates if the AtlasMesh is ready
+      jsonPath: .status.ready
+      name: Ready
+      type: boolean
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: AtlasMesh is the Schema for the atlasmeshs API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of AtlasMesh
+            properties:
+              approve:
+                type: boolean
+              dataflowPolicyRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              deployPlan:
+                properties:
+                  components:
+                    items:
+                      properties:
+                        componentRef:
+                          description: ObjectReference contains enough information
+                            to let you inspect or modify the referred object.
+                          properties:
+                            apiVersion:
+                              description: API version of the referent.
+                              type: string
+                            fieldPath:
+                              description: |-
+                                If referring to a piece of an object instead of an entire object, this string
+                                should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                For example, if the object reference is to a container within a pod, this would take on a value like:
+                                "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                the event) or if no container name is specified "spec.containers[2]" (container with
+                                index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                referencing a part of an object.
+                              type: string
+                            kind:
+                              description: |-
+                                Kind of the referent.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                              type: string
+                            name:
+                              description: |-
+                                Name of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              type: string
+                            namespace:
+                              description: |-
+                                Namespace of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                              type: string
+                            resourceVersion:
+                              description: |-
+                                Specific resourceVersion to which this reference is made, if any.
+                                More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                              type: string
+                            uid:
+                              description: |-
+                                UID of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        conditions:
+                          items:
+                            description: Condition contains details for one aspect
+                              of the current state of this API Resource.
+                            properties:
+                              lastTransitionTime:
+                                description: |-
+                                  lastTransitionTime is the last time the condition transitioned from one status to another.
+                                  This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                format: date-time
+                                type: string
+                              message:
+                                description: |-
+                                  message is a human readable message indicating details about the transition.
+                                  This may be an empty string.
+                                maxLength: 32768
+                                type: string
+                              observedGeneration:
+                                description: |-
+                                  observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                  For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                  with respect to the current state of the instance.
+                                format: int64
+                                minimum: 0
+                                type: integer
+                              reason:
+                                description: |-
+                                  reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                  Producers of specific condition types may define expected values and meanings for this field,
+                                  and whether the values are considered a guaranteed API.
+                                  The value should be a CamelCase string.
+                                  This field may not be empty.
+                                maxLength: 1024
+                                minLength: 1
+                                pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                type: string
+                              status:
+                                description: status of the condition, one of True,
+                                  False, Unknown.
+                                enum:
+                                - "True"
+                                - "False"
+                                - Unknown
+                                type: string
+                              type:
+                                description: type of condition in CamelCase or in
+                                  foo.example.com/CamelCase.
+                                maxLength: 316
+                                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                type: string
+                            required:
+                            - lastTransitionTime
+                            - message
+                            - reason
+                            - status
+                            - type
+                            type: object
+                          type: array
+                        manifest:
+                          type: string
+                        providerRef:
+                          properties:
+                            configName:
+                              type: string
+                            name:
+                              type: string
+                            platform:
+                              type: string
+                            region:
+                              type: string
+                            regionAlias:
+                              type: string
+                            type:
+                              type: string
+                            zone:
+                              type: string
+                          type: object
+                      required:
+                      - componentRef
+                      type: object
+                    type: array
+                  edges:
+                    items:
+                      properties:
+                        from:
+                          properties:
+                            componentRef:
+                              description: ObjectReference contains enough information
+                                to let you inspect or modify the referred object.
+                              properties:
+                                apiVersion:
+                                  description: API version of the referent.
+                                  type: string
+                                fieldPath:
+                                  description: |-
+                                    If referring to a piece of an object instead of an entire object, this string
+                                    should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                    For example, if the object reference is to a container within a pod, this would take on a value like:
+                                    "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                    the event) or if no container name is specified "spec.containers[2]" (container with
+                                    index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                    referencing a part of an object.
+                                  type: string
+                                kind:
+                                  description: |-
+                                    Kind of the referent.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  description: |-
+                                    Name of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                  type: string
+                                resourceVersion:
+                                  description: |-
+                                    Specific resourceVersion to which this reference is made, if any.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                  type: string
+                                uid:
+                                  description: |-
+                                    UID of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            conditions:
+                              items:
+                                description: Condition contains details for one aspect
+                                  of the current state of this API Resource.
+                                properties:
+                                  lastTransitionTime:
+                                    description: |-
+                                      lastTransitionTime is the last time the condition transitioned from one status to another.
+                                      This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                    format: date-time
+                                    type: string
+                                  message:
+                                    description: |-
+                                      message is a human readable message indicating details about the transition.
+                                      This may be an empty string.
+                                    maxLength: 32768
+                                    type: string
+                                  observedGeneration:
+                                    description: |-
+                                      observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                      with respect to the current state of the instance.
+                                    format: int64
+                                    minimum: 0
+                                    type: integer
+                                  reason:
+                                    description: |-
+                                      reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                      Producers of specific condition types may define expected values and meanings for this field,
+                                      and whether the values are considered a guaranteed API.
+                                      The value should be a CamelCase string.
+                                      This field may not be empty.
+                                    maxLength: 1024
+                                    minLength: 1
+                                    pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                    type: string
+                                  status:
+                                    description: status of the condition, one of True,
+                                      False, Unknown.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: type of condition in CamelCase or
+                                      in foo.example.com/CamelCase.
+                                    maxLength: 316
+                                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                    type: string
+                                required:
+                                - lastTransitionTime
+                                - message
+                                - reason
+                                - status
+                                - type
+                                type: object
+                              type: array
+                            manifest:
+                              type: string
+                            providerRef:
+                              properties:
+                                configName:
+                                  type: string
+                                name:
+                                  type: string
+                                platform:
+                                  type: string
+                                region:
+                                  type: string
+                                regionAlias:
+                                  type: string
+                                type:
+                                  type: string
+                                zone:
+                                  type: string
+                              type: object
+                          required:
+                          - componentRef
+                          type: object
+                        latency:
+                          type: string
+                        to:
+                          properties:
+                            componentRef:
+                              description: ObjectReference contains enough information
+                                to let you inspect or modify the referred object.
+                              properties:
+                                apiVersion:
+                                  description: API version of the referent.
+                                  type: string
+                                fieldPath:
+                                  description: |-
+                                    If referring to a piece of an object instead of an entire object, this string
+                                    should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                    For example, if the object reference is to a container within a pod, this would take on a value like:
+                                    "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                    the event) or if no container name is specified "spec.containers[2]" (container with
+                                    index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                    referencing a part of an object.
+                                  type: string
+                                kind:
+                                  description: |-
+                                    Kind of the referent.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  description: |-
+                                    Name of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                  type: string
+                                resourceVersion:
+                                  description: |-
+                                    Specific resourceVersion to which this reference is made, if any.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                  type: string
+                                uid:
+                                  description: |-
+                                    UID of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            conditions:
+                              items:
+                                description: Condition contains details for one aspect
+                                  of the current state of this API Resource.
+                                properties:
+                                  lastTransitionTime:
+                                    description: |-
+                                      lastTransitionTime is the last time the condition transitioned from one status to another.
+                                      This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                    format: date-time
+                                    type: string
+                                  message:
+                                    description: |-
+                                      message is a human readable message indicating details about the transition.
+                                      This may be an empty string.
+                                    maxLength: 32768
+                                    type: string
+                                  observedGeneration:
+                                    description: |-
+                                      observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                      with respect to the current state of the instance.
+                                    format: int64
+                                    minimum: 0
+                                    type: integer
+                                  reason:
+                                    description: |-
+                                      reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                      Producers of specific condition types may define expected values and meanings for this field,
+                                      and whether the values are considered a guaranteed API.
+                                      The value should be a CamelCase string.
+                                      This field may not be empty.
+                                    maxLength: 1024
+                                    minLength: 1
+                                    pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                    type: string
+                                  status:
+                                    description: status of the condition, one of True,
+                                      False, Unknown.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: type of condition in CamelCase or
+                                      in foo.example.com/CamelCase.
+                                    maxLength: 316
+                                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                    type: string
+                                required:
+                                - lastTransitionTime
+                                - message
+                                - reason
+                                - status
+                                - type
+                                type: object
+                              type: array
+                            manifest:
+                              type: string
+                            providerRef:
+                              properties:
+                                configName:
+                                  type: string
+                                name:
+                                  type: string
+                                platform:
+                                  type: string
+                                region:
+                                  type: string
+                                regionAlias:
+                                  type: string
+                                type:
+                                  type: string
+                                zone:
+                                  type: string
+                              type: object
+                          required:
+                          - componentRef
+                          type: object
+                      required:
+                      - from
+                      - to
+                      type: object
+                    type: array
+                type: object
+              deploymentPlanRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - approve
+            type: object
+          status:
+            description: status defines the observed state of AtlasMesh
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              objects:
+                items:
+                  description: |-
+                    SkyObject represents a "Object" managed by SkyCluster
+                    This is a claim that maps to a cluster-scope object.kubernetes resource
+                  properties:
+                    manifest:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    providerRefSpec:
+                      properties:
+                        configName:
+                          type: string
+                        name:
+                          type: string
+                        platform:
+                          type: string
+                        region:
+                          type: string
+                        regionAlias:
+                          type: string
+                        type:
+                          type: string
+                        zone:
+                          type: string
+                      type: object
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: dataflowpolicies.policy.skycluster.io
+spec:
+  group: policy.skycluster.io
+  names:
+    kind: DataflowPolicy
+    listKind: DataflowPolicyList
+    plural: dataflowpolicies
+    singular: dataflowpolicy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: The sync status of the DataflowPolicy
+      jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: Synced
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DataflowPolicy is the Schema for the dataflowpolicies API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DataflowPolicySpec defines the desired state of DataflowPolicy.
+            properties:
+              dataDependencies:
+                description: DataDependencies is the list of data dependencies
+                items:
+                  properties:
+                    averageDataRate:
+                      description: AverageDataRate indicates the average data rate
+                      type: string
+                    from:
+                      description: From is the reference to the source component
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    latency:
+                      description: Latency represents the latency between services
+                      type: string
+                    to:
+                      description: To is the reference to the destination component
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    totalDataTransfer:
+                      description: TotalDataTransfer indicates the total data transferred
+                      type: string
+                  type: object
+                type: array
+            required:
+            - dataDependencies
+            type: object
+          status:
+            description: DataflowPolicyStatus defines the observed state of DataflowPolicy.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: deploymentpolicies.policy.skycluster.io
+spec:
+  group: policy.skycluster.io
+  names:
+    kind: DeploymentPolicy
+    listKind: DeploymentPolicyList
+    plural: deploymentpolicies
+    singular: deploymentpolicy
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: The sync status of the DeploymentPolicy
+      jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: Synced
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DeploymentPolicy is the Schema for the deploymentpolicies API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: DeploymentPolicySpec defines the desired state of DeploymentPolicy.
+            properties:
+              deploymentPolicies:
+                items:
+                  properties:
+                    componentRef:
+                      description: ComponentRef is the reference to the component
+                      properties:
+                        apiVersion:
+                          description: API version of the referent.
+                          type: string
+                        fieldPath:
+                          description: |-
+                            If referring to a piece of an object instead of an entire object, this string
+                            should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                            For example, if the object reference is to a container within a pod, this would take on a value like:
+                            "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                            the event) or if no container name is specified "spec.containers[2]" (container with
+                            index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                            referencing a part of an object.
+                          type: string
+                        kind:
+                          description: |-
+                            Kind of the referent.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                          type: string
+                        name:
+                          description: |-
+                            Name of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                        namespace:
+                          description: |-
+                            Namespace of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                          type: string
+                        resourceVersion:
+                          description: |-
+                            Specific resourceVersion to which this reference is made, if any.
+                            More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                          type: string
+                        uid:
+                          description: |-
+                            UID of the referent.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                    locationConstraint:
+                      description: LocationConstraint is the location constraint for
+                        the component
+                      properties:
+                        permitted:
+                          description: Permitted specifies locations that are allowed
+                            (OR logic).
+                          items:
+                            properties:
+                              configName:
+                                type: string
+                              name:
+                                type: string
+                              platform:
+                                type: string
+                              region:
+                                type: string
+                              regionAlias:
+                                type: string
+                              type:
+                                type: string
+                              zone:
+                                type: string
+                            type: object
+                          type: array
+                        required:
+                          description: Required specifies location sets that must
+                            be satisfied (AND logic).
+                          items:
+                            description: LocationCondition represents a group of alternative
+                              location rules (OR logic).
+                            properties:
+                              anyOf:
+                                items:
+                                  properties:
+                                    configName:
+                                      type: string
+                                    name:
+                                      type: string
+                                    platform:
+                                      type: string
+                                    region:
+                                      type: string
+                                    regionAlias:
+                                      type: string
+                                    type:
+                                      type: string
+                                    zone:
+                                      type: string
+                                  type: object
+                                type: array
+                            type: object
+                          type: array
+                      type: object
+                    performanceConstraint:
+                      description: PerformanceConstraint is the performance constraint
+                        for the component
+                      properties:
+                        customMetrics:
+                          items:
+                            properties:
+                              endpoint:
+                                description: Endpoint is the endpoint of the custom
+                                  metric
+                                type: string
+                              name:
+                                description: Name is the name of the custom metric
+                                type: string
+                            required:
+                            - endpoint
+                            - name
+                            type: object
+                          type: array
+                        responseTime:
+                          type: string
+                      type: object
+                    virtualServiceConstraint:
+                      items:
+                        properties:
+                          anyOf:
+                            items:
+                              properties:
+                                apiVersion:
+                                  description: |-
+                                    APIVersion defines the versioned schema of this representation of an object.
+                                    Servers should convert recognized schemas to the latest internal value, and
+                                    may reject unrecognized values.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+                                  type: string
+                                count:
+                                  default: 1
+                                  type: integer
+                                kind:
+                                  description: |-
+                                    Kind is a string value representing the REST resource this object represents.
+                                    Servers may infer this from the endpoint the client submits requests to.
+                                    Cannot be updated.
+                                    In CamelCase.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  type: string
+                              type: object
+                            type: array
+                        required:
+                        - anyOf
+                        type: object
+                      type: array
+                  required:
+                  - componentRef
+                  type: object
+                type: array
+            required:
+            - deploymentPolicies
+            type: object
+          status:
+            description: DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: devicenodes.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: DeviceNode
+    listKind: DeviceNodeList
+    plural: devicenodes
+    singular: devicenode
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.region
+      name: Region
+      type: string
+    - jsonPath: .status.zone
+      name: Zone
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: DeviceNode is the Schema for the devicenodes API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of DeviceNode
+            properties:
+              deviceSpec:
+                properties:
+                  auth:
+                    properties:
+                      privateKeySecretRef:
+                        properties:
+                          key:
+                            description: Key in the secret
+                            type: string
+                          name:
+                            description: Name of the secret
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      username:
+                        type: string
+                    required:
+                    - username
+                    type: object
+                  configs:
+                    properties:
+                      generation:
+                        type: string
+                      gpu:
+                        properties:
+                          count:
+                            type: integer
+                          enabled:
+                            type: boolean
+                          manufacturer:
+                            type: string
+                          memory:
+                            type: string
+                          model:
+                            type: string
+                          unit:
+                            type: string
+                        type: object
+                      name:
+                        type: string
+                      nameLabel:
+                        type: string
+                      price:
+                        type: string
+                      ram:
+                        type: string
+                      spot:
+                        properties:
+                          enabled:
+                            type: boolean
+                          price:
+                            type: string
+                        type: object
+                      vcpus:
+                        type: integer
+                      volumeTypes:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  privateIp:
+                    type: string
+                  publicIp:
+                    type: string
+                  type:
+                    type: string
+                  zone:
+                    type: string
+                required:
+                - auth
+                - privateIp
+                - type
+                - zone
+                type: object
+              providerRef:
+                type: string
+            required:
+            - deviceSpec
+            - providerRef
+            type: object
+          status:
+            description: status defines the observed state of DeviceNode
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastUpdateTime:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              region:
+                type: string
+              zone:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: ilptasks.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: ILPTask
+    listKind: ILPTaskList
+    plural: ilptasks
+    singular: ilptask
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - description: The status of the ILP Task
+      jsonPath: .status.optimization.status
+      name: Status
+      type: string
+    - description: The result of the ILP Task
+      jsonPath: .status.optimization.result
+      name: Result
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ILPTask is the Schema for the ilptasks API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ILPTaskSpec defines the desired state of ILPTask.
+            properties:
+              dataflowPolicyRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              deploymentPlanRef:
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  resourceVersion:
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            type: object
+          status:
+            description: ILPTaskStatus defines the observed state of ILPTask.
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              optimization:
+                properties:
+                  configMapRef:
+                    description: |-
+                      LocalObjectReference contains enough information to let you locate the
+                      referenced object inside the same namespace.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  dataflowResourceVersion:
+                    type: string
+                  deployMap:
+                    properties:
+                      components:
+                        items:
+                          properties:
+                            componentRef:
+                              description: ObjectReference contains enough information
+                                to let you inspect or modify the referred object.
+                              properties:
+                                apiVersion:
+                                  description: API version of the referent.
+                                  type: string
+                                fieldPath:
+                                  description: |-
+                                    If referring to a piece of an object instead of an entire object, this string
+                                    should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                    For example, if the object reference is to a container within a pod, this would take on a value like:
+                                    "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                    the event) or if no container name is specified "spec.containers[2]" (container with
+                                    index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                    referencing a part of an object.
+                                  type: string
+                                kind:
+                                  description: |-
+                                    Kind of the referent.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  type: string
+                                name:
+                                  description: |-
+                                    Name of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                namespace:
+                                  description: |-
+                                    Namespace of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                  type: string
+                                resourceVersion:
+                                  description: |-
+                                    Specific resourceVersion to which this reference is made, if any.
+                                    More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                  type: string
+                                uid:
+                                  description: |-
+                                    UID of the referent.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                  type: string
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            conditions:
+                              items:
+                                description: Condition contains details for one aspect
+                                  of the current state of this API Resource.
+                                properties:
+                                  lastTransitionTime:
+                                    description: |-
+                                      lastTransitionTime is the last time the condition transitioned from one status to another.
+                                      This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                    format: date-time
+                                    type: string
+                                  message:
+                                    description: |-
+                                      message is a human readable message indicating details about the transition.
+                                      This may be an empty string.
+                                    maxLength: 32768
+                                    type: string
+                                  observedGeneration:
+                                    description: |-
+                                      observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                      For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                      with respect to the current state of the instance.
+                                    format: int64
+                                    minimum: 0
+                                    type: integer
+                                  reason:
+                                    description: |-
+                                      reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                      Producers of specific condition types may define expected values and meanings for this field,
+                                      and whether the values are considered a guaranteed API.
+                                      The value should be a CamelCase string.
+                                      This field may not be empty.
+                                    maxLength: 1024
+                                    minLength: 1
+                                    pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                    type: string
+                                  status:
+                                    description: status of the condition, one of True,
+                                      False, Unknown.
+                                    enum:
+                                    - "True"
+                                    - "False"
+                                    - Unknown
+                                    type: string
+                                  type:
+                                    description: type of condition in CamelCase or
+                                      in foo.example.com/CamelCase.
+                                    maxLength: 316
+                                    pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                    type: string
+                                required:
+                                - lastTransitionTime
+                                - message
+                                - reason
+                                - status
+                                - type
+                                type: object
+                              type: array
+                            manifest:
+                              type: string
+                            providerRef:
+                              properties:
+                                configName:
+                                  type: string
+                                name:
+                                  type: string
+                                platform:
+                                  type: string
+                                region:
+                                  type: string
+                                regionAlias:
+                                  type: string
+                                type:
+                                  type: string
+                                zone:
+                                  type: string
+                              type: object
+                          required:
+                          - componentRef
+                          type: object
+                        type: array
+                      edges:
+                        items:
+                          properties:
+                            from:
+                              properties:
+                                componentRef:
+                                  description: ObjectReference contains enough information
+                                    to let you inspect or modify the referred object.
+                                  properties:
+                                    apiVersion:
+                                      description: API version of the referent.
+                                      type: string
+                                    fieldPath:
+                                      description: |-
+                                        If referring to a piece of an object instead of an entire object, this string
+                                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                        the event) or if no container name is specified "spec.containers[2]" (container with
+                                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                        referencing a part of an object.
+                                      type: string
+                                    kind:
+                                      description: |-
+                                        Kind of the referent.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                      type: string
+                                    name:
+                                      description: |-
+                                        Name of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                      type: string
+                                    namespace:
+                                      description: |-
+                                        Namespace of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                      type: string
+                                    resourceVersion:
+                                      description: |-
+                                        Specific resourceVersion to which this reference is made, if any.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                      type: string
+                                    uid:
+                                      description: |-
+                                        UID of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                      type: string
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                conditions:
+                                  items:
+                                    description: Condition contains details for one
+                                      aspect of the current state of this API Resource.
+                                    properties:
+                                      lastTransitionTime:
+                                        description: |-
+                                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                        format: date-time
+                                        type: string
+                                      message:
+                                        description: |-
+                                          message is a human readable message indicating details about the transition.
+                                          This may be an empty string.
+                                        maxLength: 32768
+                                        type: string
+                                      observedGeneration:
+                                        description: |-
+                                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                          with respect to the current state of the instance.
+                                        format: int64
+                                        minimum: 0
+                                        type: integer
+                                      reason:
+                                        description: |-
+                                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                          Producers of specific condition types may define expected values and meanings for this field,
+                                          and whether the values are considered a guaranteed API.
+                                          The value should be a CamelCase string.
+                                          This field may not be empty.
+                                        maxLength: 1024
+                                        minLength: 1
+                                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                        type: string
+                                      status:
+                                        description: status of the condition, one
+                                          of True, False, Unknown.
+                                        enum:
+                                        - "True"
+                                        - "False"
+                                        - Unknown
+                                        type: string
+                                      type:
+                                        description: type of condition in CamelCase
+                                          or in foo.example.com/CamelCase.
+                                        maxLength: 316
+                                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                        type: string
+                                    required:
+                                    - lastTransitionTime
+                                    - message
+                                    - reason
+                                    - status
+                                    - type
+                                    type: object
+                                  type: array
+                                manifest:
+                                  type: string
+                                providerRef:
+                                  properties:
+                                    configName:
+                                      type: string
+                                    name:
+                                      type: string
+                                    platform:
+                                      type: string
+                                    region:
+                                      type: string
+                                    regionAlias:
+                                      type: string
+                                    type:
+                                      type: string
+                                    zone:
+                                      type: string
+                                  type: object
+                              required:
+                              - componentRef
+                              type: object
+                            latency:
+                              type: string
+                            to:
+                              properties:
+                                componentRef:
+                                  description: ObjectReference contains enough information
+                                    to let you inspect or modify the referred object.
+                                  properties:
+                                    apiVersion:
+                                      description: API version of the referent.
+                                      type: string
+                                    fieldPath:
+                                      description: |-
+                                        If referring to a piece of an object instead of an entire object, this string
+                                        should contain a valid JSON/Go field access statement, such as desiredState.manifest.containers[2].
+                                        For example, if the object reference is to a container within a pod, this would take on a value like:
+                                        "spec.containers{name}" (where "name" refers to the name of the container that triggered
+                                        the event) or if no container name is specified "spec.containers[2]" (container with
+                                        index 2 in this pod). This syntax is chosen only to have some well-defined way of
+                                        referencing a part of an object.
+                                      type: string
+                                    kind:
+                                      description: |-
+                                        Kind of the referent.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                      type: string
+                                    name:
+                                      description: |-
+                                        Name of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                      type: string
+                                    namespace:
+                                      description: |-
+                                        Namespace of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/
+                                      type: string
+                                    resourceVersion:
+                                      description: |-
+                                        Specific resourceVersion to which this reference is made, if any.
+                                        More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#concurrency-control-and-consistency
+                                      type: string
+                                    uid:
+                                      description: |-
+                                        UID of the referent.
+                                        More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#uids
+                                      type: string
+                                  type: object
+                                  x-kubernetes-map-type: atomic
+                                conditions:
+                                  items:
+                                    description: Condition contains details for one
+                                      aspect of the current state of this API Resource.
+                                    properties:
+                                      lastTransitionTime:
+                                        description: |-
+                                          lastTransitionTime is the last time the condition transitioned from one status to another.
+                                          This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                                        format: date-time
+                                        type: string
+                                      message:
+                                        description: |-
+                                          message is a human readable message indicating details about the transition.
+                                          This may be an empty string.
+                                        maxLength: 32768
+                                        type: string
+                                      observedGeneration:
+                                        description: |-
+                                          observedGeneration represents the .metadata.generation that the condition was set based upon.
+                                          For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                                          with respect to the current state of the instance.
+                                        format: int64
+                                        minimum: 0
+                                        type: integer
+                                      reason:
+                                        description: |-
+                                          reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                                          Producers of specific condition types may define expected values and meanings for this field,
+                                          and whether the values are considered a guaranteed API.
+                                          The value should be a CamelCase string.
+                                          This field may not be empty.
+                                        maxLength: 1024
+                                        minLength: 1
+                                        pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                                        type: string
+                                      status:
+                                        description: status of the condition, one
+                                          of True, False, Unknown.
+                                        enum:
+                                        - "True"
+                                        - "False"
+                                        - Unknown
+                                        type: string
+                                      type:
+                                        description: type of condition in CamelCase
+                                          or in foo.example.com/CamelCase.
+                                        maxLength: 316
+                                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                                        type: string
+                                    required:
+                                    - lastTransitionTime
+                                    - message
+                                    - reason
+                                    - status
+                                    - type
+                                    type: object
+                                  type: array
+                                manifest:
+                                  type: string
+                                providerRef:
+                                  properties:
+                                    configName:
+                                      type: string
+                                    name:
+                                      type: string
+                                    platform:
+                                      type: string
+                                    region:
+                                      type: string
+                                    regionAlias:
+                                      type: string
+                                    type:
+                                      type: string
+                                    zone:
+                                      type: string
+                                  type: object
+                              required:
+                              - componentRef
+                              type: object
+                          required:
+                          - from
+                          - to
+                          type: object
+                        type: array
+                    type: object
+                  deploymentPlanResourceVersion:
+                    type: string
+                  podRef:
+                    description: |-
+                      LocalObjectReference contains enough information to let you locate the
+                      referenced object inside the same namespace.
+                    properties:
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                    type: object
+                    x-kubernetes-map-type: atomic
+                  result:
+                    type: string
+                  status:
+                    enum:
+                    - Pending
+                    - Running
+                    - Succeeded
+                    - Failed
+                    - Unknown
+                    type: string
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: images.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: Image
+    listKind: ImageList
+    plural: images
+    singular: image
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.region
+      name: Region
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.lastUpdateTime
+      name: Last_Update
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Image is the Schema for the images API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of Image
+            properties:
+              images:
+                items:
+                  properties:
+                    generation:
+                      type: string
+                    name:
+                      type: string
+                    nameLabel:
+                      enum:
+                      - ubuntu-20.04
+                      - ubuntu-22.04
+                      - ubuntu-24.04
+                      - eks-optimized
+                      type: string
+                    pattern:
+                      type: string
+                    zone:
+                      type: string
+                  required:
+                  - nameLabel
+                  type: object
+                type: array
+              providerRef:
+                type: string
+            required:
+            - providerRef
+            type: object
+          status:
+            description: status defines the observed state of Image
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              images:
+                items:
+                  properties:
+                    generation:
+                      type: string
+                    name:
+                      type: string
+                    nameLabel:
+                      enum:
+                      - ubuntu-20.04
+                      - ubuntu-22.04
+                      - ubuntu-24.04
+                      - eks-optimized
+                      type: string
+                    pattern:
+                      type: string
+                    zone:
+                      type: string
+                  required:
+                  - nameLabel
+                  type: object
+                type: array
+              lastUpdateTime:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              region:
+                type: string
+            required:
+            - region
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: instancetypes.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: InstanceType
+    listKind: InstanceTypeList
+    plural: instancetypes
+    singular: instancetype
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.region
+      name: Region
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .status.lastUpdateTime
+      name: Last_Update
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: InstanceType is the Schema for the instancetypes API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of InstanceType
+            properties:
+              offerings:
+                items:
+                  properties:
+                    zone:
+                      type: string
+                    zoneOfferings:
+                      items:
+                        properties:
+                          generation:
+                            type: string
+                          gpu:
+                            properties:
+                              count:
+                                type: integer
+                              enabled:
+                                type: boolean
+                              manufacturer:
+                                type: string
+                              memory:
+                                type: string
+                              model:
+                                type: string
+                              unit:
+                                type: string
+                            type: object
+                          name:
+                            type: string
+                          nameLabel:
+                            type: string
+                          price:
+                            type: string
+                          ram:
+                            type: string
+                          spot:
+                            properties:
+                              enabled:
+                                type: boolean
+                              price:
+                                type: string
+                            type: object
+                          vcpus:
+                            type: integer
+                          volumeTypes:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      type: array
+                  required:
+                  - zone
+                  - zoneOfferings
+                  type: object
+                type: array
+              providerRef:
+                type: string
+            required:
+            - providerRef
+            type: object
+          status:
+            description: status defines the observed state of InstanceType
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              dependencies:
+                description: Dependencies is the field that will be "promoted" to
+                  the embedding struct.
+                items:
+                  properties:
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+              lastUpdateTime:
+                format: date-time
+                type: string
+              observedGeneration:
+                format: int64
+                type: integer
+              offerings:
+                items:
+                  properties:
+                    zone:
+                      type: string
+                    zoneOfferings:
+                      items:
+                        properties:
+                          generation:
+                            type: string
+                          gpu:
+                            properties:
+                              count:
+                                type: integer
+                              enabled:
+                                type: boolean
+                              manufacturer:
+                                type: string
+                              memory:
+                                type: string
+                              model:
+                                type: string
+                              unit:
+                                type: string
+                            type: object
+                          name:
+                            type: string
+                          nameLabel:
+                            type: string
+                          price:
+                            type: string
+                          ram:
+                            type: string
+                          spot:
+                            properties:
+                              enabled:
+                                type: boolean
+                              price:
+                                type: string
+                            type: object
+                          vcpus:
+                            type: integer
+                          volumeTypes:
+                            items:
+                              type: string
+                            type: array
+                        type: object
+                      type: array
+                  required:
+                  - zone
+                  - zoneOfferings
+                  type: object
+                type: array
+              region:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: latencies.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: Latency
+    listKind: LatencyList
+    plural: latencies
+    singular: latency
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.lastMeasuredMs
+      name: Last_Latency(ms)
+      type: string
+    - jsonPath: .status.p99
+      name: P99(ms)
+      type: string
+    - jsonPath: .status.lastMeasuredAt
+      name: Last_Measured
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Latency is the Schema for the latencies API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of Latency
+            properties:
+              fixedLatencyMs:
+                description: FixedLatencyMs is the seeded latency (from your fixed
+                  table)
+                type: string
+              providerRefA:
+                description: ProviderA and ProviderB are canonical sorted provider
+                  names (A < B)
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              providerRefB:
+                description: |-
+                  LocalObjectReference contains enough information to let you locate the
+                  referenced object inside the same namespace.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+            required:
+            - providerRefA
+            - providerRefB
+            type: object
+          status:
+            description: status defines the observed state of Latency
+            properties:
+              lastMeasuredAt:
+                format: date-time
+                type: string
+              lastMeasuredMs:
+                type: string
+              measurementCount:
+                type: integer
+              p50:
+                type: string
+              p95:
+                type: string
+              p99:
+                type: string
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: providerprofiles.core.skycluster.io
+spec:
+  group: core.skycluster.io
+  names:
+    kind: ProviderProfile
+    listKind: ProviderProfileList
+    plural: providerprofiles
+    singular: providerprofile
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.platform
+      name: Platform
+      type: string
+    - jsonPath: .status.region
+      name: Region
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: ProviderProfile is the Schema for the providerprofiles API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of ProviderProfile
+            properties:
+              continent:
+                type: string
+              egressCosts:
+                items:
+                  properties:
+                    destination:
+                      type: string
+                    tiers:
+                      items:
+                        properties:
+                          fromGb:
+                            type: integer
+                          pricePerGb:
+                            type: string
+                          toGb:
+                            type: integer
+                        required:
+                        - fromGb
+                        - pricePerGb
+                        type: object
+                      type: array
+                    type:
+                      type: string
+                    unit:
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+              enabled:
+                type: boolean
+              platform:
+                type: string
+              region:
+                type: string
+              regionAlias:
+                type: string
+              zones:
+                items:
+                  properties:
+                    borderGroup:
+                      type: string
+                    defaultZone:
+                      type: boolean
+                    enabled:
+                      type: boolean
+                    locationName:
+                      type: string
+                    name:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - defaultZone
+                  - enabled
+                  - name
+                  - type
+                  type: object
+                type: array
+            required:
+            - enabled
+            - platform
+            - region
+            - regionAlias
+            - zones
+            type: object
+          status:
+            description: status defines the observed state of ProviderProfile
+            properties:
+              conditions:
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              dependencies:
+                description: Dependencies is the field that will be "promoted" to
+                  the embedding struct.
+                items:
+                  properties:
+                    kind:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - kind
+                  - name
+                  type: object
+                type: array
+              egressCosts:
+                items:
+                  properties:
+                    destination:
+                      type: string
+                    tiers:
+                      items:
+                        properties:
+                          fromGb:
+                            type: integer
+                          pricePerGb:
+                            type: string
+                          toGb:
+                            type: integer
+                        required:
+                        - fromGb
+                        - pricePerGb
+                        type: object
+                      type: array
+                    type:
+                      type: string
+                    unit:
+                      type: string
+                  required:
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                format: int64
+                type: integer
+              platform:
+                type: string
+              region:
+                type: string
+              zones:
+                items:
+                  properties:
+                    borderGroup:
+                      type: string
+                    defaultZone:
+                      type: boolean
+                    enabled:
+                      type: boolean
+                    locationName:
+                      type: string
+                    name:
+                      type: string
+                    type:
+                      type: string
+                  required:
+                  - defaultZone
+                  - enabled
+                  - name
+                  - type
+                  type: object
+                type: array
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

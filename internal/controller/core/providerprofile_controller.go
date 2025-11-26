@@ -54,6 +54,7 @@ type ProviderProfileReconciler struct {
 	Logger   logr.Logger
 }
 
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=latencies,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles/status,verbs=get;update;patch

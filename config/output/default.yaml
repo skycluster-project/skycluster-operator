@@ -1,0 +1,1321 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+  name: skycluster-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-controller-manager
+  namespace: skycluster-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-leader-election-role
+  namespace: skycluster-system
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - coordination.k8s.io
+  resources:
+  - leases
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlas-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlas-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlas-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlasmesh-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlasmesh-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-atlasmesh-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlasmeshes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-devicenode-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - devicenodes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-ilptask-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-ilptask-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-ilptask-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - ilptasks/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-image-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - images/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-instancetype-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - instancetypes/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-latency-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-latency-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-latency-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - latencies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-providerprofile-admin-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles
+  verbs:
+  - '*'
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-providerprofile-editor-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-core-providerprofile-viewer-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - providerprofiles/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-operator-manager-role
+rules:
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas
+  - atlasmeshes
+  - devicenodes
+  - ilptasks
+  - images
+  - instancetypes
+  - latencies
+  - providerprofiles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas/finalizers
+  - atlasmeshes/finalizers
+  - devicenodes/finalizers
+  - ilptasks/finalizers
+  - images/finalizers
+  - instancetypes/finalizers
+  - latencies/finalizers
+  - providerprofiles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - core.skycluster.io
+  resources:
+  - atlas/status
+  - atlasmeshes/status
+  - devicenodes/status
+  - ilptasks/status
+  - images/status
+  - instancetypes/status
+  - latencies/status
+  - providerprofiles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  - deploymentpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/finalizers
+  - deploymentpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  - deploymentpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-operator-metrics-auth-role
+rules:
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
+- apiGroups:
+  - authorization.k8s.io
+  resources:
+  - subjectaccessreviews
+  verbs:
+  - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: skycluster-operator-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-dataflowpolicy-admin-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-dataflowpolicy-editor-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-dataflowpolicy-viewer-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - dataflowpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-deploymentpolicy-admin-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - '*'
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-deploymentpolicy-editor-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-policy-deploymentpolicy-viewer-role
+rules:
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - policy.skycluster.io
+  resources:
+  - deploymentpolicies/status
+  verbs:
+  - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-leader-election-rolebinding
+  namespace: skycluster-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: skycluster-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-operator-controller-manager
+  namespace: skycluster-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-manager-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: skycluster-operator-manager-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-operator-controller-manager
+  namespace: skycluster-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: skycluster-operator-metrics-auth-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: skycluster-operator-metrics-auth-role
+subjects:
+- kind: ServiceAccount
+  name: skycluster-operator-controller-manager
+  namespace: skycluster-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+  name: skycluster-operator-controller-manager-metrics-service
+  namespace: skycluster-system
+spec:
+  ports:
+  - name: https
+    port: 8443
+    protocol: TCP
+    targetPort: 8443
+  selector:
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-webhook-service
+  namespace: skycluster-system
+spec:
+  ports:
+  - port: 443
+    protocol: TCP
+    targetPort: 9443
+  selector:
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+    control-plane: controller-manager
+  name: skycluster-operator-controller-manager
+  namespace: skycluster-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: skycluster-operator
+      control-plane: controller-manager
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        app.kubernetes.io/name: skycluster-operator
+        control-plane: controller-manager
+    spec:
+      containers:
+      - args:
+        - --metrics-bind-address=:8443
+        - --leader-elect
+        - --health-probe-bind-address=:8081
+        - --webhook-cert-path=/tmp/k8s-webhook-server/serving-certs
+        command:
+        - /manager
+        image: etesami/skycluster-operator:v0.1.1
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        name: manager
+        ports:
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: webhook-certs
+          readOnly: true
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      serviceAccountName: skycluster-operator-controller-manager
+      terminationGracePeriodSeconds: 10
+      volumes:
+      - name: webhook-certs
+        secret:
+          secretName: webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-metrics-certs
+  namespace: skycluster-system
+spec:
+  dnsNames:
+  - SERVICE_NAME.SERVICE_NAMESPACE.svc
+  - SERVICE_NAME.SERVICE_NAMESPACE.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: skycluster-operator-selfsigned-issuer
+  secretName: metrics-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-serving-cert
+  namespace: skycluster-system
+spec:
+  dnsNames:
+  - skycluster-operator-webhook-service.skycluster-system.svc
+  - skycluster-operator-webhook-service.skycluster-system.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: skycluster-operator-selfsigned-issuer
+  secretName: webhook-server-cert
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  labels:
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: skycluster-operator
+  name: skycluster-operator-selfsigned-issuer
+  namespace: skycluster-system
+spec:
+  selfSigned: {}
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: skycluster-system/skycluster-operator-serving-cert
+  name: skycluster-operator-mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /mutate-apps-v1-deployment
+  failurePolicy: Fail
+  name: mdeployment.kb.io
+  namespaceSelector:
+    matchLabels:
+      skycluster.io/app-scope: distributed
+  rules:
+  - apiGroups:
+    - apps
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deployments
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /mutate-core-skycluster-io-v1alpha1-devicenode
+  failurePolicy: Fail
+  name: mdevicenode-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - devicenodes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /mutate-core-skycluster-io-v1alpha1-image
+  failurePolicy: Fail
+  name: mimage-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /mutate-core-skycluster-io-v1alpha1-instancetype
+  failurePolicy: Fail
+  name: minstancetype-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - instancetypes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /mutate-core-skycluster-io-v1alpha1-providerprofile
+  failurePolicy: Fail
+  name: mproviderprofile-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - providerprofiles
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  annotations:
+    cert-manager.io/inject-ca-from: skycluster-system/skycluster-operator-serving-cert
+  name: skycluster-operator-validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-core-skycluster-io-v1alpha1-devicenode
+  failurePolicy: Fail
+  name: vdevicenode-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - devicenodes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-core-skycluster-io-v1alpha1-image
+  failurePolicy: Fail
+  name: vimage-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - images
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-core-skycluster-io-v1alpha1-instancetype
+  failurePolicy: Fail
+  name: vinstancetype-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - instancetypes
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-core-skycluster-io-v1alpha1-providerprofile
+  failurePolicy: Fail
+  name: vproviderprofile-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - core.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - providerprofiles
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-policy-skycluster-io-v1alpha1-dataflowpolicy
+  failurePolicy: Fail
+  name: vdataflowpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - dataflowpolicies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: skycluster-operator-webhook-service
+      namespace: skycluster-system
+      path: /validate-policy-skycluster-io-v1alpha1-deploymentpolicy
+  failurePolicy: Fail
+  name: vdeploymentpolicy-v1alpha1.kb.io
+  rules:
+  - apiGroups:
+    - policy.skycluster.io
+    apiVersions:
+    - v1alpha1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - deploymentpolicies
+  sideEffects: None
