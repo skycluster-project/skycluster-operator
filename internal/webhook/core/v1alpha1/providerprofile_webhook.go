@@ -68,11 +68,6 @@ func (d *ProviderProfileCustomDefaulter) Default(_ context.Context, obj runtime.
 
 // +kubebuilder:webhook:path=/validate-core-skycluster-io-v1alpha1-providerprofile,mutating=false,failurePolicy=fail,sideEffects=None,groups=core.skycluster.io,resources=providerprofiles,verbs=create;update,versions=v1alpha1,name=vproviderprofile-v1alpha1.kb.io,admissionReviewVersions=v1
 
-// ProviderProfileCustomValidator struct is responsible for validating the ProviderProfile resource
-// when it is created, updated, or deleted.
-//
-// NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
-// as this struct is used only for temporary operations and does not need to be deeply copied.
 type ProviderProfileCustomValidator struct {
 	client client.Client
 }

@@ -5,42 +5,16 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - ""
-  resources:
-  - atlass
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - atlass/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - atlass/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlas
+  - atlasmeshes
   - devicenodes
   - ilptasks
   - images
   - instancetypes
   - latencies
   - providerprofiles
-  - skyclusters
   verbs:
   - create
   - delete
@@ -52,27 +26,27 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/finalizers
+  - atlas/finalizers
+  - atlasmeshes/finalizers
   - devicenodes/finalizers
   - ilptasks/finalizers
   - images/finalizers
   - instancetypes/finalizers
   - latencies/finalizers
   - providerprofiles/finalizers
-  - skyclusters/finalizers
   verbs:
   - update
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlas/status
+  - atlasmeshes/status
   - devicenodes/status
   - ilptasks/status
   - images/status
   - instancetypes/status
   - latencies/status
   - providerprofiles/status
-  - skyclusters/status
   verbs:
   - get
   - patch

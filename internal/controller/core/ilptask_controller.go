@@ -14,21 +14,6 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-/*
-The ILPTask controller is responsible for running the optimization process.
-
-The optimization process is run by creating a pod and mounting optimization scripts
-as well as providers and tasks files. The providers files (.json) are generated during
-the installation phase and stored in a persistent volume, however, the deployments (.json)
-are generated in init container of the optimization pod. The csv files are generated within
-the main container of the optimization pod.
-
-These make the optimization process to be run without any external source of data
-or hints. However, we introduce Sky Services such as SkyVM, and upon creation of such
-services, we include them in the optimization process.
-
-*/
-
 package core
 
 import (
@@ -66,17 +51,18 @@ import (
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=latencies,verbs=get;list;watch
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/finalizers,verbs=update
-
 // ILPTaskReconciler reconciles a ILPTask object
 type ILPTaskReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 	Logger logr.Logger
 }
+
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=latencies,verbs=get;list;watch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/finalizers,verbs=update
+
 
 func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciling ILPTask started", "namespace", req.Namespace, "name", req.Name)

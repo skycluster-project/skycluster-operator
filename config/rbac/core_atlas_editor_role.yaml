@@ -16,7 +16,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass
+  - atlas
   verbs:
   - create
   - delete
@@ -28,6 +28,6 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlass/status
+  - atlas/status
   verbs:
   - get

@@ -16,7 +16,7 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs
+  - atlasmeshes
   verbs:
   - get
   - list
@@ -24,6 +24,6 @@ rules:
 - apiGroups:
   - core.skycluster.io
   resources:
-  - atlasmeshs/status
+  - atlasmeshes/status
   verbs:
   - get

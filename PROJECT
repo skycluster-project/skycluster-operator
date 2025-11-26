@@ -2,7 +2,7 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-cliVersion: 4.7.0
+cliVersion: 4.10.1
 domain: skycluster.io
 layout:
 - go.kubebuilder.io/v4
@@ -10,12 +10,6 @@ multigroup: true
 projectName: skycluster-operator
 repo: github.com/skycluster-project/skycluster-operator
 resources:
-- controller: true
-  core: true
-  group: core
-  kind: Atlas
-  path: k8s.io/api/core/v1alpha1
-  version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
@@ -40,59 +34,16 @@ resources:
   webhooks:
     validation: true
     webhookVersion: v1
-- core: true
-  group: core
-  kind: Deployment
-  path: k8s.io/api/core/v1alpha1
-  version: v1alpha1
-  webhooks:
-    defaulting: true
-    webhookVersion: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  domain: skycluster.io
-  group: core
-  kind: Deployment
-  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
-  version: v1alpha1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: skycluster.io
   group: core
-  kind: SkyCluster
-  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: skycluster.io
-  group: core
-  kind: ILPTask
-  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  domain: skycluster.io
-  group: core
-  kind: Atlas
-  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
-  version: v1alpha1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: skycluster.io
-  group: core
-  kind: InstanceType
+  kind: Image
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
   webhooks:
-    defaulting: true
     validation: true
     webhookVersion: v1
 - api:
@@ -105,7 +56,6 @@ resources:
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
   webhooks:
-    defaulting: true
     validation: true
     webhookVersion: v1
 - api:
@@ -114,11 +64,10 @@ resources:
   controller: true
   domain: skycluster.io
   group: core
-  kind: Image
+  kind: InstanceType
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
   webhooks:
-    defaulting: true
     validation: true
     webhookVersion: v1
 - api:
@@ -127,20 +76,16 @@ resources:
   controller: true
   domain: skycluster.io
   group: core
-  kind: ProviderProfile
+  kind: ILPTask
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
-  webhooks:
-    defaulting: true
-    validation: true
-    webhookVersion: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: skycluster.io
   group: core
-  kind: Latency
+  kind: Atlas
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
 - api:
@@ -152,4 +97,33 @@ resources:
   kind: AtlasMesh
   path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: ProviderProfile
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+  webhooks:
+    validation: true
+    webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: core
+  kind: Latency
+  path: github.com/skycluster-project/skycluster-operator/api/core/v1alpha1
+  version: v1alpha1
+- core: true
+  group: core
+  kind: Deployment
+  path: k8s.io/api/core/v1alpha1
+  version: v1alpha1
+  webhooks:
+    defaulting: true
+    webhookVersion: v1
 version: "3"

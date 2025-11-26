@@ -43,15 +43,12 @@ import (
 
 	"github.com/samber/lo"
 
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
-
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
-	wbhkcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
-	webhookcorev1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
+	webhookpv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/policy/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
@@ -71,9 +68,8 @@ func customLoggerFormat() zap.EncoderConfigOption {
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
-	utilruntime.Must(cv1a1.AddToScheme(scheme))
 	utilruntime.Must(policyv1alpha1.AddToScheme(scheme))
-	utilruntime.Must(corev1alpha1.AddToScheme(scheme))
+	utilruntime.Must(cv1a1.AddToScheme(scheme))
 
 	// Add unstructured types to the scheme to allow dynamic handling of custom resources
 	gv := sch.GroupVersion{Group: "skycluster.io", Version: "v1alpha1"}
@@ -82,7 +78,7 @@ func init() {
       &unstructured.UnstructuredList{},
 	)
 	metav1.AddToGroupVersion(scheme, gv)
-	
+
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -192,7 +188,7 @@ func main() {
 
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
-	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/server
+	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/metrics/server
 	// - https://book.kubebuilder.io/reference/metrics.html
 	metricsServerOptions := metricsserver.Options{
 		BindAddress:   metricsAddr,
@@ -204,7 +200,7 @@ func main() {
 		// FilterProvider is used to protect the metrics endpoint with authn/authz.
 		// These configurations ensure that only authorized users and service accounts
 		// can access the metrics endpoint. The RBAC are configured in 'config/rbac/kustomization.yaml'. More info:
-		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/filters#WithAuthenticationAndAuthorization
+		// https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/metrics/filters#WithAuthenticationAndAuthorization
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
@@ -259,15 +255,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&corecontroller.AtlasReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-		Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Atlas")
-		os.Exit(1)
-	}
-	if err = (&policycontroller.DataflowPolicyReconciler{
+	if err := (&policycontroller.DataflowPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[DataflowPolicy]"),
@@ -275,7 +263,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DataflowPolicy")
 		os.Exit(1)
 	}
-	if err = (&policycontroller.DeploymentPolicyReconciler{
+	if err := (&policycontroller.DeploymentPolicyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[DeploymentPolicy]"),
@@ -283,13 +271,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.InstanceTypeReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[InstanceType]"),
+	if err := (&corecontroller.ImageReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ImageController"),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Image]"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
+		setupLog.Error(err, "unable to create controller", "controller", "Image")
 		os.Exit(1)
 	}
 	if err := (&corecontroller.DeviceNodeReconciler{
@@ -300,66 +288,29 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DeviceNode")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ImageReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("ImageController"),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Image]"),
+	if err := (&corecontroller.InstanceTypeReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[InstanceType]"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Image")
+		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ProviderProfileReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
-		os.Exit(1)
-	}
-	// nolint:goconst
-	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err = webhookcv1a1.SetupDeploymentWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
-			os.Exit(1)
-		}
-		if err := webhookcv1a1.SetupImageWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
-			os.Exit(1)
-		}
-		// if err = webhookpolicyv1alpha1.SetupDataflowPolicyWebhookWithManager(mgr); err != nil {
-		// 	setupLog.Error(err, "unable to create webhook", "webhook", "DataflowPolicy")
-		// 	os.Exit(1)
-		// }
-		// if err = webhookpolicyv1alpha1.SetupDeploymentPolicyWebhookWithManager(mgr); err != nil {
-		// 	setupLog.Error(err, "unable to create webhook", "webhook", "DeploymentPolicy")
-		// 	os.Exit(1)
-		// }
-		// if err = webhooksvcv1alpha1.SetupSkyProviderWebhookWithManager(mgr); err != nil {
-		// 	setupLog.Error(err, "unable to create webhook", "webhook", "SkyProvider")
-		// 	os.Exit(1)
-		// }
-		if err := webhookcv1a1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
-			os.Exit(1)
-		}
-	}
-	// nolint:goconst
-
-	// if err = (&corecontroller.SkyClusterReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyCluster")
-	// 	os.Exit(1)
-	// }
-	if err = (&corecontroller.ILPTaskReconciler{
+	if err := (&corecontroller.ILPTaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
+		os.Exit(1)
+	}
+	if err := (&corecontroller.AtlasReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Atlas")
 		os.Exit(1)
 	}
 	if err := (&corecontroller.AtlasMeshReconciler{
@@ -370,47 +321,69 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AtlasMesh")
 		os.Exit(1)
 	}
-	// if err := (&corecontroller.LatencyReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// 	Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "Latency")
-	// 	os.Exit(1)
-	// }
-	// if err = (&svccontroller.SkyAppReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyApp")
-	// 	os.Exit(1)
-	// }
-	// if err = (&svccontroller.SkyK8SReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyK8S")
-	// 	os.Exit(1)
-	// }
-	// if err = (&svccontroller.SkyProviderReconciler{
-	// 	Client: mgr.GetClient(),
-	// 	Scheme: mgr.GetScheme(),
-	// }).SetupWithManager(mgr); err != nil {
-	// 	setupLog.Error(err, "unable to create controller", "controller", "SkyProvider")
-	// 	os.Exit(1)
-	// }
-
+	if err := (&corecontroller.ProviderProfileReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ProviderProfile")
+		os.Exit(1)
+	}
+	if err := (&corecontroller.LatencyReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "Latency")
+		os.Exit(1)
+	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := wbhkcv1a1.SetupInstanceTypeWebhookWithManager(mgr); err != nil {
+		if err := webhookpv1a1.SetupDataflowPolicyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DataflowPolicy")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookpv1a1.SetupDeploymentPolicyWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DeploymentPolicy")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcv1a1.SetupDeploymentWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Deployment")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcv1a1.SetupDeviceNodeWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "DeviceNode")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcv1a1.SetupImageWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "Image")
+			os.Exit(1)
+		}
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhookcv1a1.SetupInstanceTypeWebhookWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "InstanceType")
 			os.Exit(1)
 		}
 	}
 	// nolint:goconst
 	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
-		if err := webhookcorev1alpha1.SetupDeviceNodeWebhookWithManager(mgr); err != nil {
-			setupLog.Error(err, "unable to create webhook", "webhook", "DeviceNode")
+		if err := webhookcv1a1.SetupProviderProfileWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
 			os.Exit(1)
 		}
 	}

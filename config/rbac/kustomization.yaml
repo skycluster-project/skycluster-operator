@@ -22,18 +22,30 @@ resources:
 # default, aiding admins in cluster management. Those roles are
 # not used by the {{ .ProjectName }} itself. You can comment the following lines
 # if you do not want those helpers be installed with your Project.
+- core_latency_admin_role.yaml
+- core_latency_editor_role.yaml
+- core_latency_viewer_role.yaml
+- core_providerprofile_admin_role.yaml
+- core_providerprofile_editor_role.yaml
+- core_providerprofile_viewer_role.yaml
+- core_atlasmesh_admin_role.yaml
+- core_atlasmesh_editor_role.yaml
+- core_atlasmesh_viewer_role.yaml
 - core_atlas_admin_role.yaml
 - core_atlas_editor_role.yaml
 - core_atlas_viewer_role.yaml
 - core_ilptask_admin_role.yaml
 - core_ilptask_editor_role.yaml
 - core_ilptask_viewer_role.yaml
-- core_skycluster_admin_role.yaml
-- core_skycluster_editor_role.yaml
-- core_skycluster_viewer_role.yaml
-# - core_deployment_admin_role.yaml
-# - core_deployment_editor_role.yaml
-# - core_deployment_viewer_role.yaml
+- core_instancetype_admin_role.yaml
+- core_instancetype_editor_role.yaml
+- core_instancetype_viewer_role.yaml
+- core_devicenode_admin_role.yaml
+- core_devicenode_editor_role.yaml
+- core_devicenode_viewer_role.yaml
+- core_image_admin_role.yaml
+- core_image_editor_role.yaml
+- core_image_viewer_role.yaml
 - policy_deploymentpolicy_admin_role.yaml
 - policy_deploymentpolicy_editor_role.yaml
 - policy_deploymentpolicy_viewer_role.yaml
@@ -41,14 +53,3 @@ resources:
 - policy_dataflowpolicy_editor_role.yaml
 - policy_dataflowpolicy_viewer_role.yaml
 
-
-# For each CRD, "Admin", "Editor" and "Viewer" roles are scaffolded by
-# default, aiding admins in cluster management. Those roles are
-# not used by the skycluster-operator itself. You can comment the following lines
-# if you do not want those helpers be installed with your Project.
-- core_atlasmesh_admin_role.yaml
-- core_atlasmesh_editor_role.yaml
-- core_atlasmesh_viewer_role.yaml
-- core_latency_admin_role.yaml
-- core_latency_editor_role.yaml
-- core_latency_viewer_role.yaml

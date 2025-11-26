@@ -19,16 +19,25 @@ package v1alpha1
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 var _ = Describe("Deployment Webhook", func() {
 	var (
+		obj       *appsv1.Deployment
+		oldObj    *appsv1.Deployment
 		defaulter DeploymentCustomDefaulter
 	)
 
 	BeforeEach(func() {
+		obj = &appsv1.Deployment{}
+		oldObj = &appsv1.Deployment{}
 		defaulter = DeploymentCustomDefaulter{}
 		Expect(defaulter).NotTo(BeNil(), "Expected defaulter to be initialized")
+		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
+		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
+		// TODO (user): Add any setup logic common to all tests
 	})
 
 	AfterEach(func() {

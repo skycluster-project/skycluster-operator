@@ -68,11 +68,10 @@ type Latency struct {
 // LatencyList contains a list of Latency
 type LatencyList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []Latency `json:"items"`
 }
 
 func init() {
 	SchemeBuilder.Register(&Latency{}, &LatencyList{})
 }
-

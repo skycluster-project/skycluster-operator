@@ -189,3 +189,16 @@ type MonitoringSpec struct {
 	// Schedule is the schedule information for the monitoring
 	Schedule SkyScheduleSpec `json:"schedule,omitempty"`
 }
+
+type ManagedK8s struct {
+	Name    string                     `json:"name,omitempty" yaml:"name"`
+	NameLabel    string                `json:"nameLabel" yaml:"nameLabel"`
+	Price   string                     `json:"price,omitempty" yaml:"price"`
+	Overhead ManagedK8sOverhead      `json:"overhead,omitempty" yaml:"overhead"`
+}
+
+type ManagedK8sOverhead struct {
+	Cost string 					 `json:"cost,omitempty" yaml:"cost"`
+	Count int 						 `json:"count,omitempty" yaml:"count"`
+	InstanceType string 			 `json:"instanceType,omitempty" yaml:"instanceType"`
+}

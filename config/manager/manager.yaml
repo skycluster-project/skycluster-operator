@@ -63,10 +63,11 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: etesami/skycluster-operator:latest
+        image: etesami/skycluster-operator:v0.1.1
         name: manager
         ports: []
         securityContext:
+          readOnlyRootFilesystem: true
           allowPrivilegeEscalation: false
           capabilities:
             drop:

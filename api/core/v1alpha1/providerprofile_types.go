@@ -100,7 +100,7 @@ type ProviderProfile struct {
 // ProviderProfileList contains a list of ProviderProfile
 type ProviderProfileList struct {
 	metav1.TypeMeta `json:",inline"`
-	metav1.ListMeta `json:"metadata,omitempty"`
+	metav1.ListMeta `json:"metadata,omitzero"`
 	Items           []ProviderProfile `json:"items"`
 }
 

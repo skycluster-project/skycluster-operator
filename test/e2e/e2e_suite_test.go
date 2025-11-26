@@ -1,3 +1,6 @@
+//go:build e2e
+// +build e2e
+
 /*
 Copyright 2025.
 
@@ -39,7 +42,7 @@ var (
 
 	// projectImage is the name of the image which will be build and loaded
 	// with the code source changes to be tested.
-	projectImage = "example.com/skycluster-operator:v0.0.1"
+	projectImage = "example.com/operator:v0.0.1"
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -48,7 +51,7 @@ var (
 // CertManager.
 func TestE2E(t *testing.T) {
 	RegisterFailHandler(Fail)
-	_, _ = fmt.Fprintf(GinkgoWriter, "Starting skycluster-operator integration test suite\n")
+	_, _ = fmt.Fprintf(GinkgoWriter, "Starting operator integration test suite\n")
 	RunSpecs(t, "e2e suite")
 }
 

@@ -29,7 +29,6 @@ var _ = Describe("DeviceNode Webhook", func() {
 		obj       *corev1alpha1.DeviceNode
 		oldObj    *corev1alpha1.DeviceNode
 		validator DeviceNodeCustomValidator
-		defaulter DeviceNodeCustomDefaulter
 	)
 
 	BeforeEach(func() {
@@ -37,8 +36,6 @@ var _ = Describe("DeviceNode Webhook", func() {
 		oldObj = &corev1alpha1.DeviceNode{}
 		validator = DeviceNodeCustomValidator{}
 		Expect(validator).NotTo(BeNil(), "Expected validator to be initialized")
-		defaulter = DeviceNodeCustomDefaulter{}
-		Expect(defaulter).NotTo(BeNil(), "Expected defaulter to be initialized")
 		Expect(oldObj).NotTo(BeNil(), "Expected oldObj to be initialized")
 		Expect(obj).NotTo(BeNil(), "Expected obj to be initialized")
 		// TODO (user): Add any setup logic common to all tests
@@ -46,19 +43,6 @@ var _ = Describe("DeviceNode Webhook", func() {
 
 	AfterEach(func() {
 		// TODO (user): Add any teardown logic common to all tests
-	})
-
-	Context("When creating DeviceNode under Defaulting Webhook", func() {
-		// TODO (user): Add logic for defaulting webhooks
-		// Example:
-		// It("Should apply defaults when a required field is empty", func() {
-		//     By("simulating a scenario where defaults should be applied")
-		//     obj.SomeFieldWithDefault = ""
-		//     By("calling the Default method to apply defaults")
-		//     defaulter.Default(ctx, obj)
-		//     By("checking that the default values are set")
-		//     Expect(obj.SomeFieldWithDefault).To(Equal("default_value"))
-		// })
 	})
 
 	Context("When creating or updating DeviceNode under Validating Webhook", func() {

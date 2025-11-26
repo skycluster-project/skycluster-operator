@@ -22,7 +22,6 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -30,8 +29,6 @@ import (
 )
 
 // nolint:unused
-// log is for logging in this package.
-var dfLog = logf.Log.WithName("dataflowpolicy-resource")
 
 // SetupDataflowPolicyWebhookWithManager registers the webhook for DataflowPolicy in the manager.
 func SetupDataflowPolicyWebhookWithManager(mgr ctrl.Manager) error {
@@ -41,8 +38,7 @@ func SetupDataflowPolicyWebhookWithManager(mgr ctrl.Manager) error {
 }
 
 // TODO(user): change verbs to "verbs=create;update;delete" if you want to enable deletion validation.
-// NOTE: The 'path' attribute must follow a specific pattern and should not be modified directly here.
-// Modifying the path for an invalid path can cause API server errors; failing to locate the webhook.
+// NOTE: If you want to customise the 'path', use the flags '--defaulting-path' or '--validation-path'.
 // +kubebuilder:webhook:path=/validate-policy-skycluster-io-v1alpha1-dataflowpolicy,mutating=false,failurePolicy=fail,sideEffects=None,groups=policy.skycluster.io,resources=dataflowpolicies,verbs=create;update,versions=v1alpha1,name=vdataflowpolicy-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // DataflowPolicyCustomValidator struct is responsible for validating the DataflowPolicy resource
@@ -57,7 +53,7 @@ type DataflowPolicyCustomValidator struct {
 var _ webhook.CustomValidator = &DataflowPolicyCustomValidator{}
 
 // ValidateCreate implements webhook.CustomValidator so a webhook will be registered for the type DataflowPolicy.
-func (v *DataflowPolicyCustomValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
+func (v *DataflowPolicyCustomValidator) ValidateCreate(_ context.Context, obj runtime.Object) (admission.Warnings, error) {
 	df, ok := obj.(*pv1a1.DataflowPolicy)
 	if !ok {
 		return nil, fmt.Errorf("expected a DataflowPolicy object but got %T", obj)
@@ -71,12 +67,11 @@ func (v *DataflowPolicyCustomValidator) ValidateCreate(ctx context.Context, obj 
 			return nil, fmt.Errorf("DataflowPolicy [%s] must have label: %s", df.GetName(), label)
 		}
 	}
-
 	return nil, nil
 }
 
 // ValidateUpdate implements webhook.CustomValidator so a webhook will be registered for the type DataflowPolicy.
-func (v *DataflowPolicyCustomValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
+func (v *DataflowPolicyCustomValidator) ValidateUpdate(_ context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	df, ok := newObj.(*pv1a1.DataflowPolicy)
 	if !ok {
 		return nil, fmt.Errorf("expected a DataflowPolicy object for the newObj but got %T", newObj)
@@ -96,12 +91,9 @@ func (v *DataflowPolicyCustomValidator) ValidateUpdate(ctx context.Context, oldO
 
 // ValidateDelete implements webhook.CustomValidator so a webhook will be registered for the type DataflowPolicy.
 func (v *DataflowPolicyCustomValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	_, ok := obj.(*pv1a1.DataflowPolicy)
-	if !ok {
-		return nil, fmt.Errorf("expected a DataflowPolicy object but got %T", obj)
-	}
-
-	// TODO(user): fill in your validation logic upon object deletion.
-
+	// df, ok := obj.(*pv1a1.DataflowPolicy)
+	// if !ok {
+	// 	return nil, fmt.Errorf("expected a DataflowPolicy object but got %T", obj)
+	// }
 	return nil, nil
 }

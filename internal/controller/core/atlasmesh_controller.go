@@ -73,9 +73,10 @@ type priorityLabels struct {
 	allLabels map[string]string
 }
 
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshs/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshes,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshes/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshes/finalizers,verbs=update
+
 
 func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciler started")

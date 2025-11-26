@@ -60,9 +60,12 @@ func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 	if !ok || !exists {
 		return nil
 	} else {
-		logger.Info("Webhook invoked. Setting paused to true.", "deployment", deployment.Name)
-		deployment.Spec.Paused = true
+		if !deployment.Spec.Paused {
+			logger.Info("Webhook invoked. Setting paused to true.", "deployment", deployment.Name)
+			deployment.Spec.Paused = true
+		} else {
+			logger.Info("Deployment already paused; skipping mutation.", "deployment", deployment.Name)
+		}
 	}
-
 	return nil
 }

@@ -77,10 +77,9 @@ type PodCidrSpec struct {
 	Private string `yaml:"private,omitempty"`
 }
 
-
-// +kubebuilder:rbac:groups=core,resources=atlass,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups=core,resources=atlass/status,verbs=get;update;patch
-// +kubebuilder:rbac:groups=core,resources=atlass/finalizers,verbs=update
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlas,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlas/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=core.skycluster.io,resources=atlas/finalizers,verbs=update
 
 func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciler started")
