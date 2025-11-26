@@ -1,22 +1,16 @@
-apiVersion: core.skycluster.io/v1alpha1
-kind: ProviderProfile
-metadata:
-  name: gcp-us-central1
-  namespace: skycluster-system
-spec:
-  platform: gcp
-  region: us-central1
-  regionAlias: us-east # intentionally set to us region alias
-  continent: north-america
-  enabled: true
-  zones:
-    - name: us-central1-b
-      locationName: us-central1-b
-      defaultZone: true
-      enabled: true
-      type: cloud
-    - name: us-central1-c
-      locationName: us-central1-c
-      defaultZone: false
-      enabled: true
-      type: cloud
+platform: gcp
+region: us-central1
+regionAlias: us-east # intentionally set to us region alias
+continent: north-america
+enabled: true
+zones:
+  - name: us-central1-b
+    locationName: us-central1-b
+    defaultZone: true
+    enabled: true
+    type: cloud
+  - name: us-central1-c
+    locationName: us-central1-c
+    defaultZone: false
+    enabled: true
+    type: cloud

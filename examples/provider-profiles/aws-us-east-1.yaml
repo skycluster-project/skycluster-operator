@@ -1,22 +1,16 @@
-apiVersion: core.skycluster.io/v1alpha1
-kind: ProviderProfile
-metadata:
-  name: aws-us-east-1
-  namespace: skycluster-system
-spec:
-  platform: aws
-  region: us-east-1
-  regionAlias: us-east
-  continent: north-america
-  enabled: true
-  zones:
-    - name: us-east-1a
-      locationName: us-east-1a
-      defaultZone: true
-      enabled: true
-      type: cloud
-    - name: us-east-1b
-      locationName: us-east-1b
-      defaultZone: false
-      enabled: true
-      type: cloud
+platform: aws
+region: us-east-1
+regionAlias: us-east
+continent: north-america
+enabled: true
+zones:
+  - name: us-east-1a
+    locationName: us-east-1a
+    defaultZone: true
+    enabled: true
+    type: cloud
+  - name: us-east-1b
+    locationName: us-east-1b
+    defaultZone: false
+    enabled: true
+    type: cloud

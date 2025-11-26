@@ -1,19 +1,11 @@
-apiVersion: core.skycluster.io/v1alpha1
-kind: ProviderProfile
-metadata:
-  name: azure-eastus
-  labels:
-    skycluster.io/dummy: "dummy"
-  namespace: skycluster-system
-spec:
-  platform: azure
-  region: eastus
-  regionAlias: eastus
-  continent: north-america
-  enabled: true
-  zones:
-    - name: "1"
-      locationName: eastus-1
-      defaultZone: true
-      enabled: true
-      type: edge
+platform: azure
+region: eastus
+regionAlias: eastus
+continent: north-america
+enabled: true
+zones:
+  - name: "1"
+    locationName: eastus-1
+    defaultZone: true
+    enabled: true
+    type: edge

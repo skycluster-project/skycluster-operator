@@ -1,22 +1,16 @@
-apiVersion: core.skycluster.io/v1alpha1
-kind: ProviderProfile
-metadata:
-  name: aws-ap-northeast-2
-  namespace: skycluster-system
-spec:
-  platform: aws
-  region: ap-northeast-2
-  regionAlias: ap-northeast
-  continent: asia
-  enabled: true
-  zones:
-    - name: ap-northeast-2a
-      locationName: ap-northeast-2a
-      defaultZone: true
-      enabled: true
-      type: cloud
-    - name: ap-northeast-2b
-      locationName: ap-northeast-2b
-      defaultZone: false
-      enabled: true
-      type: cloud
+platform: aws
+region: ap-northeast-2
+regionAlias: ap-northeast
+continent: asia
+enabled: true
+zones:
+  - name: ap-northeast-2a
+    locationName: ap-northeast-2a
+    defaultZone: true
+    enabled: true
+    type: cloud
+  - name: ap-northeast-2b
+    locationName: ap-northeast-2b
+    defaultZone: false
+    enabled: true
+    type: cloud

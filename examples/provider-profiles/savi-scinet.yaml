@@ -1,17 +1,11 @@
-apiVersion: core.skycluster.io/v1alpha1
-kind: ProviderProfile
-metadata:
-  name: savi-scinet-default
-  namespace: skycluster-system
-spec:
-  platform: openstack
-  region: SCINET
-  regionAlias: us-east
-  continent: north-america # Optional
-  enabled: true
-  zones:
-    - name: default
-      locationName: default # Optional
-      defaultZone: true
-      enabled: true
-      type: edge
+platform: openstack
+region: SCINET
+regionAlias: us-east
+continent: north-america # Optional
+enabled: true
+zones:
+  - name: default
+    locationName: default # Optional
+    defaultZone: true
+    enabled: true
+    type: edge
