@@ -14,3 +14,23 @@ zones:
     defaultZone: false
     enabled: true
     type: cloud
+  - name: us-east-1c
+    locationName: us-east-1c
+    defaultZone: false
+    enabled: true
+    type: cloud
+  - name: us-east-1d
+    locationName: us-east-1d
+    defaultZone: false
+    enabled: true
+    type: cloud
+  - name: us-east-1e
+    locationName: us-east-1e
+    defaultZone: false
+    enabled: true
+    type: cloud
+  - name: us-east-1f
+    locationName: us-east-1f
+    defaultZone: false
+    enabled: true
+    type: cloud

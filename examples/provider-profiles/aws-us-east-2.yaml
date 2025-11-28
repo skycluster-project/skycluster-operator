@@ -14,3 +14,8 @@ zones:
     defaultZone: false
     enabled: true
     type: cloud
+  - name: us-east-2c
+    locationName: us-east-2c
+    defaultZone: false
+    enabled: true
+    type: cloud
