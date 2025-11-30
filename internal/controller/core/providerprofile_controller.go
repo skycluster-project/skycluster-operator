@@ -492,6 +492,10 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 					NameLabel: "ubuntu-24.04",
 					Pattern: "*hvm-ssd*/ubuntu-noble-24.04-amd64-server*",
 				},
+				{
+					NameLabel: "ubuntu-24.04-gpu",
+					Pattern: "*skypilot-aws-gpu-ubuntu-241104*",
+				},
 			},
 		},
 	}

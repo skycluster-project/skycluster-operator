@@ -61,6 +61,7 @@ spec:
                       - ubuntu-20.04
                       - ubuntu-22.04
                       - ubuntu-24.04
+                      - ubuntu-24.04-gpu
                       - eks-optimized
                       type: string
                     pattern:
@@ -147,6 +148,7 @@ spec:
                       - ubuntu-20.04
                       - ubuntu-22.04
                       - ubuntu-24.04
+                      - ubuntu-24.04-gpu
                       - eks-optimized
                       type: string
                     pattern:

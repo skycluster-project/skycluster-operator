@@ -39,7 +39,7 @@ type ImageSpec struct {
 	}
 
 type ImageOffering struct {
-	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;eks-optimized
+	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;ubuntu-24.04-gpu;eks-optimized
 	NameLabel  string `json:"nameLabel" yaml:"nameLabel"`
 	Pattern 	 string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 	Name       string `json:"name,omitempty" yaml:"name,omitempty"`
