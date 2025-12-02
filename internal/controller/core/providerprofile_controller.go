@@ -839,7 +839,7 @@ func getTypeFamilies(platform string, zones []cv1a1.ZoneSpec) []cv1a1.ZoneOfferi
 		}
 	case "gcp":
 		for _, z := range zoneNames {
-			zo := buildZoneOfferings(z, []string{"e2", "n1", "g2", "a2"})
+			zo := buildZoneOfferings(z, []string{"e2", "g2", "a2"})
 			zoneOfferings = append(zoneOfferings, zo)
 		}
 	default:

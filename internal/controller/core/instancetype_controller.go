@@ -413,6 +413,7 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 					Containers: []corev1.Container{{
 						Name:    "harvest",
 						Image:   "busybox",
+						ImagePullPolicy: corev1.PullIfNotPresent,
 						Command: []string{"/bin/sh", "-c"},
 						Args:    []string{"cat " + outputPath},
 						VolumeMounts: []corev1.VolumeMount{
