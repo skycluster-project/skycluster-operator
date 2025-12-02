@@ -12,6 +12,8 @@ resources:
 - bases/core.skycluster.io_atlasmeshes.yaml
 - bases/core.skycluster.io_providerprofiles.yaml
 - bases/core.skycluster.io_latencies.yaml
+- bases/svc.skycluster.io_xinstances.yaml
+- bases/svc.skycluster.io_xkubes.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

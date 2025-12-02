@@ -1,0 +1,252 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: xinstances.svc.skycluster.io
+spec:
+  group: svc.skycluster.io
+  names:
+    kind: XInstance
+    listKind: XInstanceList
+    plural: xinstances
+    singular: xinstance
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: XInstance is the Schema for the xinstances API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of XInstance
+            properties:
+              applicationId:
+                description: |-
+                  applicationId is a unique identifier for the setup/application.
+                  Must match the applicationId used in the provider instance (for AWS).
+                minLength: 1
+                type: string
+              flavor:
+                description: Flavor of the instance, defined like "2vCPU-4GB-1xA100-32GB".
+                minLength: 1
+                type: string
+              image:
+                description: Image references an Images custom resource (images.core.skycluster.io),
+                  e.g. "ubuntu-22.04".
+                minLength: 1
+                type: string
+              preferSpot:
+                description: PreferSpot indicates whether spot instances should be
+                  used when available.
+                type: boolean
+              providerRef:
+                description: ProviderRef must reference the provider configuration
+                  used for provisioning.
+                properties:
+                  configName:
+                    type: string
+                  name:
+                    type: string
+                  platform:
+                    type: string
+                  region:
+                    type: string
+                  regionAlias:
+                    type: string
+                  type:
+                    type: string
+                  zone:
+                    type: string
+                type: object
+              publicIp:
+                description: PublicIP controls whether the instance receives a public
+                  IP address.
+                type: boolean
+              publicKey:
+                description: PublicKey is the SSH public key to be installed. If omitted,
+                  a default public key will be used.
+                type: string
+              rootVolumes:
+                description: RootVolumes describes root volumes to attach to the instance.
+                items:
+                  description: RootVolume describes a root volume for the instance.
+                  properties:
+                    size:
+                      description: |-
+                        Size of the volume in GB (string here to match provided manifest style).
+                        e.g. "20"
+                      pattern: ^[0-9]+$
+                      type: string
+                    type:
+                      description: Type of the volume, e.g. "gp2" for AWS or "pd-standard"
+                        for GCP.
+                      type: string
+                  required:
+                  - size
+                  type: object
+                type: array
+                x-kubernetes-list-type: set
+              securityGroups:
+                description: 'Security groups: lists of allowed TCP/UDP port ranges.'
+                properties:
+                  tcpPorts:
+                    description: TCP ports to open.
+                    items:
+                      description: PortRange defines a port range and protocol.
+                      properties:
+                        fromPort:
+                          description: FromPort is the starting port in the range.
+                          format: int32
+                          maximum: 65535
+                          minimum: 0
+                          type: integer
+                        protocol:
+                          description: Protocol for the range (tcp or udp).
+                          enum:
+                          - tcp
+                          - udp
+                          type: string
+                        toPort:
+                          description: ToPort is the ending port in the range.
+                          format: int32
+                          maximum: 65535
+                          minimum: 0
+                          type: integer
+                      required:
+                      - fromPort
+                      - protocol
+                      - toPort
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: set
+                  udpPorts:
+                    description: UDP ports to open.
+                    items:
+                      description: PortRange defines a port range and protocol.
+                      properties:
+                        fromPort:
+                          description: FromPort is the starting port in the range.
+                          format: int32
+                          maximum: 65535
+                          minimum: 0
+                          type: integer
+                        protocol:
+                          description: Protocol for the range (tcp or udp).
+                          enum:
+                          - tcp
+                          - udp
+                          type: string
+                        toPort:
+                          description: ToPort is the ending port in the range.
+                          format: int32
+                          maximum: 65535
+                          minimum: 0
+                          type: integer
+                      required:
+                      - fromPort
+                      - protocol
+                      - toPort
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: set
+                type: object
+              userData:
+                description: UserData is optional cloud-init (or other) user data.
+                type: string
+            required:
+            - applicationId
+            - flavor
+            - image
+            - providerRef
+            type: object
+          status:
+            description: status defines the observed state of XInstance
+            properties:
+              conditions:
+                description: The status of each condition is one of True, False, or
+                  Unknown.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

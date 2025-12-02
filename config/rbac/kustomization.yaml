@@ -52,4 +52,9 @@ resources:
 - policy_dataflowpolicy_admin_role.yaml
 - policy_dataflowpolicy_editor_role.yaml
 - policy_dataflowpolicy_viewer_role.yaml
-
+- svc_xkube_admin_role.yaml
+- svc_xkube_editor_role.yaml
+- svc_xkube_viewer_role.yaml
+- svc_xinstance_admin_role.yaml
+- svc_xinstance_editor_role.yaml
+- svc_xinstance_viewer_role.yaml

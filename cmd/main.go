@@ -45,8 +45,10 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	svcv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
+	svccontroller "github.com/skycluster-project/skycluster-operator/internal/controller/svc"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	webhookpv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/policy/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
@@ -74,11 +76,12 @@ func init() {
 	// Add unstructured types to the scheme to allow dynamic handling of custom resources
 	gv := sch.GroupVersion{Group: "skycluster.io", Version: "v1alpha1"}
 	scheme.AddKnownTypes(gv,
-			&unstructured.Unstructured{},
-      &unstructured.UnstructuredList{},
+		&unstructured.Unstructured{},
+		&unstructured.UnstructuredList{},
 	)
 	metav1.AddToGroupVersion(scheme, gv)
 
+	utilruntime.Must(svcv1a1.AddToScheme(scheme))
 	// +kubebuilder:scaffold:scheme
 }
 
@@ -272,8 +275,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&corecontroller.ImageReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ImageController"),
 		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Image]"),
 	}).SetupWithManager(mgr); err != nil {
@@ -289,8 +292,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&corecontroller.InstanceTypeReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),
 		Logger:   zap.New(pkglog.CustomLogger()).WithName("[InstanceType]"),
 	}).SetupWithManager(mgr); err != nil {
@@ -322,8 +325,8 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&corecontroller.ProviderProfileReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),
 		Logger:   zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]"),
 	}).SetupWithManager(mgr); err != nil {
@@ -333,7 +336,7 @@ func main() {
 	if err := (&corecontroller.LatencyReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
-		Logger:   zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Latency")
 		os.Exit(1)
@@ -386,6 +389,20 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "ProviderProfile")
 			os.Exit(1)
 		}
+	}
+	if err := (&svccontroller.XInstanceReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "XInstance")
+		os.Exit(1)
+	}
+	if err := (&svccontroller.XKubeReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "XKube")
+		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 

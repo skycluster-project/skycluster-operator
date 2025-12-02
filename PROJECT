@@ -126,4 +126,22 @@ resources:
   webhooks:
     defaulting: true
     webhookVersion: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: svc
+  kind: XInstance
+  path: github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1
+  version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: skycluster.io
+  group: svc
+  kind: XKube
+  path: github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1
+  version: v1alpha1
 version: "3"
