@@ -80,7 +80,6 @@ spec:
                         type: string
                       minItems: 1
                       type: array
-                      x-kubernetes-list-type: set
                     publicAccess:
                       description: publicAccess indicates whether nodes in this group
                         receive public access.
@@ -90,7 +89,6 @@ spec:
                   - publicAccess
                   type: object
                 type: array
-                x-kubernetes-list-type: set
               podCidr:
                 description: |-
                   podCidr describes pod CIDRs. For AWS this may include separate public/private sub-blocks.
@@ -218,9 +216,6 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
             type: object
         required:
         - spec

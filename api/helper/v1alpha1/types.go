@@ -202,3 +202,20 @@ type ManagedK8sOverhead struct {
 	Count int 						 `json:"count,omitempty" yaml:"count"`
 	InstanceType string 			 `json:"instanceType,omitempty" yaml:"instanceType"`
 }
+
+
+type GPU struct {
+	Enabled      bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Manufacturer string `json:"manufacturer,omitempty" yaml:"manufacturer,omitempty"`
+	Count        int    `json:"count,omitempty" yaml:"count,omitempty"`
+	Model        string `json:"model,omitempty" yaml:"model,omitempty"`
+	Unit         string `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Memory       string `json:"memory,omitempty" yaml:"memory,omitempty"`
+}
+
+// used in svc group for abstract flavor spec (user-facing)
+type FlavorSpec struct {
+	VCPU string `json:"vcpu,omitempty" yaml:"vcpu,omitempty"`
+	RAM  string `json:"ram,omitempty" yaml:"ram,omitempty"`
+	GPU GPU `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+}

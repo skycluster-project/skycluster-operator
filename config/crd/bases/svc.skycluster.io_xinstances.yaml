@@ -47,8 +47,27 @@ spec:
                 type: string
               flavor:
                 description: Flavor of the instance, defined like "2vCPU-4GB-1xA100-32GB".
-                minLength: 1
-                type: string
+                properties:
+                  gpu:
+                    properties:
+                      count:
+                        type: integer
+                      enabled:
+                        type: boolean
+                      manufacturer:
+                        type: string
+                      memory:
+                        type: string
+                      model:
+                        type: string
+                      unit:
+                        type: string
+                    type: object
+                  ram:
+                    type: string
+                  vcpu:
+                    type: string
+                type: object
               image:
                 description: Image references an Images custom resource (images.core.skycluster.io),
                   e.g. "ubuntu-22.04".
@@ -104,7 +123,6 @@ spec:
                   - size
                   type: object
                 type: array
-                x-kubernetes-list-type: set
               securityGroups:
                 description: 'Security groups: lists of allowed TCP/UDP port ranges.'
                 properties:
@@ -137,7 +155,6 @@ spec:
                       - toPort
                       type: object
                     type: array
-                    x-kubernetes-list-type: set
                   udpPorts:
                     description: UDP ports to open.
                     items:
@@ -167,7 +184,6 @@ spec:
                       - toPort
                       type: object
                     type: array
-                    x-kubernetes-list-type: set
                 type: object
               userData:
                 description: UserData is optional cloud-init (or other) user data.
@@ -239,9 +255,6 @@ spec:
                   - type
                   type: object
                 type: array
-                x-kubernetes-list-map-keys:
-                - type
-                x-kubernetes-list-type: map
             type: object
         required:
         - spec

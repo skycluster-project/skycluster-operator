@@ -189,8 +189,11 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 		requiredVirtSvcs[pName] = append(requiredVirtSvcs[pName], svcs...)
 	}
 
+	r.Logger.Info("Required virtual services per provider.", "providers", requiredVirtSvcs)
+
 	// we now know the required virtual services for each provider
 	managedK8sSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
+	xInstanceSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
 	for pName, virtSvcs := range requiredVirtSvcs {
 		for _, vs := range virtSvcs {
 			if vs.Name == "ManagedKubernetes" { // TODO: we use Name to identify the kind, need to change later.
@@ -203,12 +206,14 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 						return isValidComputeProfile(v.Name) || v.Kind == "ComputeProfile"
 					})
 				}
-			} else if isValidComputeProfile(vs.Name) || vs.Kind == "ComputeProfile" {
-				// vs.Name == "ComputeProfile" || vs.Kind == "ComputeProfile" {
-				// TODO: Handle ComputeProfile virtual services
-				// For now, we just log and skip, there is nothing we do for special ComputeProfile services
-				// here, we use it in the optimization to ensure provider offer the required flavors
-				// r.Logger.Info("ComputeProfile virtual service.", "service", vs.Name, "provider", pName)
+			} else if vs.Kind == "XInstance" || vs.Kind == "ComputeProfile" || isValidComputeProfile(vs.Name) {
+				if _, ok := xInstanceSvcs[pName]; !ok {
+					xInstanceSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
+						// we are only interested in deployable services i.e. "ComputeProfile"
+						return v.Kind == "ComputeProfile"
+					})
+					r.Logger.Info("XInstance virtual services for provider", "provider", pName, "svc", xInstanceSvcs[pName])
+				}
 			} else {
 				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Name)
 			}
@@ -218,22 +223,24 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
 	// r.Logger.Info("Generating SkyK8SCluster manifests.")
-	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
+	if len(managedK8sSvcs) > 0 {
+		managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
+		}
+		for _, obj := range managedK8sManifests {
+			manifests = append(manifests, obj)
+		}
+		r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
+		// Kubernetes Mesh
+		// r.Logger.Info("Generating XKubeMesh manifests.")
+		skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
+		}
+		manifests = append(manifests, *skyMesh)
 	}
-	for _, obj := range managedK8sManifests {
-		manifests = append(manifests, obj)
-	}
-	r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
 
-	// Kubernetes Mesh
-	// r.Logger.Info("Generating XKubeMesh manifests.")
-	skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
-	}
-	manifests = append(manifests, *skyMesh)
 
 	return manifests, nil, nil
 }
@@ -623,9 +630,7 @@ func (r *AtlasReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.Deploymen
 // dpPolicy := r.fetchDeploymentPolicy(ns, dpRef)
 // findReqVirtualSvcs(ns, skySrv, dpPolicy)
 func (r *AtlasReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
-	if len(virtualServices) == 0 {
-		return nil, nil // no virtual services required
-	}
+	if len(virtualServices) == 0 {return nil, nil} // no virtual services required
 
 	virtSvcMap, err := r.fetchVirtualServiceCfgMap(ns, providerRef)
 	if err != nil { return nil, errors.Wrap(err, "failed fetching virtual service config map") }
@@ -670,6 +675,7 @@ func (r *AtlasReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a1
 func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
 	
 	// limited number of virtual services are supported: ManagedKubernetes, ComputeProfile
+	// TODO: Use Kind instead
 	switch vs.Name {
 	case "ManagedKubernetes":
 		// cmData["managed-k8s.yaml"]
@@ -690,6 +696,44 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 				return totalCost, nil
 			}
 		}
+
+	default:
+		r.Logger.Info("Unsupported virtual service by Name", "virtualService", vs.Name)
+	}
+
+	switch vs.Kind {
+	case "XInstance":
+		// duplicate of default case, kept to use strcutured ComputeProfile definition
+		// TODO: ideally this should be adopted for default case below
+		pat, err := parseFlavorFromJSON(vs.Name)
+		if err != nil {return -1, errors.Wrap(err, "parsing flavor from JSON")}
+
+		var zoneOfferings []cv1a1.ZoneOfferings
+		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
+			for _, zo := range zoneOfferings {
+				if zo.Zone != zone {continue}
+				for _, of := range zo.Offerings {
+					if !offeringMatches2(pat, of) {continue}
+					priceFloat, err := strconv.ParseFloat(of.Price, 64)
+					if err != nil {continue}
+					
+					return priceFloat, nil
+				}
+			}
+		} 
+
+		// try the baremetal flavors
+		var bmOfferings map[string]cv1a1.DeviceZoneSpec
+		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
+			for _, deviceSpec := range bmOfferings {
+				if !offeringMatches2(pat, *deviceSpec.Configs) {continue}
+				priceFloat, err := strconv.ParseFloat(deviceSpec.Configs.Price, 64)
+				if err != nil {continue}
+				
+				return priceFloat, nil
+			}
+		}
+	
 
 	// TODO: we don't support the kind yet, ideally this should be ComputeProfile
 	// instead of case "default":

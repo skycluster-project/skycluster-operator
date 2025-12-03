@@ -19,10 +19,10 @@ package svc
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	svcv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 )
@@ -31,26 +31,14 @@ import (
 type XKubeReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Logger logr.Logger
 }
 
 // +kubebuilder:rbac:groups=svc.skycluster.io,resources=xkubes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=svc.skycluster.io,resources=xkubes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=svc.skycluster.io,resources=xkubes/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the XKube object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/reconcile
 func (r *XKubeReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
-
-	// TODO(user): your logic here
-
 	return ctrl.Result{}, nil
 }
 

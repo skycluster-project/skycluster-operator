@@ -24,6 +24,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
 
 func SetTimeAnnotation(obj metav1.Object, key string, t metav1.Time) {
@@ -473,4 +475,60 @@ func wildcardComputeProfileMatch(pattern, str string) bool {
 	regex = "^" + regex + "$"
 	re := regexp.MustCompile(regex)
 	return re.MatchString(str)
+}
+
+func offeringMatches2(p flavorPattern, off cv1a1.InstanceOffering) bool {
+	availCPU := off.VCPUs
+	availRAM, err := strconv.Atoi(strings.ReplaceAll(off.RAM, "GB", ""))
+	if err != nil {return false}
+
+	// CPU
+	if !p.cpuAny && p.cpu > 0 {
+		if availCPU < int(p.cpu) {return false}
+	}
+	// RAM
+	if !p.ramAny && p.ram > 0 {
+		if availRAM < int(p.ram) {return false}
+	}
+
+	// prefer structured fields on offering
+	offGPUCount, offGPUCountOk := parseGPUCountString(off.GPU.Unit)
+	offGPUMemory, offGPUMemoryOk := parseGPUMemoryString(off.GPU.Memory)
+	offGPUModel := strings.TrimSpace(off.GPU.Model)
+
+	// GPU model/type check (only if requested)
+	if p.gpuModel != "" {
+		// check off.gpuModel first
+		if offGPUModel != "" {
+			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false}
+		} else {
+			// offering lacks GPU info -> cannot satisfy specific model
+			return false
+		}
+	}
+
+	// GPU count (if requested)
+	if p.gpuCount > 0 {
+		if !off.GPU.Enabled {return false}
+		// prefer structured count
+		if offGPUCountOk {
+			if offGPUCount < p.gpuCount {return false}
+		} // else: no count info -> assume may satisfy
+	}
+
+	// GPU memory: 
+	if !p.gpuMemAny && p.gpuMem > 0 {
+		if !off.GPU.Enabled {return false}
+		// prefer structured memory
+		if offGPUMemoryOk {
+			if offGPUMemory < p.gpuMem {return false}
+		} // else: no memory info -> assume may satisfy
+	}
+
+	// ensure GPU enabled if model or count requested
+	if (p.gpuModel != "" || p.gpuCount > 0) && !off.GPU.Enabled {
+		return false
+	}
+
+	return true
 }

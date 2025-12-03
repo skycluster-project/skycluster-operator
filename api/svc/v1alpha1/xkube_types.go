@@ -47,7 +47,6 @@ type XKubeSpec struct {
 
 	// nodeGroups defines one or more node groups for the cluster.
 	// +optional
-	// +listType=set
 	NodeGroups []NodeGroup `json:"nodeGroups,omitempty"`
 
 	// principal identifies the principal used to perform control-plane actions.
@@ -78,7 +77,6 @@ type PodCidr struct {
 // NodeGroup defines a group of worker nodes and optional autoscaling.
 type NodeGroup struct {
 	// InstanceTypes lists instance flavor identifiers, e.g. ["4vCPU-16GB"].
-	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	InstanceTypes []string `json:"instanceTypes"`
 
@@ -115,8 +113,6 @@ type Principal struct {
 // XKubeStatus defines the observed state of XKube.
 type XKubeStatus struct {
 	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }

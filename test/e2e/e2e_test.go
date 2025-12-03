@@ -223,6 +223,17 @@ var _ = Describe("Manager", Ordered, func() {
 			}
 			Eventually(verifyWebhookEndpointsReady, 3*time.Minute, time.Second).Should(Succeed())
 
+			By("waiting for the webhook service endpoints to be ready")
+			verifyWebhookEndpointsReady := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
+					"-l", "kubernetes.io/service-name=skycluster-operator-webhook-service",
+					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.addresses[*]}{end}{end}")
+				output, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred(), "Webhook endpoints should exist")
+				g.Expect(output).ShouldNot(BeEmpty(), "Webhook endpoints not yet ready")
+			}
+			Eventually(verifyWebhookEndpointsReady, 3*time.Minute, time.Second).Should(Succeed())
+
 			// +kubebuilder:scaffold:e2e-metrics-webhooks-readiness
 
 			By("creating the curl-metrics pod to access the metrics endpoint")
@@ -307,6 +318,20 @@ var _ = Describe("Manager", Ordered, func() {
 				cmd := exec.Command("kubectl", "get",
 					"mutatingwebhookconfigurations.admissionregistration.k8s.io",
 					"operator-mutating-webhook-configuration",
+					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
+				mwhOutput, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(len(mwhOutput)).To(BeNumerically(">", 10))
+			}
+			Eventually(verifyCAInjection).Should(Succeed())
+		})
+
+		It("should have CA injection for mutating webhooks", func() {
+			By("checking CA injection for mutating webhooks")
+			verifyCAInjection := func(g Gomega) {
+				cmd := exec.Command("kubectl", "get",
+					"mutatingwebhookconfigurations.admissionregistration.k8s.io",
+					"skycluster-operator-mutating-webhook-configuration",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				mwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())

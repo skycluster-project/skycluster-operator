@@ -4,13 +4,23 @@ regionAlias: us-east # intentionally set to us region alias
 continent: north-america
 enabled: true
 zones:
+  - name: us-central1-a
+    locationName: us-central1-a
+    defaultZone: true
+    enabled: true
+    type: cloud
   - name: us-central1-b
     locationName: us-central1-b
-    defaultZone: true
+    defaultZone: false
     enabled: true
     type: cloud
   - name: us-central1-c
     locationName: us-central1-c
+    defaultZone: false
+    enabled: true
+    type: cloud
+  - name: us-central1-f
+    locationName: us-central1-f
     defaultZone: false
     enabled: true
     type: cloud

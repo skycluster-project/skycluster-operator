@@ -51,6 +51,7 @@ import (
 	svccontroller "github.com/skycluster-project/skycluster-operator/internal/controller/svc"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
 	webhookpv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/policy/v1alpha1"
+	webhooksvcv1alpha1 "github.com/skycluster-project/skycluster-operator/internal/webhook/svc/v1alpha1"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
@@ -393,6 +394,7 @@ func main() {
 	if err := (&svccontroller.XInstanceReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[XInstance]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "XInstance")
 		os.Exit(1)
@@ -400,9 +402,17 @@ func main() {
 	if err := (&svccontroller.XKubeReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[XKube]"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "XKube")
 		os.Exit(1)
+	}
+	// nolint:goconst
+	if os.Getenv("ENABLE_WEBHOOKS") != "false" {
+		if err := webhooksvcv1alpha1.SetupXInstanceWebhookWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "XInstance")
+			os.Exit(1)
+		}
 	}
 	// +kubebuilder:scaffold:builder
 

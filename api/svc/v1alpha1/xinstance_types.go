@@ -21,6 +21,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type FlavorSpec struct {
+	VCPU string    `json:"vcpu,omitempty"`
+	RAM  string    `json:"ram,omitempty"`
+	GPU  hv1a1.GPU `json:"gpu,omitempty"`
+}
+
 // XInstanceSpec defines the desired state of XInstance
 // XInstanceSpec defines the desired state of XInstance
 type XInstanceSpec struct {
@@ -30,8 +36,7 @@ type XInstanceSpec struct {
 	ApplicationID string `json:"applicationId"`
 
 	// Flavor of the instance, defined like "2vCPU-4GB-1xA100-32GB".
-	// +kubebuilder:validation:MinLength=1
-	Flavor string `json:"flavor"`
+	Flavor FlavorSpec `json:"flavor"`
 
 	// PreferSpot indicates whether spot instances should be used when available.
 	// +optional
@@ -59,7 +64,6 @@ type XInstanceSpec struct {
 
 	// RootVolumes describes root volumes to attach to the instance.
 	// +optional
-	// +listType=set
 	RootVolumes []RootVolume `json:"rootVolumes,omitempty"`
 
 	// ProviderRef must reference the provider configuration used for provisioning.
@@ -70,12 +74,10 @@ type XInstanceSpec struct {
 type SecurityGroups struct {
 	// TCP ports to open.
 	// +optional
-	// +listType=set
 	TCPPorts []PortRange `json:"tcpPorts,omitempty"`
 
 	// UDP ports to open.
 	// +optional
-	// +listType=set
 	UDPPorts []PortRange `json:"udpPorts,omitempty"`
 }
 
@@ -111,8 +113,6 @@ type RootVolume struct {
 // XInstanceStatus defines the observed state of XInstance.
 type XInstanceStatus struct {
 	// The status of each condition is one of True, False, or Unknown.
-	// +listType=map
-	// +listMapKey=type
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }

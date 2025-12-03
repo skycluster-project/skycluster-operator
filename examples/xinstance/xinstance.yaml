@@ -1,0 +1,55 @@
+apiVersion: svc.skycluster.io/v1alpha1
+kind: XInstance
+metadata:
+  name: xinstance
+spec:
+  applicationId: aws-us-east
+  flavor: 
+    vcpu: "4"
+    ram: 16GB
+    gpu:
+      model: L4
+      # unit: "1"
+      # memory: 16GB
+  # flavor: 2vCPU-4GB
+  preferSpot: true
+  image: ubuntu-24.04
+
+  # You don't need to specify public IP
+  # since you can access the VM via overlay network.
+  # publicIp: true
+
+  rootVolumes:
+    - size: "20"
+      type: gp2
+
+  userData: |
+    #cloud-config
+    write_files:
+      - path: /tmp/hello.sh
+        owner: root:root
+        permissions: '0755'
+        content: |
+          #!/bin/sh
+          echo "Hello, World!" > /tmp/hello.txt
+
+    runcmd:
+      - chmod +x /tmp/hello.sh
+      - /tmp/hello.sh
+
+  # dockerSpec: |
+  #   IMAGE="nginxdemos/hello:latest"
+  #   NAME="demo-hello"
+
+  #   # Port mappings as "host:container"
+  #   PORT_MAPPINGS="8080:80"
+
+  #   # Environment variables as "KEY=value"
+  #   ENVS="DEMO=1 GREETING=Hello_from_cloud-init"
+
+  #   RESTART="--restart unless-stopped"
+    
+  # providerRef:
+  #   platform: aws
+  #   region: us-east-1
+  #   zone: us-east-1d

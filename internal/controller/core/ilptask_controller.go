@@ -162,7 +162,9 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						return ctrl.Result{}, errors.Wrap(err, "failed to unmarshal deploy plan")
 					}
 					task.Status.Optimization.DeployMap = deployPlan
-					if len(deployPlan.Component) > 0 && len(deployPlan.Edges) > 0 {
+					// at least one component deployed needed.
+					// TODO: check if at least one edge is deployed?
+					if len(deployPlan.Component) > 0 { 
 						// If the optimization result is "Optimal" and status is "Succeeded",
 						// We have the deployment plan and we can update the SkyCluster object. (trigger deployment)
 						// skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
@@ -170,7 +172,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						task.Status.Optimization.Result = "Success"
 						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
 
-						// generate skyXRD object
+						// generate atlas object
 						if err = r.ensureAtlas(task, appId1, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 						}
@@ -339,13 +341,19 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 			altVSList := make([]virtualSvcStruct, 0)
 			additionalVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
-				newVS := virtualSvcStruct{
-					ApiVersion:  alternativeVS.APIVersion,
-					Kind:       alternativeVS.Kind,
-					Name:      alternativeVS.Name,
-					Count:  strconv.Itoa(alternativeVS.Count),
+				
+				// TODO: check for other kinds, 
+				// if it is xinstance, we only keep ComputeProfiles, don't need XInstance for optimization
+				if alternativeVS.Kind != "XInstance" {
+					newVS := virtualSvcStruct{
+						ApiVersion:  alternativeVS.APIVersion,
+						Kind:       alternativeVS.Kind,
+						Name:      alternativeVS.Name,
+						Count:  strconv.Itoa(alternativeVS.Count),
+					}
+					altVSList = append(altVSList, newVS)
 				}
-				altVSList = append(altVSList, newVS)
+				r.Logger.Info("Processing virtual service alternative", "component", cmpnt.ComponentRef.Name, "vsKind", alternativeVS.Kind, "vsName", alternativeVS.Name)
 				
 				// If this alternative is a managed Kubernetes offering, 
 				// add all potential ComputeProfile alternatives,
@@ -419,20 +427,52 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 						additionalVSList = additionalVSList[:10]
 					}
 				}
+
+				if strings.EqualFold(alternativeVS.Kind, "XInstance") {
+					// alternativeVS.Name is a flavor JSON string
+					pat, err := parseFlavorFromJSON(alternativeVS.Name)
+					if err != nil {return "", err}
+
+					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
+					if err != nil { return "", err }
+					for _, off := range profiles {
+						if !offeringMatches(pat, off) {continue}
+
+						// Add this offering as a ComputeProfile alternative
+						additionalVSList = append(additionalVSList, virtualSvcStruct{
+								ApiVersion: alternativeVS.APIVersion,
+								Kind:       "ComputeProfile",
+								Name:       off.name, // name is mapped to nameLabel
+								Count:      "1",
+								Price:      off.deployCost,
+						})
+					}
+					// remove duplicates
+					additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
+						return v.Name
+					})
+					// the list can be huge, so sort and limit to top 5 cheapest
+					sort.Slice(additionalVSList, func(i, j int) bool {
+						return additionalVSList[i].Price < additionalVSList[j].Price
+					})
+					if len(additionalVSList) > 10 {
+						additionalVSList = additionalVSList[:10]
+					}
+				}
 			}
-			if len(altVSList) == 0 {
-				return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
+			if len(altVSList) != 0 {
+				vsList = append(vsList, altVSList)
+				// return "", fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, cmpnt.VirtualServiceConstraint)
 			}
-			vsList = append(vsList, altVSList)
 			if len(additionalVSList) > 0 {
 				vsList = append(vsList, additionalVSList)
 			}
 		}
 
 		perLocList := make([]locStruct, 0)
-		if len(cmpnt.LocationConstraint.Permitted) == 0 {
-			return "", fmt.Errorf("no permitted locations found for component %s", cmpnt.ComponentRef.Name)
-		}
+		// if len(cmpnt.LocationConstraint.Permitted) == 0 {
+		// 	return "", fmt.Errorf("no permitted locations found for component %s", cmpnt.ComponentRef.Name)
+		// }
 		for _, perLoc := range cmpnt.LocationConstraint.Permitted {
 			newLoc := locStruct{
 				Name:       perLoc.Name,
@@ -501,6 +541,9 @@ func generateTasksEdgesJson(df pv1a1.DataflowPolicy) (string, error) {
 			DataRate: df.TotalDataTransfer,
 		})
 	}
+	
+	if len(taskEdges) == 0 {return "", nil}
+	
 	b, err := json.Marshal(taskEdges)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal optimization task edges: %v", err)
@@ -654,6 +697,13 @@ func (r *ILPTaskReconciler) getCandidateProviders(filter []cv1a1.ProviderProfile
 		return nil, err
 	}
 	candidateProviders := make([]cv1a1.ProviderProfile, 0)
+	
+	// If no filter is provided, return all providers
+	// TODO: Check if any conflict arises from this logic.
+	// Since in the optimization module, if the candidate providers list is empty,
+	// all providers are considered. 
+	if len(filter) == 0 {return providers.Items, nil}
+
 	for _, item := range providers.Items {
 		for _, ref := range filter {
 			match := true
@@ -706,6 +756,9 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 						cpu: 	fCPU,
 						ram: fRam,
 						gpuEnabled:    of.GPU.Enabled,
+						gpuModel: of.GPU.Model,
+						gpuCount: of.GPU.Unit,
+						gpuMem: of.GPU.Memory,
 						gpuManufacturer: of.GPU.Manufacturer,
 						deployCost:     priceFloat,
 					})
@@ -1200,6 +1253,9 @@ type computeProfileService struct {
 	usedCPU float64
 	usedRAM float64
 	gpuEnabled bool
+	gpuModel   string
+	gpuCount	 string
+	gpuMem     string
 	gpuManufacturer string
 	deployCost     float64
 }
@@ -1228,4 +1284,184 @@ func (r *ILPTaskReconciler) calculateMinComputeResource(ns string, deployName st
 		totalMem += mem
 	}
 	return &computeProfileService{name: deployName, cpu: totalCPU, ram: totalMem}, nil
+}
+
+type flavorPattern struct {
+	cpu       float64
+	cpuAny    bool
+	ram       float64
+	ramAny    bool
+	gpuCount  int    // 0 = not specified
+	gpuModel   string // empty = not specified
+	gpuMem    float64
+	gpuMemAny bool
+}
+
+func parseFlavorFromJSON(flavorJSON string) (flavorPattern, error) {
+	var numberRe = regexp.MustCompile(`[\d.]+`)
+	var fs hv1a1.FlavorSpec
+	var p flavorPattern
+	if err := json.Unmarshal([]byte(flavorJSON), &fs); err != nil {
+		return p, err
+	}
+
+	// VCPU
+	if strings.TrimSpace(fs.VCPU) == "" {
+		p.cpuAny = true
+	} else if m := numberRe.FindString(fs.VCPU); m != "" {
+		if v, err := strconv.ParseFloat(m, 64); err == nil {
+			p.cpu = v
+		} else {
+			p.cpuAny = true
+		}
+	} else {
+		p.cpuAny = true
+	}
+
+	// RAM
+	if strings.TrimSpace(fs.RAM) == "" {
+		p.ramAny = true
+	} else if m := numberRe.FindString(fs.RAM); m != "" {
+		if v, err := strconv.ParseFloat(m, 64); err == nil {
+			p.ram = v
+		} else {
+			p.ramAny = true
+		}
+	} else {
+		p.ramAny = true
+	}
+
+	// GPU model (type)
+	if strings.TrimSpace(fs.GPU.Model) != "" {
+		p.gpuModel = strings.TrimSpace(fs.GPU.Model)
+	}
+
+	// GPU count
+	if strings.TrimSpace(fs.GPU.Unit) != "" {
+		if m := numberRe.FindString(fs.GPU.Unit); m != "" {
+			if v, err := strconv.Atoi(m); err == nil {
+				p.gpuCount = v
+			}
+		}
+		// if parsing fails, leave gpuCount==0 meaning "not specified"
+	}
+
+	// GPU memory
+	if strings.TrimSpace(fs.GPU.Memory) == "" {
+		p.gpuMemAny = true
+	} else if m := numberRe.FindString(fs.GPU.Memory); m != "" {
+		if v, err := strconv.ParseFloat(m, 64); err == nil {
+			p.gpuMem = v
+		} else {
+			p.gpuMemAny = true
+		}
+	} else {
+		p.gpuMemAny = true
+	}
+
+	return p, nil
+}
+
+func parseGPUCountString(s string) (int, bool) {
+	var numberRe = regexp.MustCompile(`[\d.]+`)
+	if strings.TrimSpace(s) == "" {return 0, false}
+	if m := numberRe.FindString(s); m != "" {
+		if v, err := strconv.Atoi(m); err == nil {
+			return v, true
+		}
+	}
+	return 0, false
+}
+
+// parseGPUMemoryString parses strings like "32GB", "32 GiB", "32768MB", "0.5TB".
+// It returns the size in GB and a bool indicating whether parsing succeeded.
+func parseGPUMemoryString(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+
+	re := regexp.MustCompile(`(?i)^\s*([\d]+(?:\.[\d]+)?)\s*(tb|tib|gb|gib|mb|mib|kb|kib)?\s*$`)
+	m := re.FindStringSubmatch(s)
+	if len(m) == 0 {
+		return 0, false
+	}
+
+	v, err := strconv.ParseFloat(m[1], 64)
+	if err != nil {
+		return 0, false
+	}
+
+	unit := strings.ToLower(m[2])
+	switch unit {
+	case "tb", "tib":
+		v = v * 1024 // convert TB -> GB (binary TiB->GiB semantics)
+	case "gb", "gib", "":
+		// already in GB
+	case "mb", "mib":
+		v = v / 1024 // MB -> GB
+	case "kb", "kib":
+		v = v / (1024 * 1024) // KB -> GB
+	}
+
+	return v, true
+}
+
+func offeringMatches(p flavorPattern, off computeProfileService) bool {
+	availCPU := off.cpu
+	availRAM := off.ram
+
+	// CPU
+	if !p.cpuAny && p.cpu > 0 {
+		if availCPU < p.cpu {
+			return false
+		}
+	}
+	// RAM
+	if !p.ramAny && p.ram > 0 {
+		if availRAM < p.ram {
+			return false
+		}
+	}
+
+	// prefer structured fields on offering
+	offGPUCount, offGPUCountOk := parseGPUCountString(off.gpuCount)
+	offGPUMemory, offGPUMemoryOk := parseGPUMemoryString(off.gpuMem)
+	offGPUModel := strings.TrimSpace(off.gpuModel)
+
+	// GPU model/type check (only if requested)
+	if p.gpuModel != "" {
+		// check off.gpuModel first
+		if offGPUModel != "" {
+			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false}
+		} else {
+			// offering lacks GPU info -> cannot satisfy specific model
+			return false
+		}
+	}
+
+	// GPU count (if requested)
+	if p.gpuCount > 0 {
+		if !off.gpuEnabled {return false}
+		// prefer structured count
+		if offGPUCountOk {
+			if offGPUCount < p.gpuCount {return false}
+		} // else: no count info -> assume may satisfy
+	}
+
+	// GPU memory: 
+	if !p.gpuMemAny && p.gpuMem > 0 {
+		if !off.gpuEnabled {return false}
+		// prefer structured memory
+		if offGPUMemoryOk {
+			if offGPUMemory < p.gpuMem {return false}
+		} // else: no memory info -> assume may satisfy
+	}
+
+	// ensure GPU enabled if model or count requested
+	if (p.gpuModel != "" || p.gpuCount > 0) && !off.gpuEnabled {
+		return false
+	}
+
+	return true
 }
