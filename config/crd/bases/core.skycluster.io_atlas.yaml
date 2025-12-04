@@ -474,6 +474,13 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              executionEnvironment:
+                description: ExecutionEnvironment is the environment in which the
+                  atlas creates resources
+                enum:
+                - Kubernetes
+                - VirtualMachine
+                type: string
             required:
             - approve
             type: object

@@ -48,7 +48,11 @@ spec:
                 items:
                   properties:
                     componentRef:
-                      description: ComponentRef is the reference to the component
+                      description: |-
+                        ComponentRef is the reference to the component, for a Kubernetes application
+                        this could be a reference to a Deployment. Additionally, it can represent node groups
+                        e.g. "XNodeGroup" object.
+                        For a VirtualMachine application, this refer to "XInstance" object. For
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -167,6 +171,11 @@ spec:
                           type: string
                       type: object
                     virtualServiceConstraint:
+                      description: |-
+                        VirtualServiceConstraint is the virtual service constraint for the component
+                        For VirtualMachine execution environment, ComputeProfile mist be specified,
+                        for Kubernetes execution environment, you can specify ComputeProfile for
+                        underlying compute resources.
                       items:
                         properties:
                           anyOf:
@@ -189,8 +198,16 @@ spec:
                                     Cannot be updated.
                                     In CamelCase.
                                     More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+                                  enum:
+                                  - ComputeProfile
                                   type: string
                                 name:
+                                  description: Name specifies the name of virtual
+                                    service, if applicable
+                                  type: string
+                                spec:
+                                  description: Spec specifies the spec of virtual
+                                    service in JSON format, if applicable
                                   type: string
                               type: object
                             type: array
@@ -202,6 +219,13 @@ spec:
                   - componentRef
                   type: object
                 type: array
+              executionEnvironment:
+                description: ExecutionEnvironment specifies the execution environment
+                  for the deployment policy
+                enum:
+                - Kubernetes
+                - VirtualMachine
+                type: string
             required:
             - deploymentPolicies
             type: object

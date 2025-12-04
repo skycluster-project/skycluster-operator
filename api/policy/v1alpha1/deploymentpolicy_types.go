@@ -37,8 +37,15 @@ type PerformanceConstraint struct {
 }
 
 type DeploymentPolicyItem struct {
-	// ComponentRef is the reference to the component
+	// ComponentRef is the reference to the component, for a Kubernetes application
+	// this could be a reference to a Deployment. Additionally, it can represent node groups
+	// e.g. "XNodeGroup" object.
+	// For a VirtualMachine application, this refer to "XInstance" object. For 
 	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	// VirtualServiceConstraint is the virtual service constraint for the component
+	// For VirtualMachine execution environment, ComputeProfile mist be specified,
+	// for Kubernetes execution environment, you can specify ComputeProfile for 
+	// underlying compute resources. 
 	VirtualServiceConstraint []VirtualServiceConstraint `json:"virtualServiceConstraint,omitempty"`
 	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
@@ -58,6 +65,9 @@ type VirtualServiceSelector struct {
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.
 type DeploymentPolicySpec struct {
+	// ExecutionEnvironment specifies the execution environment for the deployment policy
+	// +kubebuilder:validation:Enum=Kubernetes;VirtualMachine
+	ExecutionEnvironment string `json:"executionEnvironment,omitempty"`
 	DeploymentPolicies []DeploymentPolicyItem `json:"deploymentPolicies"`
 }
 

@@ -51,7 +51,11 @@ type LocationCondition struct {
 }
 
 type VirtualService struct {
+	// Name specifies the name of virtual service, if applicable
 	Name string       `json:"name,omitempty"`
+	// Spec specifies the spec of virtual service in JSON format, if applicable
+	Spec string  	 		`json:"spec,omitempty"`
+	// +kubebuilder:validation:Enum=ComputeProfile
 	Kind string       `json:"kind,omitempty"`
 	metav1.TypeMeta `json:",inline"`
 }

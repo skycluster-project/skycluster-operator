@@ -133,6 +133,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 	// VirtualServiceConstraint contains a ManagedKubernetes alternative so the optimizer
 	// can consider managed k8s offerings (this matches ILPTask logic).
 	dp.Spec = policyv1a1.DeploymentPolicySpec{
+		ExecutionEnvironment: "VirtualMachine",
 		DeploymentPolicies: []policyv1a1.DeploymentPolicyItem{
 			{
 				ComponentRef: corev1.ObjectReference{
@@ -148,8 +149,8 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 							{
 								// VirtualServiceSelector embeds hv1a1.VirtualService inline.
 								VirtualService: hv1a1.VirtualService{
-									Kind:       "XInstance",
-									Name:       string(flavorJson),
+									Kind:       "ComputeProfile",
+									Spec:       string(flavorJson),
 								},
 								Count: 1,
 							},

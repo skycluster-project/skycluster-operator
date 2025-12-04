@@ -27,6 +27,9 @@ import (
 type AtlasSpec struct {
 	// Manifests is a list of manifests to apply to the cluster
 	Approve bool `json:"approve"`
+	// ExecutionEnvironment is the environment in which the atlas creates resources
+	// +kubebuilder:validation:Enum=Kubernetes;VirtualMachine
+	ExecutionEnvironment string `json:"executionEnvironment,omitempty"`
 	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
 	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
 	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
