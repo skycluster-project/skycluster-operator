@@ -23,14 +23,11 @@ import (
 	"reflect"
 	"slices"
 	"sort"
-	"strconv"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"gopkg.in/yaml.v3"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -40,6 +37,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
@@ -155,6 +153,17 @@ func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	return ctrl.Result{}, nil
 }
 
+// SetupWithManager sets up the controller with the Manager.
+func (r *AtlasReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&cv1a1.Atlas{}).
+		Named("core-atlas").
+		WithOptions(controller.Options{
+			RateLimiter: newCustomRateLimiter(),
+		}).
+		Complete(r)
+}
+
 func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.Atlas) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
 	deployMap := atlas.Spec.DeployMap
 	manifests := make([]hv1a1.SkyService, 0)
@@ -163,7 +172,6 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
 	// We extract all provider's info and create corresponding SkyProvider objects for each provider
-	// r.Logger.Info("Generating provider manifests.")
 	providersManifests, provToMetadataIdx, err := r.generateProviderManifests(appId, ns, deployMap.Component)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
@@ -172,74 +180,119 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 		manifests = append(manifests, obj)
 	}
 	// r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
+	r.Logger.Info("Generated provider manifests.", "count", len(provToMetadataIdx))
 
-	depPolicy, err := r.fetchDeploymentPolicy(ns, atlas.Spec.DeploymentPolicyRef)
+	dpPolicy, err := r.fetchDeploymentPolicy(ns, atlas.Spec.DeploymentPolicyRef)
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
 
-	requiredVirtSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
-	for _, skySrvc := range deployMap.Component {
-		pName := skySrvc.ProviderRef.Name
-		if _, ok := requiredVirtSvcs[pName]; !ok {
-			requiredVirtSvcs[pName] = make([]pv1a1.VirtualServiceSelector, 0)
+	// // ######### Handle execution environment: Kubernetes
+	// if atlas.Spec.ExecutionEnvironment == "Kubernetes" {
+	// 	k8sManifests, err := r.generateK8SManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
+	// 	if err != nil {
+	// 		return nil, nil, errors.Wrap(err, "Error generating Kubernetes manifests.")
+	// 	}
+	// 	if len(k8sManifests) > 0 {
+	// 		manifests = append(manifests, k8sManifests...)
+	// 	}
+	// }
+
+	// ######### Handle execution environment: VirtualMachine
+	if atlas.Spec.ExecutionEnvironment == "VirtualMachine" {
+		vmManifests, err := r.generateVMManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Error generating VirtualMachine manifests.")
 		}
-
-		svcs, err := r.findReqVirtualSvcs(ns, skySrvc, *depPolicy)
-		if err != nil {return nil, nil, errors.Wrap(err, "fetching required virtual services")}
-
-		requiredVirtSvcs[pName] = append(requiredVirtSvcs[pName], svcs...)
-	}
-
-	r.Logger.Info("Required virtual services per provider.", "providers", requiredVirtSvcs)
-
-	// we now know the required virtual services for each provider
-	managedK8sSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
-	xInstanceSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
-	for pName, virtSvcs := range requiredVirtSvcs {
-		for _, vs := range virtSvcs {
-			if vs.Name == "ManagedKubernetes" { // TODO: we use Name to identify the kind, need to change later.
-				// we only need to create one ManagedKubernetes virtual service per provider
-				// we filter all ComputeProfile (flavors) and use them to create workers in the cluster
-				if _, ok := managedK8sSvcs[pName]; !ok {
-					managedK8sSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
-						// TODO: use kind instead (i.e. ComputeProfile)
-						// return v.Name == "ComputeProfile" || v.Kind == "ComputeProfile"
-						return isValidComputeProfile(v.Name) || v.Kind == "ComputeProfile"
-					})
-				}
-			} else if vs.Kind == "XInstance" || vs.Kind == "ComputeProfile" || isValidComputeProfile(vs.Name) {
-				if _, ok := xInstanceSvcs[pName]; !ok {
-					xInstanceSvcs[pName] = lo.Filter(virtSvcs, func(v pv1a1.VirtualServiceSelector, _ int) bool {
-						// we are only interested in deployable services i.e. "ComputeProfile"
-						return v.Kind == "ComputeProfile"
-					})
-					r.Logger.Info("XInstance virtual services for provider", "provider", pName, "svc", xInstanceSvcs[pName])
-				}
-			} else {
-				return nil, nil, errors.New("unsupported virtual service kind: " + vs.Name)
-			}
+		if len(vmManifests) > 0 {
+			manifests = append(manifests, vmManifests...)
 		}
 	}
 
+
+	// // virtual services required per provider
+	// // currently only ComputeProfile kind is supported
+	// requiredVirtSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
+	// for _, skySrvc := range deployMap.Component {
+	// 	pName := skySrvc.ProviderRef.Name
+	// 	pKind := skySrvc.ProviderRef.Type
+
+	// 	supportedKinds := []string{"XInstance", "Deployment", "XNodeGroup"}
+	// 	if !slices.Contains(supportedKinds, pKind) {
+	// 		return nil, nil, errors.New("unsupported provider type for virtual service fetching: " + pKind)
+	// 	}
+
+	// 	if _, ok := requiredVirtSvcs[pName]; !ok {
+	// 		requiredVirtSvcs[pName] = make([]pv1a1.VirtualServiceSelector, 0)
+	// 	}
+		
+	// 	// find required cheapest virtual service for this component per each alternative set
+	// 	// (requested ComputeProfile)
+	// 	computeProfiles, err := r.findReqComputeProfile(ns, skySrvc, *dpPolicy)
+	// 	if err != nil {return nil, nil, errors.Wrap(err, "fetching required virtual services")}
+	// 	requiredVirtSvcs[pName] = append(requiredVirtSvcs[pName], computeProfiles...)
+	// }
+
+	// r.Logger.Info("Required virtual services per provider.", "providers", requiredVirtSvcs)
+
+	// // If execution environment is Kubernetes, we need to create Kubernetes manifests
+	// // We also need to include a set of ComputeProfiles as node groups for the cluster
+	// // computeProfilesSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
+	// switch dpPolicy.Spec.ExecutionEnvironment {
+	// case "Kubernetes" :
+	// 	// when the execution environment is Kubernetes, we assume that all involved providers
+	// 	// will be used to create a (managed) Kubernetes cluster. Therefore, a combination of 
+	// 	// providers with Kubernetes clusters and without Kubernetes clusters is not supported.
+	// 	// The reason is that we aim for running application, an we either support running it
+	// 	// on a Kubernetes cluster (managed by us), or within VMs, not both at the same time.
+	// 	// User is able to manually provision VMs along with managed Kubernetes if needed.
+	// 	// We filter all ComputeProfile (flavors) and use them to create worker pools in the cluster
+		
+	// 	// for each provider, generate Kubernetes manifests, 
+	// 	//   with node groups consolidated from all required virtual services for that provider
+	// 	kubernetesManifests, err := r.generateMgmdK8sManifests(appId, requiredVirtSvcs, provToMetadataIdx)
+	// 	if err != nil {
+	// 		return nil, nil, errors.Wrap(err, "Error generating managed Kubernetes manifests.")
+	// 	}
+	// 	manifests = append(manifests, lo.Values(kubernetesManifests)...)
+
+	// case "VirtualMachine" :
+	// 	// for VirtualMachine execution environment, we need to create XInstance virtual services
+	// 	// for each provider. In this case, it is expected to have component Kind of XInstance
+	// 	// and the virtual services specify the ComputeProfiles.
+	// 	// for _, skySrvc := range deployMap.Component {
+	// 		// pName := skySrvc.ProviderRef.Name
+	// 		// pKind := skySrvc.ProviderRef.Type
+
+	// 		// if pKind != "XInstance" {
+	// 		// 	r.Logger.Info("Skipping non-XInstance component for VirtualMachine execution environment.", "component", skySrvc.ComponentRef.Name, "kind", pKind)
+	// 		// 	continue
+	// 		// }
+	// 	// }
+	// 		// requiredVirtSvcs[pName] = lo.UniqBy(requiredVirtSvcs[pName], func(v pv1a1.VirtualServiceSelector) string {
+		
+	// default:
+	// 	return nil, nil, errors.New("unsupported execution environment: " + dpPolicy.Spec.ExecutionEnvironment)
+	// }
+	
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
 	// r.Logger.Info("Generating SkyK8SCluster manifests.")
-	if len(managedK8sSvcs) > 0 {
-		managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
-		}
-		for _, obj := range managedK8sManifests {
-			manifests = append(manifests, obj)
-		}
-		r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
-		// Kubernetes Mesh
-		// r.Logger.Info("Generating XKubeMesh manifests.")
-		skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
-		}
-		manifests = append(manifests, *skyMesh)
-	}
+	// if len(managedK8sSvcs) > 0 {
+	// 	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
+	// 	if err != nil {
+	// 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
+	// 	}
+	// 	for _, obj := range managedK8sManifests {
+	// 		manifests = append(manifests, obj)
+	// 	}
+	// 	r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
+	// 	// Kubernetes Mesh
+	// 	// r.Logger.Info("Generating XKubeMesh manifests.")
+	// 	skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
+	// 	if err != nil {
+	// 		return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
+	// 	}
+	// 	manifests = append(manifests, *skyMesh)
+	// }
 
 
 	return manifests, nil, nil
@@ -258,6 +311,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 		uniqueProviders[providerName] = cmpnt.ProviderRef
 	}
 	// a map from platform to map[providerName]index in metadata list
+	// aws -> { us-east-1a: 0, us-east-1b: 1 }
 	indexedSortedProviders := buildIndexMap(uniqueProviders)
 	
 	// Now we have all unique providers
@@ -280,6 +334,8 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
 		obj.SetKind("XProvider")
+
+		// set name with deterministic random suffix to avoid name collisions
 		name := helper.EnsureK8sName("xp-" + pName + "-" + appId)
 		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
@@ -341,7 +397,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 					return nil
 				}
 				switch p.Region {
-				case "SCINET":
+				case "SCINET": // SAVI Testbed
 					return map[string]string{
 						"networkName": "ext-net",
 						"networkId":   "0a23c4ae-98ba-4f3a-8c85-5a7dc614cc4e",
@@ -368,7 +424,8 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			},
 		}
 		obj.Object["spec"] = spec
-		// extra labels only for "SAVI" (openstack)
+
+		// extra labels only for "SAVI Testbed" (openstack)
 		if p.Platform == "openstack" {
 			objAnnt := make(map[string]string, 0)
 			objAnnt["skycluster.io/external-resources"] = "[{\"apiVersion\":\"identity.openstack.crossplane.io/v1alpha1\",\"kind\":\"ProjectV3\",\"id\":\"1e1c724728544ec2a9058303ddc8f30b\"}]"
@@ -380,10 +437,10 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			return nil, nil, errors.Wrap(err, "Error generating YAML manifest.")
 		}
 		manifests[pName] = hv1a1.SkyService{
-			ComponentRef: corev1.ObjectReference{
+			ComponentRef: hv1a1.ComponentRef{
 				APIVersion: obj.GetAPIVersion(),
 				Kind:       obj.GetKind(),
-				Namespace:  obj.GetNamespace(),
+				// Namespace:  obj.GetNamespace(),
 				Name:       obj.GetName(),
 			},
 			Manifest: yamlObj,
@@ -400,38 +457,36 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 	return manifests, indexedSortedProviders, nil
 }
 
-func (r *AtlasReconciler) generateMgmdK8sManifests(appId string, svcList map[string][]pv1a1.VirtualServiceSelector, provToIdx map[string]map[string]int) (map[string]hv1a1.SkyService, error) {
-	// For managed K8S deployments, we start the cluster with nodes needed for control plane
-	// and let the cluster autoscaler handle the rest of the scaling for the workload.
-	// The optimization has decided that for requested workload, this provider is the best fit.
+// Generates VM manifests based on deployment map and deployment policy
+// It fetches uses deployment policy object to determine requested instance types
+// and find equivalent virtual services (ComputeProfile) for the specified provider
+func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string]map[string]int, deployMap cv1a1.DeployMap, dpPolicy pv1a1.DeploymentPolicy) ([]hv1a1.SkyService, error) {
 
-	k8sMetadata, err := r.loadProviderMetadata()
-	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
+	manifests := make([]hv1a1.SkyService, 0)
+	for _, cmpnt := range deployMap.Component {
+		if cmpnt.ProviderRef.Type != "XInstance" {continue}
 
-	provProfiles, err := r.fetchProviderProfilesMap()
-	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
+		// find requested ComputeProfile virtual service for this component
+		computeProfileList, err := r.findReqComputeProfile(dpPolicy.Namespace, cmpnt, dpPolicy)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error finding requested ComputeProfile.")
+		}
+		if len(computeProfileList) == 0 {
+			return nil, errors.New("No ComputeProfile found for component: " + cmpnt.ComponentRef.Name)
+		}
+		// we take the first one as the best fit
+		// computeProfile := computeProfileList[0]
 
-	manifests := map[string]hv1a1.SkyService{}
-	for pName, computeProfileList := range svcList {
-		// computeProfileList is the list of ComputeProfile virtual services for this provider
-		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
-		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
-			return v.Name
-		})
-		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
-		pp := provProfiles[pName]
-		idx := provToIdx[pp.Spec.Platform][pName]
-
-		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
-		if !ok {return nil, errors.New("No primary zone found")}
-		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
+		platform := cmpnt.ProviderRef.Platform
+		region := cmpnt.ProviderRef.Region
+		zone := cmpnt.ProviderRef.Zone
 
 		// we need to create a XKube object
 		xrdObj := &unstructured.Unstructured{}
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
-		xrdObj.SetKind("XKube")
-		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+		xrdObj.SetKind("XInstance")
+
+		name := helper.EnsureK8sName("xvm-" + "-" + appId)
 		rand := RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + rand
@@ -439,100 +494,11 @@ func (r *AtlasReconciler) generateMgmdK8sManifests(appId string, svcList map[str
 
 		spec := map[string]any{
 			"applicationId": appId,
-			"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
-			"nodeCidr": func () string {
-				if pp.Spec.Platform == "gcp" {
-					return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
-				}
-				return ""
-			}(),
-			"podCidr": func () map[string]any {
-				fields := make(map[string]any)
-				if pp.Spec.Platform == "aws" {
-					fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
-					fields["private"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Private
-				}
-				fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
-				return fields
-			}(),
-			"nodeGroups": func () []map[string]any {
-				fields := make([]map[string]any, 0)
-				if pp.Spec.Platform == "aws" {
-					// default node group
-					f := make(map[string]any)
-					f["instanceTypes"] = []string{
-						"2vCPU-4GB",
-						"4vCPU-8GB",
-						"8vCPU-32GB",
-					}
-					f["nodeCount"] = 3
-					f["publicAccess"] = true
-					f["autoScaling"] = map[string]any{
-						"enabled": false,
-						"minSize": 1,
-						"maxSize": 3,
-					}
-					fields = append(fields, f)
-
-					// workers
-					for _, vs := range uniqueProfiles {
-						f := make(map[string]any)
-						f["instanceTypes"] = []string{vs.Name}
-						f["publicAccess"] = false
-						fields = append(fields, f)
-					}
-				}
-				if pp.Spec.Platform == "gcp" {
-					// workers only
-					// manually limit this to prevent charging too much
-					f := make(map[string]any)
-						f["nodeCount"] = 3
-						f["instanceType"] = "2vCPU-4GB"
-						f["publicAccess"] = false
-						f["autoScaling"] = map[string]any{
-							"enabled": true,
-							"minSize": 1,
-							"maxSize": 8,
-					}
-					fields = append(fields, f)
-					// for _, vs := range uniqueProfiles {
-					// 	f := make(map[string]any)
-					// 	f["nodeCount"] = 2
-					// 	f["instanceType"] = vs.Name
-					// 	f["publicAccess"] = false
-					// 	f["autoScaling"] = map[string]any{
-					// 		"enabled": true,
-					// 		"minSize": 1,
-					// 		"maxSize": 3,
-					// 	}
-					// 	fields = append(fields, f)
-					// }
-				}
-				return fields
-			}(),
-			"principal": func () map[string]any {
-				fields := make(map[string]any)
-				if pp.Spec.Platform == "aws" {
-					fields["type"] = "servicePrincipal"
-					fields["id"] = "arn:aws:iam::885707601199:root"
-				}
-				return fields
-			}(),
 			"providerRef": func () map[string]any {
 				fields := map[string]any{
-					"platform": pp.Spec.Platform,
-					"region": pp.Spec.Region,
-				}
-				if pp.Spec.Platform == "aws" {
-					fields["zones"] = map[string]string{
-						"primary": znPrimary.Name,
-						"secondary": znSecondary.Name,
-					}
-				}
-				if pp.Spec.Platform == "gcp" {
-					fields["zones"] = map[string]string{
-						"primary": znPrimary.Name,
-					}
+					"platform": platform,
+					"region": region,
+					"zone": zone,
 				}
 				return fields
 			}(),
@@ -544,27 +510,357 @@ func (r *AtlasReconciler) generateMgmdK8sManifests(appId string, svcList map[str
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating YAML manifest.")
 		}
-		manifests[pName] = hv1a1.SkyService{
-			ComponentRef: corev1.ObjectReference{
+		manifests = append(manifests, hv1a1.SkyService{
+			ComponentRef: hv1a1.ComponentRef{
 				APIVersion: xrdObj.GetAPIVersion(),
 				Kind:       xrdObj.GetKind(),
-				Namespace:  xrdObj.GetNamespace(),
+				// Namespace:  xrdObj.GetNamespace(),
 				Name:       xrdObj.GetName(),
 			},
 			Manifest: yamlObj,
 			ProviderRef: hv1a1.ProviderRefSpec{
-				Name:   pName,
-				Type: znPrimary.Type,
-				Platform: pp.Spec.Platform,
-				Region: pp.Spec.Region,
-				RegionAlias: pp.Spec.RegionAlias,
-				Zone:   znPrimary.Name,
+				// Name:   pName,
+				// Type: znPrimary.Type,
+				Platform: platform,
+				Region: region,
+				// RegionAlias: pp.Spec.RegionAlias,
+				Zone:   zone,
 			},
-		}
+		})
 	}
-	
 	return manifests, nil
 }
+
+// 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
+// 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
+// 	// The optimization has decided that for requested workload, this provider is the best fit.
+
+// 	k8sMetadata, err := r.loadProviderMetadata()
+// 	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
+
+// 	provProfiles, err := r.fetchProviderProfilesMap()
+// 	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
+
+// 	manifests := map[string]hv1a1.SkyService{}
+// 	for pName, skySvc := range deployMap.Component {
+// 		// computeProfileList is the list of ComputeProfile virtual services for this provider
+// 		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
+// 		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
+// 			return v.Name
+// 		})
+// 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
+// 		pp := provProfiles[pName]
+// 		idx := provToIdx[pp.Spec.Platform][pName]
+
+// 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+// 		if !ok {return nil, errors.New("No primary zone found")}
+// 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
+// 		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
+
+// 		// we need to create a XKube object
+// 		xrdObj := &unstructured.Unstructured{}
+// 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
+// 		xrdObj.SetKind("XKube")
+// 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+// 		rand := RandSuffix(name)
+// 		name = name[0:int(math.Min(float64(len(name)), 15))]
+// 		name = name + "-" + rand
+// 		xrdObj.SetName(name)
+
+// 		spec := map[string]any{
+// 			"applicationId": appId,
+// 			"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
+// 			"nodeCidr": func () string {
+// 				if pp.Spec.Platform == "gcp" {
+// 					return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
+// 				}
+// 				return ""
+// 			}(),
+// 			"podCidr": func () map[string]any {
+// 				fields := make(map[string]any)
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
+// 					fields["private"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Private
+// 				}
+// 				fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
+// 				return fields
+// 			}(),
+// 			"nodeGroups": func () []map[string]any {
+// 				fields := make([]map[string]any, 0)
+// 				if pp.Spec.Platform == "aws" {
+// 					// default node group
+// 					f := make(map[string]any)
+// 					f["instanceTypes"] = []string{
+// 						"2vCPU-4GB",
+// 						"4vCPU-8GB",
+// 						"8vCPU-32GB",
+// 					}
+// 					f["nodeCount"] = 3
+// 					f["publicAccess"] = true
+// 					f["autoScaling"] = map[string]any{
+// 						"enabled": false,
+// 						"minSize": 1,
+// 						"maxSize": 3,
+// 					}
+// 					fields = append(fields, f)
+
+// 					// workers
+// 					for _, vs := range uniqueProfiles {
+// 						f := make(map[string]any)
+// 						f["instanceTypes"] = []string{vs.Name}
+// 						f["publicAccess"] = false
+// 						fields = append(fields, f)
+// 					}
+// 				}
+// 				if pp.Spec.Platform == "gcp" {
+// 					// workers only
+// 					// manually limit this to prevent charging too much
+// 					f := make(map[string]any)
+// 						f["nodeCount"] = 3
+// 						f["instanceType"] = "2vCPU-4GB"
+// 						f["publicAccess"] = false
+// 						f["autoScaling"] = map[string]any{
+// 							"enabled": true,
+// 							"minSize": 1,
+// 							"maxSize": 8,
+// 					}
+// 					fields = append(fields, f)
+// 					// for _, vs := range uniqueProfiles {
+// 					// 	f := make(map[string]any)
+// 					// 	f["nodeCount"] = 2
+// 					// 	f["instanceType"] = vs.Name
+// 					// 	f["publicAccess"] = false
+// 					// 	f["autoScaling"] = map[string]any{
+// 					// 		"enabled": true,
+// 					// 		"minSize": 1,
+// 					// 		"maxSize": 3,
+// 					// 	}
+// 					// 	fields = append(fields, f)
+// 					// }
+// 				}
+// 				return fields
+// 			}(),
+// 			"principal": func () map[string]any {
+// 				fields := make(map[string]any)
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["type"] = "servicePrincipal"
+// 					fields["id"] = "arn:aws:iam::885707601199:root"
+// 				}
+// 				return fields
+// 			}(),
+// 			"providerRef": func () map[string]any {
+// 				fields := map[string]any{
+// 					"platform": pp.Spec.Platform,
+// 					"region": pp.Spec.Region,
+// 				}
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["zones"] = map[string]string{
+// 						"primary": znPrimary.Name,
+// 						"secondary": znSecondary.Name,
+// 					}
+// 				}
+// 				if pp.Spec.Platform == "gcp" {
+// 					fields["zones"] = map[string]string{
+// 						"primary": znPrimary.Name,
+// 					}
+// 				}
+// 				return fields
+// 			}(),
+// 		}
+
+// 		xrdObj.Object["spec"] = spec
+
+// 		yamlObj, err := generateYAMLManifest(xrdObj)
+// 		if err != nil {
+// 			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+// 		}
+// 		manifests[pName] = hv1a1.SkyService{
+// 			ComponentRef: corev1.ObjectReference{
+// 				APIVersion: xrdObj.GetAPIVersion(),
+// 				Kind:       xrdObj.GetKind(),
+// 				Namespace:  xrdObj.GetNamespace(),
+// 				Name:       xrdObj.GetName(),
+// 			},
+// 			Manifest: yamlObj,
+// 			ProviderRef: hv1a1.ProviderRefSpec{
+// 				Name:   pName,
+// 				Type: znPrimary.Type,
+// 				Platform: pp.Spec.Platform,
+// 				Region: pp.Spec.Region,
+// 				RegionAlias: pp.Spec.RegionAlias,
+// 				Zone:   znPrimary.Name,
+// 			},
+// 		}
+// 	}
+	
+// 	return manifests, nil
+// }
+
+// func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[string]map[string]int, deployMap hv1a1.DeployMap, dpPolicy pv1a1.DeploymentPolicy) (map[string]hv1a1.SkyService, error) {
+// 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
+// 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
+// 	// The optimization has decided that for requested workload, this provider is the best fit.
+
+// 	k8sMetadata, err := r.loadProviderMetadata()
+// 	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
+
+// 	provProfiles, err := r.fetchProviderProfilesMap()
+// 	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
+
+// 	manifests := map[string]hv1a1.SkyService{}
+// 	for pName, skySvc := range deployMap.Component {
+// 		// computeProfileList is the list of ComputeProfile virtual services for this provider
+// 		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
+// 		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
+// 			return v.Name
+// 		})
+// 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
+// 		pp := provProfiles[pName]
+// 		idx := provToIdx[pp.Spec.Platform][pName]
+
+// 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+// 		if !ok {return nil, errors.New("No primary zone found")}
+// 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
+// 		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
+
+// 		// we need to create a XKube object
+// 		xrdObj := &unstructured.Unstructured{}
+// 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
+// 		xrdObj.SetKind("XKube")
+// 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+// 		rand := RandSuffix(name)
+// 		name = name[0:int(math.Min(float64(len(name)), 15))]
+// 		name = name + "-" + rand
+// 		xrdObj.SetName(name)
+
+// 		spec := map[string]any{
+// 			"applicationId": appId,
+// 			"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
+// 			"nodeCidr": func () string {
+// 				if pp.Spec.Platform == "gcp" {
+// 					return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
+// 				}
+// 				return ""
+// 			}(),
+// 			"podCidr": func () map[string]any {
+// 				fields := make(map[string]any)
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
+// 					fields["private"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Private
+// 				}
+// 				fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
+// 				return fields
+// 			}(),
+// 			"nodeGroups": func () []map[string]any {
+// 				fields := make([]map[string]any, 0)
+// 				if pp.Spec.Platform == "aws" {
+// 					// default node group
+// 					f := make(map[string]any)
+// 					f["instanceTypes"] = []string{
+// 						"2vCPU-4GB",
+// 						"4vCPU-8GB",
+// 						"8vCPU-32GB",
+// 					}
+// 					f["nodeCount"] = 3
+// 					f["publicAccess"] = true
+// 					f["autoScaling"] = map[string]any{
+// 						"enabled": false,
+// 						"minSize": 1,
+// 						"maxSize": 3,
+// 					}
+// 					fields = append(fields, f)
+
+// 					// workers
+// 					for _, vs := range uniqueProfiles {
+// 						f := make(map[string]any)
+// 						f["instanceTypes"] = []string{vs.Name}
+// 						f["publicAccess"] = false
+// 						fields = append(fields, f)
+// 					}
+// 				}
+// 				if pp.Spec.Platform == "gcp" {
+// 					// workers only
+// 					// manually limit this to prevent charging too much
+// 					f := make(map[string]any)
+// 						f["nodeCount"] = 3
+// 						f["instanceType"] = "2vCPU-4GB"
+// 						f["publicAccess"] = false
+// 						f["autoScaling"] = map[string]any{
+// 							"enabled": true,
+// 							"minSize": 1,
+// 							"maxSize": 8,
+// 					}
+// 					fields = append(fields, f)
+// 					// for _, vs := range uniqueProfiles {
+// 					// 	f := make(map[string]any)
+// 					// 	f["nodeCount"] = 2
+// 					// 	f["instanceType"] = vs.Name
+// 					// 	f["publicAccess"] = false
+// 					// 	f["autoScaling"] = map[string]any{
+// 					// 		"enabled": true,
+// 					// 		"minSize": 1,
+// 					// 		"maxSize": 3,
+// 					// 	}
+// 					// 	fields = append(fields, f)
+// 					// }
+// 				}
+// 				return fields
+// 			}(),
+// 			"principal": func () map[string]any {
+// 				fields := make(map[string]any)
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["type"] = "servicePrincipal"
+// 					fields["id"] = "arn:aws:iam::885707601199:root"
+// 				}
+// 				return fields
+// 			}(),
+// 			"providerRef": func () map[string]any {
+// 				fields := map[string]any{
+// 					"platform": pp.Spec.Platform,
+// 					"region": pp.Spec.Region,
+// 				}
+// 				if pp.Spec.Platform == "aws" {
+// 					fields["zones"] = map[string]string{
+// 						"primary": znPrimary.Name,
+// 						"secondary": znSecondary.Name,
+// 					}
+// 				}
+// 				if pp.Spec.Platform == "gcp" {
+// 					fields["zones"] = map[string]string{
+// 						"primary": znPrimary.Name,
+// 					}
+// 				}
+// 				return fields
+// 			}(),
+// 		}
+
+// 		xrdObj.Object["spec"] = spec
+
+// 		yamlObj, err := generateYAMLManifest(xrdObj)
+// 		if err != nil {
+// 			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+// 		}
+// 		manifests[pName] = hv1a1.SkyService{
+// 			ComponentRef: corev1.ObjectReference{
+// 				APIVersion: xrdObj.GetAPIVersion(),
+// 				Kind:       xrdObj.GetKind(),
+// 				Namespace:  xrdObj.GetNamespace(),
+// 				Name:       xrdObj.GetName(),
+// 			},
+// 			Manifest: yamlObj,
+// 			ProviderRef: hv1a1.ProviderRefSpec{
+// 				Name:   pName,
+// 				Type: znPrimary.Type,
+// 				Platform: pp.Spec.Platform,
+// 				Region: pp.Spec.Region,
+// 				RegionAlias: pp.Spec.RegionAlias,
+// 				Zone:   znPrimary.Name,
+// 			},
+// 		}
+// 	}
+	
+// 	return manifests, nil
+// }
 
 // only one mesh per application
 func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
@@ -607,370 +903,13 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 		return nil, errors.Wrap(err, "Error generating YAML manifest.")
 	}
 	return &hv1a1.SkyService{
-		ComponentRef: corev1.ObjectReference{
+		ComponentRef: hv1a1.ComponentRef{
 			APIVersion: xrdObj.GetAPIVersion(),
 			Kind:       xrdObj.GetKind(),
-			Namespace:  xrdObj.GetNamespace(),
+			// Namespace:  xrdObj.GetNamespace(),
 			Name:       xrdObj.GetName(),
 		},
 		Manifest: yamlObj,
 	}, nil
 	
-}
-
-
-// dpRef is the deployment plan reference from Atlas spec
-func (r *AtlasReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.DeploymentPolicyRef) (*pv1a1.DeploymentPolicy, error) {
-	dp := &pv1a1.DeploymentPolicy{}
-	err := r.Get(context.TODO(), client.ObjectKey{Namespace: ns, Name: dpRef.Name}, dp)
-	if err != nil {return nil, err}
-	return dp, nil
-}
-
-// dpPolicy := r.fetchDeploymentPolicy(ns, dpRef)
-// findReqVirtualSvcs(ns, skySrv, dpPolicy)
-func (r *AtlasReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
-	if len(virtualServices) == 0 {return nil, nil} // no virtual services required
-
-	virtSvcMap, err := r.fetchVirtualServiceCfgMap(ns, providerRef)
-	if err != nil { return nil, errors.Wrap(err, "failed fetching virtual service config map") }
-
-	// Find the set with the minimum cost
-	var cheapestVirtSvc *pv1a1.VirtualServiceSelector
-	minCost := math.MaxFloat64
-	for _, vs := range virtualServices {
-		cost, err := r.calculateVirtualServiceSetCost(virtSvcMap, vs, providerRef.Zone)
-		if err != nil {return nil, err}
-		if cost < 0 {continue} // unable to calculate cost, skip, maybe not offered?
-
-		if cost < minCost {
-			minCost = cost
-			cheapestVirtSvc = &vs
-		}	
-	}
-	if cheapestVirtSvc == nil {
-		return nil, errors.New("no valid virtual service found" + " for provider " + providerRef.Name)
-	}
-
-	return cheapestVirtSvc, nil
-}
-
-func (r *AtlasReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a1.ProviderRefSpec) (map[string]string, error) {
-	cm := &corev1.ConfigMapList{}
-	if err := r.List(context.Background(), cm, client.MatchingLabels{
-		"skycluster.io/config-type": "provider-profile",
-		"skycluster.io/managed-by": "skycluster",
-		"skycluster.io/provider-platform": providerRef.Platform,
-		"skycluster.io/provider-profile": providerRef.Name,
-		"skycluster.io/provider-region": providerRef.Region,
-	}); err != nil { return nil, errors.Wrap(err, "listing provider profile ConfigMaps") }
-	if len(cm.Items) == 0 { return nil, errors.New("no provider profile ConfigMaps found") }
-	if len(cm.Items) > 1 { return nil, errors.New("multiple provider profile ConfigMaps found") }
-	
-	return cm.Items[0].Data, nil
-}
-
-// virtSvcMap := fetchVirtualServiceCfgMap(ns, providerRef)
-// calculateVirtualServiceSetCost(virtSvcMap, virtualService, zone)
-func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[string]string, vs pv1a1.VirtualServiceSelector, zone string) (float64, error) {
-	
-	// limited number of virtual services are supported: ManagedKubernetes, ComputeProfile
-	// TODO: Use Kind instead
-	switch vs.Name {
-	case "ManagedKubernetes":
-		// cmData["managed-k8s.yaml"]
-		mngK8sList := []hv1a1.ManagedK8s{}
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["managed-k8s.yaml"]), &mngK8sList); err != nil {
-			return -1, errors.Wrap(err, "unmarshalling managed-k8s.yaml")
-		}
-		for _, mngK8s := range mngK8sList {
-			if mngK8s.NameLabel == vs.Name {
-				// found matching managed K8s, calculate cost
-				overheadCost, err := strconv.ParseFloat(mngK8s.Overhead.Cost, 64)
-				if err != nil {return -1, errors.Wrap(err, "parsing overhead cost")}
-
-				price, err := strconv.ParseFloat(mngK8s.Price, 64)
-				if err != nil {return -1, errors.Wrap(err, "parsing price")}
-
-				totalCost := price + (overheadCost * float64(vs.Count))
-				return totalCost, nil
-			}
-		}
-
-	default:
-		r.Logger.Info("Unsupported virtual service by Name", "virtualService", vs.Name)
-	}
-
-	switch vs.Kind {
-	case "XInstance":
-		// duplicate of default case, kept to use strcutured ComputeProfile definition
-		// TODO: ideally this should be adopted for default case below
-		pat, err := parseFlavorFromJSON(vs.Name)
-		if err != nil {return -1, errors.Wrap(err, "parsing flavor from JSON")}
-
-		var zoneOfferings []cv1a1.ZoneOfferings
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
-			for _, zo := range zoneOfferings {
-				if zo.Zone != zone {continue}
-				for _, of := range zo.Offerings {
-					if !offeringMatches2(pat, of) {continue}
-					priceFloat, err := strconv.ParseFloat(of.Price, 64)
-					if err != nil {continue}
-					
-					return priceFloat, nil
-				}
-			}
-		} 
-
-		// try the baremetal flavors
-		var bmOfferings map[string]cv1a1.DeviceZoneSpec
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
-			for _, deviceSpec := range bmOfferings {
-				if !offeringMatches2(pat, *deviceSpec.Configs) {continue}
-				priceFloat, err := strconv.ParseFloat(deviceSpec.Configs.Price, 64)
-				if err != nil {continue}
-				
-				return priceFloat, nil
-			}
-		}
-	
-
-	// TODO: we don't support the kind yet, ideally this should be ComputeProfile
-	// instead of case "default":
-	default:
-		// cmData["flavors.yaml"]
-		var zoneOfferings []cv1a1.ZoneOfferings
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
-			for _, zo := range zoneOfferings {
-				if zo.Zone != zone {continue}
-				
-				for _, of := range zo.Offerings {
-					if !wildcardComputeProfileMatch(vs.Name, of.NameLabel) {continue}
-					priceFloat, err := strconv.ParseFloat(of.Price, 64)
-					if err != nil {continue}
-					
-					return priceFloat, nil
-				}
-			}
-		} 
-
-		// try the baremetal flavors
-		var bmOfferings map[string]cv1a1.DeviceZoneSpec
-		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
-			for _, deviceSpec := range bmOfferings {
-				deviceSpecLabel := strconv.Itoa(deviceSpec.Configs.VCPUs) + "vCPU-" + deviceSpec.Configs.RAM + "GB" + func() string {
-					if deviceSpec.Configs.GPU.Count != 0 && deviceSpec.Configs.GPU.Unit != "" {
-						return "-" + strconv.Itoa(deviceSpec.Configs.GPU.Count) + "x" + deviceSpec.Configs.GPU.Unit
-					}
-					return ""
-				}()
-				if !wildcardComputeProfileMatch(vs.Name, deviceSpecLabel) {continue}
-				priceFloat, err := strconv.ParseFloat(deviceSpec.Configs.Price, 64)
-				if err != nil {continue}
-				
-				return priceFloat, nil
-			}
-		}
-	}
-
-	return -1, nil
-}
-
-// dpRef is the deployment plan reference from Atlas spec
-// skySrvc is the SkyService component for which we are finding required virtual services
-func (r *AtlasReconciler) findReqVirtualSvcs(ns string, skySrvc hv1a1.SkyService, dpPolicy pv1a1.DeploymentPolicy) ([]pv1a1.VirtualServiceSelector, error) {
-	// parse the deployment plan to find required virtual services for the component
-	cmpntRef := skySrvc.ComponentRef
-	provRef := skySrvc.ProviderRef
-	for _, cmpnt := range dpPolicy.Spec.DeploymentPolicies {
-
-		if cmpnt.ComponentRef.Name == cmpntRef.Name && 
-				cmpnt.ComponentRef.Kind == cmpntRef.Kind && 
-				cmpnt.ComponentRef.APIVersion == cmpntRef.APIVersion {
-		
-			// found matching component, extract virtual services
-			// list of (alternative virtual services)
-			reqVirtualSvcs := make([]pv1a1.VirtualServiceSelector, 0) 
-			for _, vsSet := range cmpnt.VirtualServiceConstraint {
-				cheapestVirtualSvcs, err := r.findCheapestVirtualSvcs(ns, provRef, vsSet.AnyOf)
-				if err != nil {return nil, errors.Wrap(err, "finding cheapest virtual services")}
-				if cheapestVirtualSvcs == nil {
-					return nil, errors.New("no available virtual service found for component " + cmpntRef.Name )
-				}
-				reqVirtualSvcs = append(reqVirtualSvcs, *cheapestVirtualSvcs)
-
-				// if this requested virtual service is a managed Kubernetes
-				// we find all potential ComputeProfile alternatives
-				// and sort them by cost, then use top N=5 cheapest ones
-				// change N to allow more alternatives (Karpenter will pick)
-				// Alternativelly, if user specifies specific ComputeProfile,
-				// we only use that one.
-				if cheapestVirtualSvcs.Name == "ManagedKubernetes" {
-					virtSvcMap, err := r.fetchVirtualServiceCfgMap(ns, provRef)
-					if err != nil { return nil, errors.Wrap(err, "failed fetching virtual service config map for compute profiles") }
-
-					type computeProfileAlternative struct {
-						Name  string
-						EstimatedCost float64
-					}
-
-					// cmData["flavors.yaml"]
-					var zoneOfferings []cv1a1.ZoneOfferings
-					err1 := yaml.Unmarshal([]byte(virtSvcMap["flavors.yaml"]), &zoneOfferings); 
-					computeProfiles := make([]computeProfileAlternative, 0)
-					if err1 == nil {
-						for _, zo := range zoneOfferings {
-							if zo.Zone != provRef.Zone {continue}
-							
-							for _, of := range zo.Offerings {
-								priceFloat, err := helper.ParseAmount(of.Price)
-								if err != nil {continue}
-
-								if strings.Contains(of.NameLabel, "-0GB") {continue}
-								
-								computeProfiles = append(computeProfiles, computeProfileAlternative{
-									Name:  of.NameLabel,
-									EstimatedCost: priceFloat,
-								})
-							}
-						}
-						// remove duplicates
-						uniqueProfiles := lo.UniqBy(computeProfiles, func(cp computeProfileAlternative) string {
-							return cp.Name
-						})
-						// sort compute profiles by estimated cost
-						sort.Slice(uniqueProfiles, func(i, j int) bool {
-							return uniqueProfiles[i].EstimatedCost < uniqueProfiles[j].EstimatedCost
-						})
-						// take top N=5 cheapest compute profiles
-						N := 5
-						if len(uniqueProfiles) < N {
-							N = len(uniqueProfiles)
-						}
-						tmp := make([]pv1a1.VirtualServiceSelector, 0)
-						for _, cp := range uniqueProfiles[:N] {
-							tmp = append(tmp, pv1a1.VirtualServiceSelector{
-								VirtualService: hv1a1.VirtualService{
-									Name: cp.Name,
-									Kind: "ComputeProfile",
-								},
-								Count: 1,
-							})
-						}
-
-						reqVirtualSvcs = append(reqVirtualSvcs, tmp...)
-					}
-				}
-
-			}
-			// one component is matched, no need to continue
-			return reqVirtualSvcs, nil
-		}
-	}
-	return nil, errors.New("no matching component found in deployment policy")
-}
-
-// Load static metadata about providers from configmaps
-// key: platform name, value: list of provider metadata
-func (r *AtlasReconciler) loadProviderMetadata() (map[string][]providerMetadata, error) {
-	providerData, err := r.fetchProviderMetadataMap()
-	if err != nil {
-		return nil, errors.Wrap(err, "fetching provider metadata map")
-	}
-
-	providerMetadataByKey := make(map[string][]providerMetadata)
-	for key, yamlStr := range providerData {
-		var metas []providerMetadata
-		if err := yaml.Unmarshal([]byte(yamlStr), &metas); err != nil {
-			return nil, errors.Wrapf(err, "unmarshalling provider metadata for key %s", key)
-		}
-		providerMetadataByKey[key] = metas
-	}
-
-	return providerMetadataByKey, nil
-}
-
-// Load static metadata about providers from configmaps and return as a map
-// key: platform name, value: yaml string
-func (r *AtlasReconciler) fetchProviderMetadataMap() (map[string]string, error) {
-	cmList := &corev1.ConfigMapList{}
-	if err := r.List(context.Background(), cmList, client.MatchingLabels{
-		"skycluster.io/config-type": "provider-metadata-e2e",
-	}); err != nil {
-		return nil, errors.Wrap(err, "listing provider metadata ConfigMaps")
-	}
-
-	if len(cmList.Items) == 0 {
-		return nil, errors.New("no provider metadata ConfigMaps found")
-	}
-	if len(cmList.Items) > 1 {
-		return nil, errors.New("more than one provider metadata ConfigMap found")
-	}
-
-	providerData := make(map[string]string, len(cmList.Items[0].Data))
-	for k, v := range cmList.Items[0].Data {
-		providerData[k] = v
-	}
-	return providerData, nil
-}
-
-// Fetch all provider profiles and return as a map
-func (r *AtlasReconciler) fetchProviderProfilesMap() (map[string]cv1a1.ProviderProfile, error) {
-	ppList := &cv1a1.ProviderProfileList{}
-	if err := r.List(context.Background(), ppList); err != nil {
-		return nil, errors.Wrap(err, "listing provider profiles")
-	}
-
-	if len(ppList.Items) == 0 {
-		return nil, errors.New("no provider profiles found")
-	}
-
-	providerProfilesMap := make(map[string]cv1a1.ProviderProfile)
-	for _, pp := range ppList.Items {
-		if _, ok := providerProfilesMap[pp.Spec.Platform]; !ok {
-			providerProfilesMap[pp.Name] = pp
-		}
-	}
-	return providerProfilesMap, nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *AtlasReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&cv1a1.Atlas{}).
-		Named("core-atlas").
-		WithOptions(controller.Options{
-			RateLimiter: newCustomRateLimiter(),
-		}).
-		Complete(r)
-}
-
-func findSecondaryZone(p cv1a1.ProviderProfile, primary string) string {
-	for _, z := range p.Spec.Zones {
-		if z.Name != primary { return z.Name }
-	}
-	return ""
-}
-
-func buildIndexMap(pvs map[string]hv1a1.ProviderRefSpec) map[string]map[string]int {
-	typedProviders := make(map[string][]string)
-	for pname, p := range pvs {
-		if typedProviders[p.Platform] == nil {
-			typedProviders[p.Platform] = make([]string, 0)
-		}
-		typedProviders[p.Platform] = append(typedProviders[p.Platform], pname)
-	}
-	for pltf, pnames := range typedProviders {
-		sort.Strings(pnames)
-		typedProviders[pltf] = pnames
-	}
-	provToIdx := make(map[string]map[string]int)
-	for pltf, pnames := range typedProviders {
-		m := make(map[string]int)
-		for id, pname := range pnames {
-			m[pname] = id
-		}
-		provToIdx[pltf] = m
-	}
-	return provToIdx
 }

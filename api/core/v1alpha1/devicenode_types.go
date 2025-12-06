@@ -35,7 +35,7 @@ type DeviceZoneSpec struct {
 	PrivateIp string             `json:"privateIp" yaml:"privateIp"`
 	PublicIp  string             `json:"publicIp,omitempty" yaml:"publicIp,omitempty"`
 	Auth      *DeviceNodeAuth    `json:"auth" yaml:"auth"`
-	Configs   *InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
+	Configs   *hv1a1.InstanceOffering   `json:"configs,omitempty" yaml:"configs,omitempty"`
 }
 
 type DeviceNodeAuth struct {

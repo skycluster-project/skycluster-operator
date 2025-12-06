@@ -71,14 +71,34 @@ metadata:
   labels:
     skycluster.io/app-id: testcase1
 spec:
+  # The execution environment can be either Kubernetes or VirtualMachine
+  # when it is Kubernetes, the controller will attempt to provision Kubernetes
+  # clusters (managed or self-managed) to deploy the application components.
+  # when it is VirtualMachine, the controller will attempt to provision VMs
+  # to deploy the application components. 
+  executionEnvironment: Kubernetes # Kubernetes | VirtualMachine
   deploymentPolicies:
+    # Depending on the execution environment, the componentRef kind
+    # can be Deployment (for Kubernetes) or inline Docker container spec (for VM).
     - componentRef:
         apiVersion: apps/v1
-        kind: Deployment
+        kind: Deployment # Deployment | DockerContainer
         name: producer
+        spec: |
+          # inline spec can go here if needed
       virtualServiceConstraint:
+      # Virtual service constraints specify the required services
+      # for hosting and running this component. 
+      # Supported types: ComputeProfile (for VMs and underlying hosts in Kubernetes (node groups))
+      # This could be extended to support multiple virtual service types
       - anyOf:
-        - name: ManagedKubernetes
+        - kind: ComputeProfile
+        # must specify the ComputeProfile with json/yaml spec.
+          spec: |
+            {
+              "vcpu": 2,
+              "ram": 4
+            }
       performanceConstraint:
         responseTime: 100ms
       locationConstraint:

@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
-	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -116,7 +115,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 		},
 	}
 
-	flavorJson, err := json.Marshal(hv1a1.FlavorSpec{
+	flavorJson, err := json.Marshal(hv1a1.ComputeFlavor{
 		VCPU: owner.Spec.Flavor.VCPU,
 		RAM:  owner.Spec.Flavor.RAM,
 		GPU: hv1a1.GPU{
@@ -136,11 +135,11 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 		ExecutionEnvironment: "VirtualMachine",
 		DeploymentPolicies: []policyv1a1.DeploymentPolicyItem{
 			{
-				ComponentRef: corev1.ObjectReference{
+				ComponentRef: hv1a1.ComponentRef{
 					APIVersion: "skycluster.io/v1alpha1",
 					Kind:       "XInstance",
 					Name:       owner.Name,
-					Namespace:  "", // cluster-scoped
+					// Namespace:  "", // cluster-scoped
 				},
 				// a single VirtualServiceConstraint whose AnyOf contains ManagedKubernetes
 				VirtualServiceConstraint: []policyv1a1.VirtualServiceConstraint{
@@ -150,7 +149,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 								// VirtualServiceSelector embeds hv1a1.VirtualService inline.
 								VirtualService: hv1a1.VirtualService{
 									Kind:       "ComputeProfile",
-									Spec:       string(flavorJson),
+									Spec:       &runtime.RawExtension{Raw: flavorJson},
 								},
 								Count: 1,
 							},

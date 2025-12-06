@@ -147,7 +147,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					}
 					
 					// if the result is optimal we set the deployment plan
-					deployPlan := hv1a1.DeployMap{}
+					deployPlan := cv1a1.DeployMap{}
 					if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
 						return ctrl.Result{}, errors.Wrap(err, "failed to unmarshal deploy plan")
 					}
@@ -221,7 +221,7 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
+func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, deployPlan cv1a1.DeployMap) error {
 	obj := &cv1a1.AtlasMeshList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
 		"skycluster.io/app-id": appId,
@@ -274,7 +274,7 @@ func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, d
 	return nil
 }
 
-func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, deployPlan hv1a1.DeployMap) error {
+func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, deployPlan cv1a1.DeployMap) error {
 	obj := &cv1a1.AtlasList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
 		"skycluster.io/app-id": appId,

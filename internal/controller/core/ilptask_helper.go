@@ -14,6 +14,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/samber/lo"
@@ -461,11 +462,11 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 	return vServicesList, nil
 }
 
-func parseFlavorFromJSON(flavorJSON string) (flavorPattern, error) {
+func parseFlavorFromJSON(flavorJSON *runtime.RawExtension) (flavorPattern, error) {
 	var numberRe = regexp.MustCompile(`[\d.]+`)
-	var fs hv1a1.FlavorSpec
+	var fs hv1a1.ComputeFlavor
 	var p flavorPattern
-	if err := json.Unmarshal([]byte(flavorJSON), &fs); err != nil {
+	if err := json.Unmarshal(flavorJSON.Raw, &fs); err != nil {
 		return p, err
 	}
 

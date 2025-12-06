@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -26,9 +25,9 @@ import (
 
 type DataDapendency struct {
 	// From is the reference to the source component
-	From corev1.ObjectReference `json:"from,omitempty"`
+	From hv1a1.ComponentRef `json:"from,omitempty"`
 	// To is the reference to the destination component
-	To corev1.ObjectReference `json:"to,omitempty"`
+	To hv1a1.ComponentRef `json:"to,omitempty"`
 
 	// Latency represents the latency between services
 	Latency string `json:"latency,omitempty"`

@@ -292,29 +292,30 @@ func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
 			}
 		}
 
-		cmData, ok = cm.Data["managed-k8s.yaml"]
-		if !ok { continue }
-		var managedK8s []hv1a1.ManagedK8s
-		if err := yaml.Unmarshal([]byte(cmData), &managedK8s); err != nil {
-			return "", fmt.Errorf("failed to unmarshal managed k8s config map: %v", err)
-		}
-		for _, mk8s := range managedK8s {
-			// I expect only one offering
-			priceFloat, err1 := strconv.ParseFloat(mk8s.Price, 64)
-			priceOverheadFloat, err2 := strconv.ParseFloat(mk8s.Overhead.Cost, 64)
-			if err1 != nil || err2 != nil {
-				return "", fmt.Errorf("failed to parse price or overhead for managed k8s vservice %s: price error: %v; overhead error: %v", mk8s.Name, err1, err2)
-			}
-			vServicesList = append(vServicesList, vServiceStruct{
-				VServiceName:   mk8s.NameLabel,
-				VServiceKind:   "ManagedKubernetes",
-				ProviderName:   pName,
-				ProviderPlatform: pPlatform,
-				ProviderRegion: pRegion,
-				DeployCost:     priceFloat + priceOverheadFloat,
-				Availability:   100000, // assuming always available
-			})
-		}
+		// TODO: managed Kubernetes costs
+	// 	cmData, ok = cm.Data["managed-k8s.yaml"]
+	// 	if !ok { continue }
+	// 	var managedK8s []hv1a1.ManagedK8s
+	// 	if err := yaml.Unmarshal([]byte(cmData), &managedK8s); err != nil {
+	// 		return "", fmt.Errorf("failed to unmarshal managed k8s config map: %v", err)
+	// 	}
+	// 	for _, mk8s := range managedK8s {
+	// 		// I expect only one offering
+	// 		priceFloat, err1 := strconv.ParseFloat(mk8s.Price, 64)
+	// 		priceOverheadFloat, err2 := strconv.ParseFloat(mk8s.Overhead.Cost, 64)
+	// 		if err1 != nil || err2 != nil {
+	// 			return "", fmt.Errorf("failed to parse price or overhead for managed k8s vservice %s: price error: %v; overhead error: %v", mk8s.Name, err1, err2)
+	// 		}
+	// 		vServicesList = append(vServicesList, vServiceStruct{
+	// 			VServiceName:   mk8s.NameLabel,
+	// 			VServiceKind:   "ManagedKubernetes",
+	// 			ProviderName:   pName,
+	// 			ProviderPlatform: pPlatform,
+	// 			ProviderRegion: pRegion,
+	// 			DeployCost:     priceFloat + priceOverheadFloat,
+	// 			Availability:   100000, // assuming always available
+	// 		})
+	// 	}
 	}
 	b, err := json.Marshal(vServicesList)
 	if err != nil {

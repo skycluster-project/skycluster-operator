@@ -28,12 +28,12 @@ type AtlasMeshSpec struct {
 	Approve bool `json:"approve"`
 	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
 	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
-	DeployMap hv1a1.DeployMap `json:"deployPlan,omitempty"`
+	DeployMap DeployMap `json:"deployPlan,omitempty"`
 }
 
 // AtlasMeshStatus defines the observed state of AtlasMesh.
 type AtlasMeshStatus struct {
-	Objects   []hv1a1.SkyObject   `json:"objects,omitempty"`
+	Objects   []hv1a1.SkyService   `json:"objects,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 

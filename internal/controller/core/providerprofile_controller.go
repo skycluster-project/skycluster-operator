@@ -814,9 +814,9 @@ func (r *ProviderProfileReconciler) fetchInstanceTypeData(ctx context.Context, p
 // }
 
 func buildZoneOfferings(zoneName string, offerings []string) cv1a1.ZoneOfferings {
-	o := make([]cv1a1.InstanceOffering, 0, len(offerings))
+	o := make([]hv1a1.InstanceOffering, 0, len(offerings))
 	for _, offering := range offerings {
-		o = append(o, cv1a1.InstanceOffering{NameLabel: offering})
+		o = append(o, hv1a1.InstanceOffering{NameLabel: offering})
 	}
 	return cv1a1.ZoneOfferings{Zone: zoneName, Offerings: o}
 }

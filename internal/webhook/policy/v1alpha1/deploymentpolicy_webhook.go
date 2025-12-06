@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -67,6 +68,30 @@ func (v *DeploymentPolicyCustomValidator) ValidateCreate(_ context.Context, obj 
 		}
 	}
 
+	// When executionEnvironment == VirtualMachine, enforce exactly one ComputeProfile
+	if dp.Spec.ExecutionEnvironment == "VirtualMachine" {
+		for idx, item := range dp.Spec.DeploymentPolicies {
+			computeCount := 0
+			// iterate over all virtual service constraints and their anyOf selectors
+			for _, vsc := range item.VirtualServiceConstraint {
+				for _, sel := range vsc.AnyOf {
+					if strings.EqualFold(sel.Kind, "ComputeProfile") {
+						computeCount++
+						// as long as an alternative set contains a ComputeProfile, 
+						// we are done with this set, because we only need to count how many
+						// alternative sets contain ComputeProfile selectors
+						// and if there is more than one, we will raise an error
+						break
+					}
+				}
+			}
+
+			if computeCount > 1 {
+				return nil, fmt.Errorf("deploymentPolicies[%d] (component=%s): executionEnvironment=VirtualMachine requires exactly one ComputeProfile selector, found %d", idx, item.ComponentRef.Name, computeCount)
+			}
+		}
+	}
+
 	return nil, nil
 }
 
@@ -84,6 +109,30 @@ func (v *DeploymentPolicyCustomValidator) ValidateUpdate(_ context.Context, oldO
 		for _, label := range labels {
 			if _, exists := dp.Labels[label]; !exists {
 				return nil, fmt.Errorf("missing required label '%s' on DeploymentPolicy '%s'", label, dp.GetName())
+			}
+		}
+	}
+
+	// When executionEnvironment == VirtualMachine, enforce exactly one ComputeProfile
+	if dp.Spec.ExecutionEnvironment == "VirtualMachine" {
+		for idx, item := range dp.Spec.DeploymentPolicies {
+			computeCount := 0
+			// iterate over all virtual service constraints and their anyOf selectors
+			for _, vsc := range item.VirtualServiceConstraint {
+				for _, sel := range vsc.AnyOf {
+					if strings.EqualFold(sel.Kind, "ComputeProfile") {
+						computeCount++
+						// as long as an alternative set contains a ComputeProfile, 
+						// we are done with this set, because we only need to count how many
+						// alternative sets contain ComputeProfile selectors
+						// and if there is more than one, we will raise an error
+						break
+					}
+				}
+			}
+
+			if computeCount > 1 {
+				return nil, fmt.Errorf("deploymentPolicies[%d] (component=%s): executionEnvironment=VirtualMachine requires exactly one ComputeProfile selector, found %d", idx, item.ComponentRef.Name, computeCount)
 			}
 		}
 	}

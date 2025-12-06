@@ -25,7 +25,7 @@ import (
 	"k8s.io/client-go/util/workqueue"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 )
 
 func SetTimeAnnotation(obj metav1.Object, key string, t metav1.Time) {
@@ -354,6 +354,7 @@ func generateYAMLManifest(obj any) (string, error) {
 	return string(objYAML), nil
 }
 
+// RandSuffix generates a deterministic random suffix based on the input string
 func RandSuffix(s string) string {
 	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
 	const length = 5
@@ -361,7 +362,9 @@ func RandSuffix(s string) string {
 	// Use a hash of the input as the seed
 	h := fnv.New64a()
 	h.Write([]byte(s))
-	r := rand.New(rand.NewSource(int64(h.Sum64()))) // use local rand to avoid affecting global seed
+	
+	// use local rand to avoid affecting global seed
+	r := rand.New(rand.NewSource(int64(h.Sum64()))) 
 
 	b := make([]byte, length)
 	for i := range b {
@@ -477,7 +480,7 @@ func wildcardComputeProfileMatch(pattern, str string) bool {
 	return re.MatchString(str)
 }
 
-func offeringMatches2(p flavorPattern, off cv1a1.InstanceOffering) bool {
+func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) bool {
 	availCPU := off.VCPUs
 	availRAM, err := strconv.Atoi(strings.ReplaceAll(off.RAM, "GB", ""))
 	if err != nil {return false}

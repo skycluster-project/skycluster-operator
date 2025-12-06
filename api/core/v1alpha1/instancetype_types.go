@@ -24,6 +24,11 @@ import (
 	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
 
+type ZoneOfferings struct {
+	Zone      string             `json:"zone" yaml:"zone"`
+	Offerings []hv1a1.InstanceOffering `json:"zoneOfferings" yaml:"zoneOfferings"`
+}
+
 // InstanceTypeSpec defines the desired state of InstanceType
 type InstanceTypeSpec struct {
 	ProviderRef string          `json:"providerRef"`
@@ -38,28 +43,6 @@ type InstanceTypeStatus struct {
 	ObservedGeneration        int64           `json:"observedGeneration,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`
-}
-
-type ZoneOfferings struct {
-	Zone      string             `json:"zone" yaml:"zone"`
-	Offerings []InstanceOffering `json:"zoneOfferings" yaml:"zoneOfferings"`
-}
-
-type InstanceOffering struct {
-	Name        string   `json:"name,omitempty" yaml:"name,omitempty"`
-	NameLabel   string   `json:"nameLabel,omitempty" yaml:"nameLabel,omitempty"`
-	VCPUs       int      `json:"vcpus,omitempty" yaml:"vcpus,omitempty"`
-	RAM         string   `json:"ram,omitempty" yaml:"ram,omitempty"`
-	Price       string   `json:"price,omitempty" yaml:"price,omitempty"`
-	GPU         hv1a1.GPU      `json:"gpu,omitempty" yaml:"gpu,omitempty"`
-	Generation  string   `json:"generation,omitempty" yaml:"generation,omitempty"`
-	VolumeTypes []string `json:"volumeTypes,omitempty" yaml:"volumeTypes,omitempty"`
-	Spot        Spot     `json:"spot,omitempty" yaml:"spot,omitempty"`
-}
-
-type Spot struct {
-	Price   string `json:"price,omitempty" yaml:"price,omitempty"`
-	Enabled bool   `json:"enabled,omitempty" yaml:"enabled,omitempty"`
 }
 
 // +kubebuilder:object:root=true

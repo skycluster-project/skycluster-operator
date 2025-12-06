@@ -21,12 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type FlavorSpec struct {
-	VCPU string    `json:"vcpu,omitempty"`
-	RAM  string    `json:"ram,omitempty"`
-	GPU  hv1a1.GPU `json:"gpu,omitempty"`
-}
-
 // XInstanceSpec defines the desired state of XInstance
 // XInstanceSpec defines the desired state of XInstance
 type XInstanceSpec struct {
@@ -36,7 +30,7 @@ type XInstanceSpec struct {
 	ApplicationID string `json:"applicationId"`
 
 	// Flavor of the instance, defined like "2vCPU-4GB-1xA100-32GB".
-	Flavor FlavorSpec `json:"flavor"`
+	Flavor hv1a1.ComputeFlavor `json:"flavor"`
 
 	// PreferSpot indicates whether spot instances should be used when available.
 	// +optional

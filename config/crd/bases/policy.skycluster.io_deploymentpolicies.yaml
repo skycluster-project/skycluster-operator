@@ -206,8 +206,9 @@ spec:
                                     service, if applicable
                                   type: string
                                 spec:
-                                  description: Spec specifies the spec of virtual
-                                    service in JSON format, if applicable
+                                  description: |-
+                                    Spec specifies the spec of virtual service in JSON format, if applicable.
+                                    The spec structure is according to the kind of virtual service.
                                   type: string
                               type: object
                             type: array

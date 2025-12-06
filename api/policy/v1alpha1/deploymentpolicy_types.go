@@ -17,7 +17,6 @@ limitations under the License.
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -38,10 +37,8 @@ type PerformanceConstraint struct {
 
 type DeploymentPolicyItem struct {
 	// ComponentRef is the reference to the component, for a Kubernetes application
-	// this could be a reference to a Deployment. Additionally, it can represent node groups
-	// e.g. "XNodeGroup" object.
-	// For a VirtualMachine application, this refer to "XInstance" object. For 
-	ComponentRef corev1.ObjectReference `json:"componentRef"`
+	// this could be a reference to a Deployment. 
+	ComponentRef hv1a1.ComponentRef `json:"componentRef"`
 	// VirtualServiceConstraint is the virtual service constraint for the component
 	// For VirtualMachine execution environment, ComputeProfile mist be specified,
 	// for Kubernetes execution environment, you can specify ComputeProfile for 

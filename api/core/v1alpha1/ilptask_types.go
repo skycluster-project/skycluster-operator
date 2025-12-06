@@ -28,7 +28,7 @@ type OptimizationSpec struct {
 	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
 	Status       string                      `json:"status,omitempty"`
 	Result       string                      `json:"result,omitempty"`
-	DeployMap    hv1a1.DeployMap                 `json:"deployMap,omitempty"`
+	DeployMap    DeployMap                 `json:"deployMap,omitempty"`
 	ConfigMapRef corev1.LocalObjectReference `json:"configMapRef,omitempty"`
 	PodRef       corev1.LocalObjectReference `json:"podRef,omitempty"`
 	DataflowResourceVersion        string    `json:"dataflowResourceVersion,omitempty"`

@@ -99,7 +99,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, errors.New("missing required label: skycluster.io/app-id")
 	}
 
-	manifests := make([]*hv1a1.SkyObject, 0)
+	manifests := make([]*hv1a1.SkyService, 0)
 
 	// Must generate application manifests
 	// (i.e. deployments, services, istio configurations, etc.) and
@@ -137,10 +137,10 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 	// manifests = append(manifests, manifestsIstio...)
 
-	oldMap := make(map[string]hv1a1.SkyObject, len(atlasmesh.Status.Objects))
+	oldMap := make(map[string]hv1a1.SkyService, len(atlasmesh.Status.Objects))
 	for _, o := range atlasmesh.Status.Objects {oldMap[o.Name] = o}
 
-	newObjects := make([]hv1a1.SkyObject, 0, len(manifests))
+	newObjects := make([]hv1a1.SkyService, 0, len(manifests))
 	for _, m := range manifests {newObjects = append(newObjects, *m)}	
 	
 	changed := false
@@ -215,7 +215,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{}, nil
 }
 
-func generateUnstructuredWrapper(skyObj *hv1a1.SkyObject, owner *cv1a1.AtlasMesh, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
+func generateUnstructuredWrapper(skyObj *hv1a1.SkyService, owner *cv1a1.AtlasMesh, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
 	
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -321,9 +321,9 @@ func (r *AtlasMeshReconciler) getProviderConfigNameMap(atlasmesh cv1a1.AtlasMesh
 
 // get the deployments' namespaces and generate namespace manifests
 // namespaces must be generated for all clusters
-func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
 
-	manifests := make([]*hv1a1.SkyObject, 0)
+	manifests := make([]*hv1a1.SkyService, 0)
 	selectedProvNames := make([]string, 0)
 
 	// Since we don't know and do not care about the location of configmaps,
@@ -433,9 +433,9 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 	return manifests, nil
 }
 
-func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]*hv1a1.SkyObject, 0)
+	manifests := make([]*hv1a1.SkyService, 0)
 	selectedNs := make([]string, 0)
 	selectedProvNames := make([]string, 0)
 
@@ -517,9 +517,9 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 	return manifests, nil
 }
 
-func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]*hv1a1.SkyObject, 0)
+	manifests := make([]*hv1a1.SkyService, 0)
 	selectedProvNames := make([]string, 0)
 
 	for _, deployItem := range cmpnts {
@@ -576,9 +576,9 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 
 // generateDeployManifests generates application manifests based on the deploy plan
 // for distributed environment, including replicated deployments and services
-func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
+func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
 	// manifests := make([]hv1a1.SkyService, 0)
-	manifests := make([]*hv1a1.SkyObject, 0)
+	manifests := make([]*hv1a1.SkyService, 0)
 	cmpnts := dpMap.Component
 	edges := dpMap.Edges
 	
@@ -705,7 +705,7 @@ func (r *AtlasMeshReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provi
 	return providerProfilesMap, nil
 }
 
-func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) map[string]*priorityLabels {
+func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) map[string]*priorityLabels {
 	
 	// using Istio destination rule, we control which target endpoint is used for each deployment
 	// We use failover priority that enables selection of endpoints based on the 
@@ -891,8 +891,8 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []hv1a1.DeployMapEdge) ma
 	return labels
 }
 
-func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap hv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyObject, error) {
-	manifests := make([]*hv1a1.SkyObject, 0)
+func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap cv1a1.DeployMap, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
+	manifests := make([]*hv1a1.SkyService, 0)
 
 	edges := dpMap.Edges
 	cmpnts := dpMap.Component
@@ -1089,13 +1089,14 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 	return manifests, nil
 }
 
-func generateObjectWrapper(name string, ns string, objAny map[string]any, providerConfigName string) (*hv1a1.SkyObject, error) {
-	obj := &hv1a1.SkyObject{}
+func generateObjectWrapper(name string, ns string, objAny map[string]any, providerConfigName string) (*hv1a1.SkyService, error) {
+	obj := &hv1a1.SkyService{}
 	obj.Name = name
 	if ns != "" {obj.Namespace = ns}
 	b, err := json.Marshal(objAny)
 	if err != nil { return nil, errors.Wrap(err, "failed to marshal objectAny to JSON") }
-	obj.Manifest = runtime.RawExtension{Raw: b}
+	// obj.Manifest = runtime.RawExtension{Raw: b}
+	obj.Manifest = string(b)
 	obj.ProviderRef = hv1a1.ProviderRefSpec{
 		ConfigName: providerConfigName,
 	}

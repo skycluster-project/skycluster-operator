@@ -70,10 +70,15 @@ spec:
                 properties:
                   components:
                     items:
+                      description: |-
+                        SkyService represents a service supported by SkyCluster compositions
+                        It references a component (defined by user) and include the manifests
+                        needed to be deployed with the refrenced provider.
                       properties:
                         componentRef:
-                          description: ObjectReference contains enough information
-                            to let you inspect or modify the referred object.
+                          description: |-
+                            ComponentRef references a component in deployment policy object
+                            defined by user
                           properties:
                             apiVersion:
                               description: API version of the referent.
@@ -174,6 +179,12 @@ spec:
                             type: object
                           type: array
                         manifest:
+                          description: Manifest is a manifest of a SkyCluster composition
+                            API object
+                          type: string
+                        name:
+                          type: string
+                        namespace:
                           type: string
                         providerRef:
                           properties:
@@ -200,10 +211,15 @@ spec:
                     items:
                       properties:
                         from:
+                          description: |-
+                            SkyService represents a service supported by SkyCluster compositions
+                            It references a component (defined by user) and include the manifests
+                            needed to be deployed with the refrenced provider.
                           properties:
                             componentRef:
-                              description: ObjectReference contains enough information
-                                to let you inspect or modify the referred object.
+                              description: |-
+                                ComponentRef references a component in deployment policy object
+                                defined by user
                               properties:
                                 apiVersion:
                                   description: API version of the referent.
@@ -304,6 +320,12 @@ spec:
                                 type: object
                               type: array
                             manifest:
+                              description: Manifest is a manifest of a SkyCluster
+                                composition API object
+                              type: string
+                            name:
+                              type: string
+                            namespace:
                               type: string
                             providerRef:
                               properties:
@@ -328,10 +350,15 @@ spec:
                         latency:
                           type: string
                         to:
+                          description: |-
+                            SkyService represents a service supported by SkyCluster compositions
+                            It references a component (defined by user) and include the manifests
+                            needed to be deployed with the refrenced provider.
                           properties:
                             componentRef:
-                              description: ObjectReference contains enough information
-                                to let you inspect or modify the referred object.
+                              description: |-
+                                ComponentRef references a component in deployment policy object
+                                defined by user
                               properties:
                                 apiVersion:
                                   description: API version of the referent.
@@ -432,6 +459,12 @@ spec:
                                 type: object
                               type: array
                             manifest:
+                              description: Manifest is a manifest of a SkyCluster
+                                composition API object
+                              type: string
+                            name:
+                              type: string
+                            namespace:
                               type: string
                             providerRef:
                               properties:
@@ -545,10 +578,15 @@ spec:
                 type: array
               manifests:
                 items:
+                  description: |-
+                    SkyService represents a service supported by SkyCluster compositions
+                    It references a component (defined by user) and include the manifests
+                    needed to be deployed with the refrenced provider.
                   properties:
                     componentRef:
-                      description: ObjectReference contains enough information to
-                        let you inspect or modify the referred object.
+                      description: |-
+                        ComponentRef references a component in deployment policy object
+                        defined by user
                       properties:
                         apiVersion:
                           description: API version of the referent.
@@ -648,6 +686,12 @@ spec:
                         type: object
                       type: array
                     manifest:
+                      description: Manifest is a manifest of a SkyCluster composition
+                        API object
+                      type: string
+                    name:
+                      type: string
+                    namespace:
                       type: string
                     providerRef:
                       properties:
