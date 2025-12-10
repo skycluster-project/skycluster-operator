@@ -65,7 +65,7 @@ spec:
                     type: object
                   ram:
                     type: string
-                  vcpu:
+                  vcpus:
                     type: string
                 type: object
               image:

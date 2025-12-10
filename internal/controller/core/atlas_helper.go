@@ -192,20 +192,26 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 	// 	r.Logger.Info("Unsupported virtual service by Name", "virtualService", vs.Name)
 	// }
 
+	r.Logger.Info("Calculating cost for virtual service", "kind", vs.Kind, "name", vs.Name, "count", vs.Count, "zone", zone)
 	switch vs.Kind {
 	
-	case "XInstance", "XNodeGroup":
-		// duplicate of default case, kept to use strcutured ComputeProfile definition
+	// case "XInstance", "XNodeGroup":
+	case "ComputeProfile":
 		// TODO: ideally this should be adopted for default case below
 		pat, err := parseFlavorFromJSON(vs.Spec)
 		if err != nil {return -1, errors.Wrap(err, "parsing flavor from JSON")}
+
+		r.Logger.Info("pat spec", "cpu", pat.cpu, "memoryGB", pat.gpuModel)
 
 		var zoneOfferings []cv1a1.ZoneOfferings
 		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
 			for _, zo := range zoneOfferings {
 				if zo.Zone != zone {continue}
 				for _, of := range zo.Offerings {
-					if !offeringMatches2(pat, of) {continue}
+					if ok, err := offeringMatches2(pat, of); !ok {
+						r.Logger.Info("offering does not match", "offering", of.NameLabel, "reason", err)
+						continue
+					}
 					priceFloat, err := strconv.ParseFloat(of.Price, 64)
 					if err != nil {continue}
 					
@@ -218,7 +224,10 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 		var bmOfferings map[string]cv1a1.DeviceZoneSpec
 		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
 			for _, deviceSpec := range bmOfferings {
-				if !offeringMatches2(pat, *deviceSpec.Configs) {continue}
+				if ok, err := offeringMatches2(pat, *deviceSpec.Configs); !ok {
+					r.Logger.Info("baremetal offering does not match", "offering", deviceSpec.Configs.NameLabel, "reason", err)
+					continue
+				}
 				priceFloat, err := strconv.ParseFloat(deviceSpec.Configs.Price, 64)
 				if err != nil {continue}
 				

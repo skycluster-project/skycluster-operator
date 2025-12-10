@@ -116,7 +116,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 	}
 
 	flavorJson, err := json.Marshal(hv1a1.ComputeFlavor{
-		VCPU: owner.Spec.Flavor.VCPU,
+		VCPUs: owner.Spec.Flavor.VCPUs,
 		RAM:  owner.Spec.Flavor.RAM,
 		GPU: hv1a1.GPU{
 			Model:  owner.Spec.Flavor.GPU.Model,

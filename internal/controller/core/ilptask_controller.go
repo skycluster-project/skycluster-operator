@@ -108,7 +108,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if status.Result != "" && status.DataflowResourceVersion == currDFRV && status.DeploymentPlanResourceVersion == currDPRV {
 		r.Logger.Info("ILPTask already processed and references unchanged. Skipping optimization.")
 		// generate skyXRD object
-		if err := r.ensureAtlas(task, appId1, status.DeployMap); err != nil {
+		if err := r.ensureAtlas(task, appId1, dp.Spec.ExecutionEnvironment, status.DeployMap); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 		}
 		if err := r.ensureAtlasMesh(task, appId1, status.DeployMap); err != nil {
@@ -163,7 +163,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
 
 						// generate atlas object
-						if err = r.ensureAtlas(task, appId1, deployPlan); err != nil {
+						if err = r.ensureAtlas(task, appId1, dp.Spec.ExecutionEnvironment,deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 						}
 						if err = r.ensureAtlasMesh(task, appId1, deployPlan); err != nil {
@@ -274,7 +274,7 @@ func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, d
 	return nil
 }
 
-func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, deployPlan cv1a1.DeployMap) error {
+func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, execEnv string, deployPlan cv1a1.DeployMap) error {
 	obj := &cv1a1.AtlasList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
 		"skycluster.io/app-id": appId,
@@ -309,6 +309,7 @@ func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, deplo
 			},
 			Spec: cv1a1.AtlasSpec{
 				Approve: false,
+				ExecutionEnvironment: execEnv,
 				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
 				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
 				DeployMap: deployPlan,

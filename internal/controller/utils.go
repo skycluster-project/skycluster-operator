@@ -562,6 +562,7 @@ func RemoveNestedListItem(obj map[string]any, idx int, fields ...string) error {
 	return nil
 }
 
+// CanonicalPair returns the canonical order of two strings
 func CanonicalPair(a, b string) (string, string) {
 	ns := []string{a, b}
 	sort.Strings(ns)

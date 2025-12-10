@@ -480,18 +480,18 @@ func wildcardComputeProfileMatch(pattern, str string) bool {
 	return re.MatchString(str)
 }
 
-func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) bool {
+func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) (bool, string) {
 	availCPU := off.VCPUs
 	availRAM, err := strconv.Atoi(strings.ReplaceAll(off.RAM, "GB", ""))
-	if err != nil {return false}
+	if err != nil {return false, "parsing offering RAM"}
 
 	// CPU
 	if !p.cpuAny && p.cpu > 0 {
-		if availCPU < int(p.cpu) {return false}
+		if availCPU < int(p.cpu) {return false, "offering CPU less than requested"}
 	}
 	// RAM
 	if !p.ramAny && p.ram > 0 {
-		if availRAM < int(p.ram) {return false}
+		if availRAM < int(p.ram) {return false, "offering RAM less than requested"}
 	}
 
 	// prefer structured fields on offering
@@ -503,35 +503,35 @@ func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) bool {
 	if p.gpuModel != "" {
 		// check off.gpuModel first
 		if offGPUModel != "" {
-			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false}
+			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false, "offering GPU model does not match requested"}
 		} else {
 			// offering lacks GPU info -> cannot satisfy specific model
-			return false
+			return false, "offering lacks GPU model information"
 		}
 	}
 
 	// GPU count (if requested)
 	if p.gpuCount > 0 {
-		if !off.GPU.Enabled {return false}
+		if !off.GPU.Enabled {return false, "offering GPU not enabled"}
 		// prefer structured count
 		if offGPUCountOk {
-			if offGPUCount < p.gpuCount {return false}
+			if offGPUCount < p.gpuCount {return false, "offering GPU count less than requested"}
 		} // else: no count info -> assume may satisfy
 	}
 
 	// GPU memory: 
 	if !p.gpuMemAny && p.gpuMem > 0 {
-		if !off.GPU.Enabled {return false}
+		if !off.GPU.Enabled {return false, "offering GPU not enabled"}
 		// prefer structured memory
 		if offGPUMemoryOk {
-			if offGPUMemory < p.gpuMem {return false}
+			if offGPUMemory < p.gpuMem {return false, "offering GPU memory less than requested"}
 		} // else: no memory info -> assume may satisfy
 	}
 
 	// ensure GPU enabled if model or count requested
 	if (p.gpuModel != "" || p.gpuCount > 0) && !off.GPU.Enabled {
-		return false
+		return false, "offering GPU not enabled"
 	}
 
-	return true
+	return true, ""
 }

@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -131,26 +131,26 @@ func (r *ILPTaskReconciler) generateProvidersJson() (string, error) {
 	}
 
 	type providerStruct struct {
-		Name        string `json:"name,omitempty"`
-		Platform   string `json:"platform,omitempty"`
-		RegionAlias string `json:"regionAlias,omitempty"`
-		Zone       string `json:"zone,omitempty"`
-		PType      string `json:"pType,omitempty"`
-		Region     string `json:"region,omitempty"`
+		UpstreamName  string `json:"upstreamName,omitempty"`
+		Name          string `json:"name,omitempty"`
+		Platform      string `json:"platform,omitempty"`
+		RegionAlias   string `json:"regionAlias,omitempty"`
+		Zone          string `json:"zone,omitempty"`
+		PType         string `json:"pType,omitempty"`
+		Region        string `json:"region,omitempty"`
 	}
 	var providerList []providerStruct
 	for _, p := range providers.Items {
 		for _, zone := range p.Spec.Zones {
-			if !zone.Enabled {
-				continue
-			}
+			if !zone.Enabled {continue}
 			providerList = append(providerList, providerStruct{
-				Name:        p.Name,
-				Platform:    p.Spec.Platform,
-				PType:      zone.Type,
-				RegionAlias: p.Spec.RegionAlias,
-				Region:     p.Spec.Region,
-				Zone:       zone.Name,
+				UpstreamName: p.Name,
+				Name:         p.Spec.Platform + "-" + p.Spec.Region + "-" + zone.Name,
+				Platform:     p.Spec.Platform,
+				PType:        zone.Type,
+				RegionAlias:  p.Spec.RegionAlias,
+				Region:       p.Spec.Region,
+				Zone:         zone.Name,
 			})
 		}
 	}
@@ -169,157 +169,141 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 		return "", err
 	}
 
+	var latencies cv1a1.LatencyList
+	if err := r.List(context.Background(), &latencies); err != nil {
+		return "", err
+	}
+	type providerStruct struct {
+		Name        string `json:"name,omitempty"`
+		Platform   string `json:"platform,omitempty"`
+		RegionAlias string `json:"regionAlias,omitempty"`
+		Zone       string `json:"zone,omitempty"`
+		PType      string `json:"pType,omitempty"`
+		Region     string `json:"region,omitempty"`
+	}
 	type providerAttrStruct struct {
 		SrcName 	string  `json:"srcName,omitempty"`
 		DstName 	string  `json:"dstName,omitempty"`
+		Src 			providerStruct `json:"src,omitempty"`
+		Dst 			providerStruct `json:"dst,omitempty"`
 		Latency 	float64 `json:"latency"`
 		EgressCostDataRate float64 `json:"egressCost_dataRate"`
 	}
 
 	var providerList []providerAttrStruct
+	// need to consider all zones of all providers
 	for _, p := range providers.Items {
 		for _, p2 := range providers.Items {
-			if p.Name == p2.Name {
-				// we must have zero latency to self
-				providerList = append(providerList, providerAttrStruct{
-					SrcName: 	p.Name,
-					DstName: 	p2.Name,
-					Latency: 	0.0,
-					EgressCostDataRate: 0.0,
-				})
-				continue
-			}
-			a, b := utils.CanonicalPair(p.Name, p2.Name)
-			latName := "latency-" + utils.SanitizeName(a) + "-" + utils.SanitizeName(b)
-			
-			// assuming we are within the first tier of egress cost specs
-			// and it is for internet
-			egressCost := p.Status.EgressCostSpecs[0].Tiers[0].PricePerGB
-			
-			var latencyValue string
-			lt := &cv1a1.Latency{}
-			err := r.Get(context.TODO(), client.ObjectKey{
-				Namespace: ns,
-				Name:      latName,
-			}, lt)
-			if err != nil {
-				return "", errors.Wrapf(err, "failed to get latency object %s, ns: %s", latName, ns)
-			} else {
-				if lt.Status.P95 != "" {
-					latencyValue = lt.Status.P95
-				} else if lt.Status.P99 != "" {
-					latencyValue = lt.Status.P99
-				} else if lt.Status.LastMeasuredMs != "" {
-					latencyValue = lt.Status.LastMeasuredMs
-				} else {
-					return "", fmt.Errorf("no latency value found in latency object %s", latName)
+
+			for _, pz1 := range p.Spec.Zones {
+				if !pz1.Enabled {continue}
+				for _, pz2 := range p2.Spec.Zones {
+					if !pz2.Enabled {continue}
+
+					p1Name := p.Spec.Platform + "-" + p.Spec.Region + "-" + pz1.Name
+					p2Name := p2.Spec.Platform + "-" + p2.Spec.Region + "-" + pz2.Name
+
+					samePlatform := p.Spec.Platform == p2.Spec.Platform
+					sameRegion := p.Spec.Region == p2.Spec.Region
+
+					// consider inter-zone latencies as negligible
+					// consider inter-zone costs as 0.01 per GB and 
+
+					if samePlatform && sameRegion { 
+						// same regions: intra-zone latency is zero, cost are 0 if same zones
+						egressCostStr := lo.Filter(p.Status.EgressCostSpecs, func(t cv1a1.EgressCostSpec, _ int) bool {
+							return t.Type == "inter-zone"
+						})[0].Tiers[0].PricePerGB
+						egressCostFloat, err := strconv.ParseFloat(egressCostStr, 64)
+						if err != nil {
+							return "", fmt.Errorf("failed to parse inter-zone egress cost for providers %s and %s", p.Name, p2.Name)
+						}
+						providerList = append(providerList, providerAttrStruct{
+							SrcName: 	p1Name,
+							DstName: 	p2Name,
+							Src: providerStruct{
+								Platform:    p.Spec.Platform,
+								Region:      p.Spec.Region,
+								Zone:        pz1.Name,
+							},
+							Dst: providerStruct{
+								Platform:    p2.Spec.Platform,
+								Region:      p2.Spec.Region,
+								Zone:        pz2.Name,
+							},
+							Latency: 	0.0,
+							EgressCostDataRate: lo.Ternary(pz1.Name == pz2.Name, 0.0, egressCostFloat),
+						})
+						continue
+					}
+					
+					// assuming we are within the first tier of egress cost specs
+					// TODO: fix tier selection based on the maount of data transfer
+					egressCostStr := "0.0"
+					if samePlatform { // inter-region egress cost
+						egressCostStr = lo.Filter(p.Status.EgressCostSpecs, func(t cv1a1.EgressCostSpec, _ int) bool {
+							return t.Type == "inter-region"
+						})[0].Tiers[0].PricePerGB
+					} else {
+						egressCostStr = lo.Filter(p.Status.EgressCostSpecs, func(t cv1a1.EgressCostSpec, _ int) bool {
+							return t.Type == "internet"
+						})[0].Tiers[0].PricePerGB
+					}
+					
+					aName := p.Spec.Platform + "-" + p.Spec.Region
+					bName := p2.Spec.Platform + "-" + p2.Spec.Region
+					a, b := utils.CanonicalPair(aName, bName)
+					
+					var lt *cv1a1.Latency
+					for _, lat := range latencies.Items {
+						if lat.Labels["skycluster.io/provider-pair"] == utils.SanitizeName(a)+"-"+utils.SanitizeName(b) {
+							lt = &lat
+							break
+						}
+					}
+
+					if lt == nil {
+						return "", fmt.Errorf("no latency object found for provider pair %s - %s", a, b)
+					}
+
+					var latencyValue string
+					if lt.Status.P95 != "" {
+						latencyValue = lt.Status.P95
+					} else if lt.Status.P99 != "" {
+						latencyValue = lt.Status.P99
+					} else if lt.Status.LastMeasuredMs != "" {
+						latencyValue = lt.Status.LastMeasuredMs
+					} else {
+						return "", fmt.Errorf("no latency value found in latency object %s", lt.Name)
+					}
+					latencyValueFloat, err1 := strconv.ParseFloat(latencyValue, 64)
+					egressCostFloat, err2 := strconv.ParseFloat(egressCostStr, 64)
+					if err1 != nil || err2 != nil {
+						return "", fmt.Errorf("failed to parse latency or egress cost to float for providers %s and %s", p.Name, p2.Name)
+					}
+
+					providerList = append(providerList, providerAttrStruct{
+						SrcName: 	p1Name,
+						DstName: 	p2Name,
+						Src: providerStruct{
+							Platform:    p.Spec.Platform,
+							Region:      p.Spec.Region,
+						},
+						Dst: providerStruct{
+							Platform:    p2.Spec.Platform,
+							Region:      p2.Spec.Region,
+						},	
+						Latency: 	latencyValueFloat,
+						EgressCostDataRate: egressCostFloat,
+					})
+
 				}
 			}
-			latencyValueFloat, err1 := strconv.ParseFloat(latencyValue, 64)
-			egressCostFloat, err2 := strconv.ParseFloat(egressCost, 64)
-			if err1 != nil || err2 != nil {
-				return "", fmt.Errorf("failed to parse latency or egress cost to float for providers %s and %s", p.Name, p2.Name)
-			}
-
-			providerList = append(providerList, providerAttrStruct{
-				SrcName: 	p.Name,
-				DstName: 	p2.Name,
-				Latency: 	latencyValueFloat,
-				EgressCostDataRate: egressCostFloat,
-			})
 		}
 	}
 	b, err := json.Marshal(providerList)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal providers: %v", err)
-	}
-	return string(b), nil
-}
-
-func (r *ILPTaskReconciler) generateVServicesJson() (string, error) {
-	// Virtual Services are defined manually for now
-	// Available virtual services:
-	// ComputeProfile "flavors.yaml"
-	// ManagedKubernetes "managed-k8s.yaml"
-
-	// List all config maps by labels
-	var configMaps corev1.ConfigMapList
-	if err := r.List(context.Background(), &configMaps, client.MatchingLabels{
-		"skycluster.io/config-type": "provider-profile",
-		"skycluster.io/managed-by": "skycluster",
-	}); err != nil {
-		return "", err
-	}
-
-
-	type vServiceStruct struct {
-		VServiceName 	string  `json:"vservice_name,omitempty"`
-		VServiceKind 	string  `json:"vservice_kind,omitempty"`
-		ProviderName 	string  `json:"provider_name,omitempty"`
-		ProviderPlatform string  `json:"provider_platform,omitempty"`
-		ProviderRegion 	string  `json:"provider_region,omitempty"`
-		ProviderZone 	string  `json:"provider_zone,omitempty"`
-		DeployCost  	float64 `json:"deploy_cost,omitempty"`
-		Availability 	int     `json:"availability,omitempty"`
-	}
-	var vServicesList []vServiceStruct
-
-	for _, cm := range configMaps.Items {
-		pName := cm.Labels["skycluster.io/provider-profile"]
-		pPlatform := cm.Labels["skycluster.io/provider-platform"]
-		pRegion := cm.Labels["skycluster.io/provider-region"]
-		
-		cmData, ok := cm.Data["flavors.yaml"]
-		if ok {
-			var zoneOfferings []cv1a1.ZoneOfferings
-			if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
-				for _, zo := range zoneOfferings {
-					for _, of := range zo.Offerings{
-						priceFloat, err := strconv.ParseFloat(of.Price, 64)
-						if err != nil {continue}
-						vServicesList = append(vServicesList, vServiceStruct{
-							VServiceName:   of.NameLabel,
-							VServiceKind:   "ComputeProfile",
-							ProviderName:   pName,
-							ProviderPlatform: pPlatform,
-							ProviderRegion: pRegion,
-							ProviderZone:   zo.Zone,
-							DeployCost:     priceFloat,
-							Availability:   10000, // assuming always available
-						})
-					}
-				}
-			}
-		}
-
-		// TODO: managed Kubernetes costs
-	// 	cmData, ok = cm.Data["managed-k8s.yaml"]
-	// 	if !ok { continue }
-	// 	var managedK8s []hv1a1.ManagedK8s
-	// 	if err := yaml.Unmarshal([]byte(cmData), &managedK8s); err != nil {
-	// 		return "", fmt.Errorf("failed to unmarshal managed k8s config map: %v", err)
-	// 	}
-	// 	for _, mk8s := range managedK8s {
-	// 		// I expect only one offering
-	// 		priceFloat, err1 := strconv.ParseFloat(mk8s.Price, 64)
-	// 		priceOverheadFloat, err2 := strconv.ParseFloat(mk8s.Overhead.Cost, 64)
-	// 		if err1 != nil || err2 != nil {
-	// 			return "", fmt.Errorf("failed to parse price or overhead for managed k8s vservice %s: price error: %v; overhead error: %v", mk8s.Name, err1, err2)
-	// 		}
-	// 		vServicesList = append(vServicesList, vServiceStruct{
-	// 			VServiceName:   mk8s.NameLabel,
-	// 			VServiceKind:   "ManagedKubernetes",
-	// 			ProviderName:   pName,
-	// 			ProviderPlatform: pPlatform,
-	// 			ProviderRegion: pRegion,
-	// 			DeployCost:     priceFloat + priceOverheadFloat,
-	// 			Availability:   100000, // assuming always available
-	// 		})
-	// 	}
-	}
-	b, err := json.Marshal(vServicesList)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal virtual services: %v", err)
 	}
 	return string(b), nil
 }

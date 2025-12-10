@@ -176,11 +176,10 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "Error generating provider manifests.")
 	}
-	for _, obj := range providersManifests {
-		manifests = append(manifests, obj)
+	if len(providersManifests) > 0 {
+		manifests = append(manifests, lo.Values(providersManifests)...)
+		r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
 	}
-	// r.Logger.Info("Generated provider manifests.", "count", len(providersManifests))
-	r.Logger.Info("Generated provider manifests.", "count", len(provToMetadataIdx))
 
 	dpPolicy, err := r.fetchDeploymentPolicy(ns, atlas.Spec.DeploymentPolicyRef)
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
@@ -198,12 +197,14 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 
 	// ######### Handle execution environment: VirtualMachine
 	if atlas.Spec.ExecutionEnvironment == "VirtualMachine" {
+		r.Logger.Info("Generating VirtualMachine manifests.")
 		vmManifests, err := r.generateVMManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating VirtualMachine manifests.")
 		}
 		if len(vmManifests) > 0 {
 			manifests = append(manifests, vmManifests...)
+			r.Logger.Info("Generated VirtualMachine manifests.", "count", len(vmManifests))
 		}
 	}
 
@@ -346,12 +347,20 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 		if !ok {return nil, nil, errors.New("No primary zone found")}
 		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
 		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {return nil, nil, errors.New("No secondary zone found")}
+		
+		// prepare static values and subnets
+		idx := indexedSortedProviders[p.Platform][pName]
+		cidr := provMetadata[p.Platform][idx].VPCCIDR
+		zoneCount := len(lo.Filter(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec, _ int) bool { 
+			return z.Enabled
+		}))
+		subnets, err := helper.Subnets(cidr, zoneCount)
+		if err != nil { return nil, nil, errors.Wrap(err, "Error calculating subnets.") }
 
 		spec := map[string]any{
 			"applicationId": appId,
 			"vpcCidr":  func() string {
 				if p.Platform == "aws" || p.Platform == "gcp" || p.Platform == "openstack" {
-					idx := indexedSortedProviders[p.Platform][pName]
 					return provMetadata[p.Platform][idx].VPCCIDR
 				}
 				// not supported. Baremetal xprovider expected to be created manually.
@@ -364,33 +373,31 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 					fields["volumeSize"] = 30
 				}
 				fields["flavor"] = func () string {
-					if p.Platform == "aws" || p.Platform == "openstack" {
-						return "4vCPU-16GB"
-					}
+					if p.Platform == "aws" || p.Platform == "openstack" {return "4vCPU-16GB"}
 					return "2vCPU-8GB"
 				}()
 				return fields
 			}(),
 			"subnets": func() []map[string]any {
-				subnets := make([]map[string]any, 0)
-				idx := indexedSortedProviders[p.Platform][pName]
-				for _, sn := range provMetadata[p.Platform][idx].Subnets {
+				subnetList := make([]map[string]any, 0)
+				for i := range zoneCount {
+					sn := subnets[i]
 					subnet := map[string]any{
-						"cidr": sn.CIDR,
-						"zone": p.Zone,
+						"cidr": sn.String(),
+						"zone": providerProfiles[pName].Spec.Zones[i].Name,
 					}
 					if p.Platform == "aws" {
-						subnet["type"] = sn.Type
+						subnet["type"] = providerProfiles[pName].Spec.Zones[i].Type
 					}
-					if p.Platform == "baremetal" && sn.Type == "public" {
+					if p.Platform == "baremetal" && providerProfiles[pName].Spec.Zones[i].Type == "public" {
 						subnet["default"] = true
 					} 
 					if p.Platform == "openstack" {
 						subnet["default"] = true
 					} 
-					subnets = append(subnets, subnet)
+					subnetList = append(subnetList, subnet)
 				}
-				return subnets
+				return subnetList
 			}(),
 			"externalNetwork": func() map[string]string {
 				if p.Platform != "openstack" {
@@ -464,7 +471,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 
 	manifests := make([]hv1a1.SkyService, 0)
 	for _, cmpnt := range deployMap.Component {
-		if cmpnt.ProviderRef.Type != "XInstance" {continue}
+		if cmpnt.ComponentRef.Kind != "XInstance" {continue}
 
 		// find requested ComputeProfile virtual service for this component
 		computeProfileList, err := r.findReqComputeProfile(dpPolicy.Namespace, cmpnt, dpPolicy)

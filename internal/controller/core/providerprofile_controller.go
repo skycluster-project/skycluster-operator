@@ -123,6 +123,7 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	resyncRequired := meta.IsStatusConditionTrue(pf.Status.Conditions, string(hv1a1.ResyncRequired))
 	if specChanged || resyncRequired {
+		r.Logger.Info("spec changed or resync required, ensuring ConfigMap and dependencies", "ProviderProfile", pf.Name)
 		// Create a ConfigMap if it doesn't exist
 		cm, err := r.ensureConfigMap(ctx, pf)
 		if err != nil {
@@ -372,17 +373,47 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile)
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"}},
 			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-zone",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-region",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
+			})
 		case "azure":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
 				Type:       "internet",
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.087"}},
 			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-zone",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-region",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
+			})
 		case "gcp":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
 				Type:       "internet",
 				Unit:       "GB",
 				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.12"}},
+			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-zone",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+			})
+			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
+				Type:       "inter-region",
+				Unit:       "GB",
+				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
 			})
 		default:
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
@@ -405,7 +436,9 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 		if other.Name == pf.Name {
 			continue
 		}
-		a, b := utils.CanonicalPair(pf.Name, other.Name)
+		aName := pf.Spec.Platform + "-" + pf.Spec.Region
+		bName := other.Spec.Platform + "-" + other.Spec.Region
+		a, b := utils.CanonicalPair(aName, bName)
 		latName := makeLatencyName(a, b)
 		var lat cv1a1.Latency
 		err := r.Get(ctx, types.NamespacedName{Namespace: pf.Namespace, Name: latName}, &lat)
@@ -427,6 +460,8 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 					Name:      latName,
 					Labels: map[string]string{
 						"skycluster.io/provider-pair": utils.SanitizeName(a) + "-" + utils.SanitizeName(b),
+						"skycluster.io/provider-platform": pf.Spec.Platform,
+						"skycluster.io/provider-region": pf.Spec.Region,
 					},
 				},
 				Spec: cv1a1.LatencySpec{

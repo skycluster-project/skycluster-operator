@@ -50,7 +50,7 @@ type flavorPattern struct {
 
 type virtualSvcStruct struct {
 	Name 		 string `json:"name,omitempty"`
-	Spec     string `json:"spec,omitempty"`
+	Spec     *runtime.RawExtension `json:"spec,omitempty"`
 	ApiVersion  string `json:"apiVersion,omitempty"`
 	Kind       string `json:"kind,omitempty"`
 	Count      string `json:"count,omitempty"`
@@ -471,9 +471,9 @@ func parseFlavorFromJSON(flavorJSON *runtime.RawExtension) (flavorPattern, error
 	}
 
 	// VCPU
-	if strings.TrimSpace(fs.VCPU) == "" {
+	if strings.TrimSpace(fs.VCPUs) == "" {
 		p.cpuAny = true
-	} else if m := numberRe.FindString(fs.VCPU); m != "" {
+	} else if m := numberRe.FindString(fs.VCPUs); m != "" {
 		if v, err := strconv.ParseFloat(m, 64); err == nil {
 			p.cpu = v
 		} else {
