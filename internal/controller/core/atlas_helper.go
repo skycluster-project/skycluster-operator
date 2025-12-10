@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"sort"
 	"strconv"
@@ -118,6 +119,8 @@ func (r *AtlasReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.Deploymen
 	return dp, nil
 }
 
+
+// findCheapestVirtualSvcs finds the cheapest virtual service from a list of alternatives
 // dpPolicy := r.fetchDeploymentPolicy(ns, dpRef)
 // findReqVirtualSvcs(ns, skySrv, dpPolicy)
 func (r *AtlasReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.ProviderRefSpec, virtualServices []pv1a1.VirtualServiceSelector) (*pv1a1.VirtualServiceSelector, error) {
@@ -284,6 +287,22 @@ func (r *AtlasReconciler) findReqComputeProfile(ns string, skySrvc hv1a1.SkyServ
 	return nil, errors.New("no matching component found in deployment policy")
 }
 
+func fixFlavorVCPUsFormat(flavor []byte) ([]byte, error) {
+	// Step 1: unmarshal into a generic map
+	var tmp map[string]interface{}
+	json.Unmarshal(flavor, &tmp)
+
+	// Step 2: convert vcpus string to int if necessary
+	if v, ok := tmp["vcpus"].(string); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			tmp["vcpus"] = n
+		}
+	}
+
+	// Step 3: marshal back to JSON
+	fixedData, _ := json.Marshal(tmp)
+	return fixedData, nil
+}
 
 // func test(execEnv string) ([]pv1a1.VirtualServiceSelector, error) {
 

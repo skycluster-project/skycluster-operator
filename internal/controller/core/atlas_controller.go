@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -37,6 +38,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	svccv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
@@ -473,6 +475,13 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 	for _, cmpnt := range deployMap.Component {
 		if cmpnt.ComponentRef.Kind != "XInstance" {continue}
 
+		// fetch refereced deployment policy item
+		xi := &svccv1a1.XInstance{}
+		if err := r.Get(context.Background(), client.ObjectKey{
+			Namespace: dpPolicy.Namespace, Name: cmpnt.ComponentRef.Name}, xi); err != nil {
+			return nil, errors.Wrap(err, "Error fetching XInstance for component: " + cmpnt.ComponentRef.Name)
+		}
+
 		// find requested ComputeProfile virtual service for this component
 		computeProfileList, err := r.findReqComputeProfile(dpPolicy.Namespace, cmpnt, dpPolicy)
 		if err != nil {
@@ -481,8 +490,22 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 		if len(computeProfileList) == 0 {
 			return nil, errors.New("No ComputeProfile found for component: " + cmpnt.ComponentRef.Name)
 		}
-		// we take the first one as the best fit
-		// computeProfile := computeProfileList[0]
+		// computeProfileList contains a list of possible ComputeProfiles 
+		// that satisfy the request. In some cases such as spot instances,
+		// a selected ComputeProfile may not be available at the time of provisioning.
+		// In such cases, we create multiple XInstance objects with different
+		// ComputeProfiles to increase the chance of successful provisioning.
+		computeProfile := computeProfileList[0]
+
+		fixedFlavor, err := fixFlavorVCPUsFormat(computeProfile.Spec.Raw)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error fixing flavor VCPUs format.")
+		}
+		var computeProfileFlavor hv1a1.InstanceOffering
+		if err := json.Unmarshal(fixedFlavor, &computeProfileFlavor); err != nil {
+			return nil, errors.Wrap(err, "Error unmarshalling ComputeProfile spec.")
+		}
+		
 
 		platform := cmpnt.ProviderRef.Platform
 		region := cmpnt.ProviderRef.Region
@@ -501,6 +524,18 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 
 		spec := map[string]any{
 			"applicationId": appId,
+			"flavor": hv1a1.ComputeFlavor{
+				VCPUs:    fmt.Sprintf("%d", computeProfileFlavor.VCPUs),
+				RAM: computeProfileFlavor.RAM,
+				GPU: computeProfileFlavor.GPU,
+			},
+			"preferSpot": xi.Spec.PreferSpot,
+			"image": xi.Spec.Image,
+			"rootVolumes": xi.Spec.RootVolumes,
+			"userData": xi.Spec.UserData,
+			"securityGroups": xi.Spec.SecurityGroups,
+			"publicIp": xi.Spec.PublicIP,
+			"publicKey": xi.Spec.PublicKey,
 			"providerRef": func () map[string]any {
 				fields := map[string]any{
 					"platform": platform,
