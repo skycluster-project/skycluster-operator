@@ -187,15 +187,15 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
 
 	// // ######### Handle execution environment: Kubernetes
-	// if atlas.Spec.ExecutionEnvironment == "Kubernetes" {
-	// 	k8sManifests, err := r.generateK8SManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
-	// 	if err != nil {
-	// 		return nil, nil, errors.Wrap(err, "Error generating Kubernetes manifests.")
-	// 	}
-	// 	if len(k8sManifests) > 0 {
-	// 		manifests = append(manifests, lo.Values(k8sManifests)...)
-	// 	}
-	// }
+	if atlas.Spec.ExecutionEnvironment == "Kubernetes" {
+		k8sManifests, err := r.generateK8SManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Error generating Kubernetes manifests.")
+		}
+		if len(k8sManifests) > 0 {
+			manifests = append(manifests, lo.Values(k8sManifests)...)
+		}
+	}
 
 	// ######### Handle execution environment: VirtualMachine
 	if atlas.Spec.ExecutionEnvironment == "VirtualMachine" {
@@ -571,172 +571,175 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 }
 
 // Creates manifest for setup of managed Kubernetes clusters
-// func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[string]map[string]int, deployMap hv1a1.DeployMap, dpPolicy pv1a1.DeploymentPolicy) (map[string]hv1a1.SkyService, error) {
-// 	// For managed K8S deployments, we start the cluster with nodes needed for control plane
-// 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
-// 	// The optimization has decided that for requested workload, this provider is the best fit.
+func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[string]map[string]int, deployMap cv1a1.DeployMap, dpPolicy pv1a1.DeploymentPolicy) (map[string]hv1a1.SkyService, error) {
+	// For managed K8S deployments, we start the cluster with nodes needed for control plane
+	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 
-// 	k8sMetadata, err := r.loadProviderMetadata()
-// 	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
+	k8sMetadata, err := r.loadProviderMetadata()
+	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
 
-// 	provProfiles, err := r.fetchProviderProfilesMap()
-// 	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
+	provProfiles, err := r.fetchProviderProfilesMap()
+	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
 
-// 	manifests := map[string]hv1a1.SkyService{}
-// 	for pName, skySvc := range deployMap.Component {
-// 		// computeProfileList is the list of ComputeProfile virtual services for this provider
-// 		// r.Logger.Info("Compute profiles for provider", "profiles", len(computeProfileList), "provider", pName)
-// 		uniqueProfiles := lo.UniqBy(computeProfileList, func(v pv1a1.VirtualServiceSelector) string {
-// 			return v.Name
-// 		})
-// 		// r.Logger.Info("Unique compute profiles for provider", "profiles", len(uniqueProfiles), "provider", pName)
-// 		pp := provProfiles[pName]
-// 		idx := provToIdx[pp.Spec.Platform][pName]
+	manifests := map[string]hv1a1.SkyService{}
+	for _, skySvc := range deployMap.Component {
 
-// 		// need primary and secondary zones for Kube
-// 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
-// 		if !ok {return nil, errors.New("No primary zone found")}
-// 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-// 		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
+		pName := skySvc.ProviderRef.Name
+		pp := provProfiles[pName]
+		idx := provToIdx[pp.Spec.Platform][pName]
 
-// 		// we need to create a XKube object
-// 		xrdObj := &unstructured.Unstructured{}
-// 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
-// 		xrdObj.SetKind("XKube")
-// 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
-// 		rand := RandSuffix(name)
-// 		name = name[0:int(math.Min(float64(len(name)), 15))]
-// 		name = name + "-" + rand
-// 		xrdObj.SetName(name)
+		// need primary and secondary zones for Kube
+		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
+		if !ok {return nil, errors.New("No primary zone found")}
+		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
+		var znSecondaryPtr *cv1a1.ZoneSpec
+		if ok {znSecondaryPtr = &znSecondary}
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
 
-// 		spec := map[string]any{
-// 			"applicationId": appId,
-// 			"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
-// 			"nodeCidr": func () string {
-// 				if pp.Spec.Platform == "gcp" {
-// 					return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
-// 				}
-// 				return ""
-// 			}(),
-// 			"podCidr": func () map[string]any {
-// 				fields := make(map[string]any)
-// 				if pp.Spec.Platform == "aws" {
-// 					fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
-// 					fields["private"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Private
-// 				}
-// 				fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
-// 				return fields
-// 			}(),
-// 			"nodeGroups": func () []map[string]any {
-// 				fields := make([]map[string]any, 0)
-// 				if pp.Spec.Platform == "aws" {
-// 					// default node group
-// 					f := make(map[string]any)
-// 					f["instanceTypes"] = []string{
-// 						"2vCPU-4GB",
-// 						"4vCPU-8GB",
-// 						"8vCPU-32GB",
-// 					}
-// 					f["nodeCount"] = 3
-// 					f["publicAccess"] = true
-// 					f["autoScaling"] = map[string]any{
-// 						"enabled": false,
-// 						"minSize": 1,
-// 						"maxSize": 3,
-// 					}
-// 					fields = append(fields, f)
+		// we need to create a XKube object
+		xrdObj := &unstructured.Unstructured{}
+		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
+		xrdObj.SetKind("XKube")
+		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
+		rand := RandSuffix(name)
+		name = name[0:int(math.Min(float64(len(name)), 15))]
+		name = name + "-" + rand
+		xrdObj.SetName(name)
 
-// 					// workers
-// 					for _, vs := range uniqueProfiles {
-// 						f := make(map[string]any)
-// 						f["instanceTypes"] = []string{vs.Name}
-// 						f["publicAccess"] = false
-// 						fields = append(fields, f)
-// 					}
-// 				}
-// 				if pp.Spec.Platform == "gcp" {
-// 					// workers only
-// 					// manually limit this to prevent charging too much
-// 					f := make(map[string]any)
-// 						f["nodeCount"] = 3
-// 						f["instanceType"] = "2vCPU-4GB"
-// 						f["publicAccess"] = false
-// 						f["autoScaling"] = map[string]any{
-// 							"enabled": true,
-// 							"minSize": 1,
-// 							"maxSize": 8,
-// 					}
-// 					fields = append(fields, f)
-// 					// for _, vs := range uniqueProfiles {
-// 					// 	f := make(map[string]any)
-// 					// 	f["nodeCount"] = 2
-// 					// 	f["instanceType"] = vs.Name
-// 					// 	f["publicAccess"] = false
-// 					// 	f["autoScaling"] = map[string]any{
-// 					// 		"enabled": true,
-// 					// 		"minSize": 1,
-// 					// 		"maxSize": 3,
-// 					// 	}
-// 					// 	fields = append(fields, f)
-// 					// }
-// 				}
-// 				return fields
-// 			}(),
-// 			"principal": func () map[string]any {
-// 				fields := make(map[string]any)
-// 				if pp.Spec.Platform == "aws" {
-// 					fields["type"] = "servicePrincipal"
-// 					fields["id"] = "arn:aws:iam::885707601199:root"
-// 				}
-// 				return fields
-// 			}(),
-// 			"providerRef": func () map[string]any {
-// 				fields := map[string]any{
-// 					"platform": pp.Spec.Platform,
-// 					"region": pp.Spec.Region,
-// 				}
-// 				if pp.Spec.Platform == "aws" {
-// 					fields["zones"] = map[string]string{
-// 						"primary": znPrimary.Name,
-// 						"secondary": znSecondary.Name,
-// 					}
-// 				}
-// 				if pp.Spec.Platform == "gcp" {
-// 					fields["zones"] = map[string]string{
-// 						"primary": znPrimary.Name,
-// 					}
-// 				}
-// 				return fields
-// 			}(),
-// 		}
+		spec := r.buildK8SSpec(appId, k8sMetadata, pp, idx, znPrimary, znSecondaryPtr)
 
-// 		xrdObj.Object["spec"] = spec
+		xrdObj.Object["spec"] = spec
 
-// 		yamlObj, err := generateYAMLManifest(xrdObj)
-// 		if err != nil {
-// 			return nil, errors.Wrap(err, "Error generating YAML manifest.")
-// 		}
-// 		manifests[pName] = hv1a1.SkyService{
-// 			ComponentRef: corev1.ObjectReference{
-// 				APIVersion: xrdObj.GetAPIVersion(),
-// 				Kind:       xrdObj.GetKind(),
-// 				Namespace:  xrdObj.GetNamespace(),
-// 				Name:       xrdObj.GetName(),
-// 			},
-// 			Manifest: yamlObj,
-// 			ProviderRef: hv1a1.ProviderRefSpec{
-// 				Name:   pName,
-// 				Type: znPrimary.Type,
-// 				Platform: pp.Spec.Platform,
-// 				Region: pp.Spec.Region,
-// 				RegionAlias: pp.Spec.RegionAlias,
-// 				Zone:   znPrimary.Name,
-// 			},
-// 		}
-// 	}
+		yamlObj, err := generateYAMLManifest(xrdObj)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+		}
+		manifests[pName] = hv1a1.SkyService{
+			ComponentRef: hv1a1.ComponentRef {
+				APIVersion: xrdObj.GetAPIVersion(),
+				Kind:       xrdObj.GetKind(),
+				Namespace:  xrdObj.GetNamespace(),
+				Name:       xrdObj.GetName(),
+			},
+			Manifest: yamlObj,
+			ProviderRef: hv1a1.ProviderRefSpec{
+				Name:   pName,
+				Type: znPrimary.Type,
+				Platform: pp.Spec.Platform,
+				Region: pp.Spec.Region,
+				RegionAlias: pp.Spec.RegionAlias,
+				Zone:   znPrimary.Name,
+			},
+		}
+	}
 	
-// 	return manifests, nil
-// }
+	return manifests, nil
+}
+
+// buildK8SSpec builds the spec map for XKube manifests
+func (r *AtlasReconciler) buildK8SSpec(appId string, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) map[string]any {
+	spec := map[string]any{
+		"applicationId": appId,
+		"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
+		"nodeCidr": func () string {
+			if pp.Spec.Platform == "gcp" {
+				return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
+			}
+			return ""
+		}(),
+		"podCidr": func () map[string]any {
+			fields := make(map[string]any)
+			if pp.Spec.Platform == "aws" {
+				fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
+				fields["private"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Private
+			}
+			fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
+			return fields
+		}(),
+		"nodeGroups": func () []map[string]any {
+			fields := make([]map[string]any, 0)
+			if pp.Spec.Platform == "aws" {
+				// default node group
+				f := make(map[string]any)
+				f["instanceTypes"] = []string{
+					"2vCPU-4GB",
+					"4vCPU-8GB",
+					"8vCPU-32GB",
+				}
+				f["nodeCount"] = 3
+				f["publicAccess"] = true
+				f["autoScaling"] = map[string]any{
+					"enabled": false,
+					"minSize": 1,
+					"maxSize": 3,
+				}
+				fields = append(fields, f)
+
+				// workers
+				// for _, vs := range uniqueProfiles {
+				// 	f := make(map[string]any)
+				// 	f["instanceTypes"] = []string{vs.Name}
+				// 	f["publicAccess"] = false
+				// 	fields = append(fields, f)
+				// }
+			}
+			if pp.Spec.Platform == "gcp" {
+				// workers only
+				// manually limit this to prevent charging too much
+				f := make(map[string]any)
+					f["nodeCount"] = 3
+					f["instanceType"] = "2vCPU-4GB"
+					f["publicAccess"] = false
+					f["autoScaling"] = map[string]any{
+						"enabled": true,
+						"minSize": 1,
+						"maxSize": 8,
+				}
+				fields = append(fields, f)
+				// for _, vs := range uniqueProfiles {
+				// 	f := make(map[string]any)
+				// 	f["nodeCount"] = 2
+				// 	f["instanceType"] = vs.Name
+				// 	f["publicAccess"] = false
+				// 	f["autoScaling"] = map[string]any{
+				// 		"enabled": true,
+				// 		"minSize": 1,
+				// 		"maxSize": 3,
+				// 	}
+				// 	fields = append(fields, f)
+				// }
+			}
+			return fields
+		}(),
+		"principal": func () map[string]any {
+			fields := make(map[string]any)
+			if pp.Spec.Platform == "aws" {
+				fields["type"] = "servicePrincipal"
+				fields["id"] = "arn:aws:iam::885707601199:root"
+			}
+			return fields
+		}(),
+		"providerRef": func () map[string]any {
+			fields := map[string]any{
+				"platform": pp.Spec.Platform,
+				"region": pp.Spec.Region,
+			}
+			if pp.Spec.Platform == "aws" && znSecondary != nil {
+				fields["zones"] = map[string]string{
+					"primary": znPrimary.Name,
+					"secondary": znSecondary.Name,
+				}
+			}
+			if pp.Spec.Platform == "gcp" {
+				fields["zones"] = map[string]string{
+					"primary": znPrimary.Name,
+				}
+			}
+			return fields
+		}(),
+	}
+	return spec
+}
 
 // only one mesh per application
 func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
