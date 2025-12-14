@@ -45,11 +45,6 @@ spec:
                   Must match the one used by the provider.
                 minLength: 1
                 type: string
-              nodeCidr:
-                description: nodeCidr is an optional node CIDR (commonly used in GCP
-                  manifests).
-                pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$
-                type: string
               nodeGroups:
                 description: nodeGroups defines one or more node groups for the cluster.
                 items:
@@ -77,38 +72,51 @@ spec:
                       description: InstanceTypes lists instance flavor identifiers,
                         e.g. ["4vCPU-16GB"].
                       items:
-                        type: string
+                        description: used in svc group for abstract flavor spec (user-facing)
+                        properties:
+                          gpu:
+                            properties:
+                              count:
+                                type: integer
+                              enabled:
+                                type: boolean
+                              manufacturer:
+                                type: string
+                              memory:
+                                type: string
+                              model:
+                                type: string
+                              unit:
+                                type: string
+                            type: object
+                          ram:
+                            type: string
+                          vcpus:
+                            type: string
+                        type: object
                       minItems: 1
                       type: array
+                    outboundTraffic:
+                      description: OutboundTrafficPolicy defines the policy for outbound
+                        traffic.
+                      properties:
+                        averageDataRate:
+                          description: AverageDataRate indicates the average data
+                            rate.
+                          type: string
+                        totalDataTransfer:
+                          description: TotalDataTransfer indicates the total data
+                            transferred.
+                          type: string
+                      type: object
                     publicAccess:
                       description: publicAccess indicates whether nodes in this group
                         receive public access.
                       type: boolean
                   required:
                   - instanceTypes
-                  - publicAccess
                   type: object
                 type: array
-              podCidr:
-                description: |-
-                  podCidr describes pod CIDRs. For AWS this may include separate public/private sub-blocks.
-                  For GCP it may only include cidr.
-                properties:
-                  cidr:
-                    description: CIDR block for pods.
-                    pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$
-                    type: string
-                  private:
-                    description: 'Optional: private pods CIDR (AWS example)'
-                    pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$
-                    type: string
-                  public:
-                    description: 'Optional: public pods CIDR (AWS example)'
-                    pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$
-                    type: string
-                required:
-                - cidr
-                type: object
               principal:
                 description: principal identifies the principal used to perform control-plane
                   actions.
@@ -145,15 +153,8 @@ spec:
                   zone:
                     type: string
                 type: object
-              serviceCidr:
-                description: |-
-                  serviceCidr is the CIDR for services (non-overlapping with VPC/node CIDRs).
-                  Optional (commonly used in AWS manifests).
-                pattern: ^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$
-                type: string
             required:
             - applicationId
-            - providerRef
             type: object
           status:
             description: status defines the observed state of XKube

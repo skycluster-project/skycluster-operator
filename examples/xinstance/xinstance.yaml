@@ -5,13 +5,13 @@ metadata:
 spec:
   applicationId: aws-us-east
   flavor: 
-    vcpu: "4"
+    vcpus: "4"
     ram: 16GB
     gpu:
       model: L4
       # unit: "1"
       # memory: 16GB
-  # flavor: 2vCPU-4GB
+  # flavor: 2vCPUs-4GB
   preferSpot: true
   image: ubuntu-24.04
 

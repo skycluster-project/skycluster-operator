@@ -28,23 +28,6 @@ type XKubeSpec struct {
 	// Must match the one used by the provider.
 	// +kubebuilder:validation:MinLength=1
 	ApplicationID string `json:"applicationId"`
-
-	// serviceCidr is the CIDR for services (non-overlapping with VPC/node CIDRs).
-	// Optional (commonly used in AWS manifests).
-	// +optional
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$`
-	ServiceCidr string `json:"serviceCidr,omitempty"`
-
-	// nodeCidr is an optional node CIDR (commonly used in GCP manifests).
-	// +optional
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$`
-	NodeCidr string `json:"nodeCidr,omitempty"`
-
-	// podCidr describes pod CIDRs. For AWS this may include separate public/private sub-blocks.
-	// For GCP it may only include cidr.
-	// +optional
-	PodCidr *PodCidr `json:"podCidr,omitempty"`
-
 	// nodeGroups defines one or more node groups for the cluster.
 	// +optional
 	NodeGroups []NodeGroup `json:"nodeGroups,omitempty"`
@@ -54,38 +37,37 @@ type XKubeSpec struct {
 	Principal *Principal `json:"principal,omitempty"`
 
 	// Provider reference must match the provider instance configuration.
+	// +optional
 	ProviderRef hv1a1.ProviderRefSpec `json:"providerRef"`
-}
-
-// PodCidr represents pod networking blocks. Public/private are optional subdivisions.
-type PodCidr struct {
-	// CIDR block for pods.
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$`
-	Cidr string `json:"cidr"`
-
-	// Optional: public pods CIDR (AWS example)
-	// +optional
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$`
-	Public string `json:"public,omitempty"`
-
-	// Optional: private pods CIDR (AWS example)
-	// +optional
-	// +kubebuilder:validation:Pattern=`^([0-9]{1,3}\.){3}[0-9]{1,3}\/[0-9]{1,2}$`
-	Private string `json:"private,omitempty"`
 }
 
 // NodeGroup defines a group of worker nodes and optional autoscaling.
 type NodeGroup struct {
 	// InstanceTypes lists instance flavor identifiers, e.g. ["4vCPU-16GB"].
 	// +kubebuilder:validation:MinItems=1
-	InstanceTypes []string `json:"instanceTypes"`
+	InstanceTypes []hv1a1.ComputeFlavor `json:"instanceTypes"`
 
 	// publicAccess indicates whether nodes in this group receive public access.
+	// +optional
 	PublicAccess bool `json:"publicAccess"`
 
 	// AutoScaling settings (optional).
 	// +optional
 	AutoScaling *AutoScaling `json:"autoScaling,omitempty"`
+
+	// OutboundTrafficPolicy defines the policy for outbound traffic.
+	// +optional
+	OutboundTraffic *OutboundTraffic `json:"outboundTraffic,omitempty"`
+}
+
+type OutboundTraffic struct {
+	// TotalDataTransfer indicates the total data transferred.
+	// +optional
+	TotalDataTransfer string `json:"totalDataTransfer"`
+
+	// AverageDataRate indicates the average data rate.
+	// +optional
+	AverageDataRate string `json:"averageDataRate"`
 }
 
 // AutoScaling contains optional autoscaler settings for a node group.

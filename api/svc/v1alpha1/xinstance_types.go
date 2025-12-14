@@ -106,6 +106,12 @@ type RootVolume struct {
 
 // XInstanceStatus defines the observed state of XInstance.
 type XInstanceStatus struct {
+	// // SelectedComputeProfile lists the compute profiles selected for this XInstance.
+	// // +optional
+	// SelectedComputeProfile []hv1a1.VirtualService `json:"selectedComputeProfile,omitempty"`
+	// // AttemptComputeProfile lists the compute profiles attempted for this XInstance.
+	// // +optional
+	// AttemptedComputeProfile []hv1a1.VirtualService `json:"attemptedComputeProfile,omitempty"`
 	// The status of each condition is one of True, False, or Unknown.
 	// +optional
 	Conditions []metav1.Condition `json:"conditions,omitempty"`

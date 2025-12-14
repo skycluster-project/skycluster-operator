@@ -1,35 +1,43 @@
 apiVersion: svc.skycluster.io/v1alpha1
 kind: XKube
 metadata:
-  name: xkube
+  name: xkube-1234
 spec:
-  applicationId: "my-application-1234"
+  applicationId: "app-1234"
 
-  # Optional: service network CIDR (AWS-style)
-  serviceCidr: "10.200.0.0/20"
+  # Must be defined when deployment manifest is used
+  # # Optional: service network CIDR (AWS-style)
+  # serviceCidr: "10.200.0.0/20"
 
-  # Optional: node network CIDR (GCP-style)
-  nodeCidr: "10.210.0.0/20"
+  # # Optional: node network CIDR (GCP-style)
+  # nodeCidr: "10.210.0.0/20"
 
   # Pod CIDR definitions
-  podCidr:
-    cidr: "10.100.0.0/16"
-    public: "10.100.1.0/24"     # optional, AWS example
-    private: "10.100.2.0/24"    # optional, AWS example
+  # podCidr:
+  #   cidr: "10.100.0.0/16"
+  #   public: "10.100.1.0/24"     # optional, AWS example
+  #   private: "10.100.2.0/24"    # optional, AWS example
 
   # Node groups
   nodeGroups:
     - instanceTypes:
-        - "4vCPU-16GB"
-        - "8vCPU-32GB"
+        - vcpus: "4"
+          ram: 16GB
+      outboundTraffic:
+        totalDataTransfer: "10GB"
+    - instanceTypes:
+        - vcpus: "4"
+          ram: 16GB
+          gpu:
+            model: L4
+        - vcpus: "4"
+          ram: 16GB
+      outboundTraffic:
+        totalDataTransfer: "10GB"
       publicAccess: false
       autoScaling:
         minSize: 2
         maxSize: 5
-
-    - instanceTypes:
-        - "4vCPU-16GB"
-      publicAccess: true
 
   # Principal performing control plane actions
   principal:
