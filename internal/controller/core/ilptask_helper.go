@@ -81,7 +81,8 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 	
 	var optTasks []optTaskStruct
 	for _, cmpnt := range dpPolicies {
-		supportedKinds := []string{"Deployment", "XNodeGroup"}
+		// TODO: Check the supported Kinds for e2e application support
+		supportedKinds := []string{"Deployment", "XNodeGroup", "XKube"}
 		if !slices.Contains(supportedKinds, cmpnt.ComponentRef.Kind) {
 			return nil, fmt.Errorf("unsupported component kind %s for Kubernetes execution environment", cmpnt.ComponentRef.Kind)
 		}
@@ -160,15 +161,15 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 						})
 					}
 
-				case "XNodeGroup":
-					// If the component is an XNodeGroup, it represents a set of Compute profile
+				case "XNodeGroup", "XKube":
+					// If the component is an XNodeGroup or XKube, it represents a set of Compute profile
 					// that must be used for node groups for the execution cluster itself.
 					// if it is tied to a specific provider, it targets the provider's Kubernetes cluster
 					// If no provider is specified, the optimizer will choose the best provider minimizing
 					// the node group costs plus other deployment costs (e.g., control plane).
 					
 					// Since the ComputeProfile is already handled above, we do not need to do anything here.
-					r.Logger.Info("XNodeGroup component detected, handled via ComputeProfile alternatives", "component", cmpnt.ComponentRef.Name)
+					r.Logger.Info("XNodeGroup/XKube component detected, handled via ComputeProfile alternatives", "component", cmpnt.ComponentRef.Name)
 				
 				default:
 					return nil, fmt.Errorf("unsupported virtual service kind %s for Kubernetes execution environment", alternativeVS.Kind)

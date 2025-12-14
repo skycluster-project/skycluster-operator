@@ -23,8 +23,6 @@ spec:
     - instanceTypes:
         - vcpus: "4"
           ram: 16GB
-      outboundTraffic:
-        totalDataTransfer: "10GB"
     - instanceTypes:
         - vcpus: "4"
           ram: 16GB
@@ -32,8 +30,6 @@ spec:
             model: L4
         - vcpus: "4"
           ram: 16GB
-      outboundTraffic:
-        totalDataTransfer: "10GB"
       publicAccess: false
       autoScaling:
         minSize: 2

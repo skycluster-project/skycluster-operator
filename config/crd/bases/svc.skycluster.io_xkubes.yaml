@@ -96,19 +96,6 @@ spec:
                         type: object
                       minItems: 1
                       type: array
-                    outboundTraffic:
-                      description: OutboundTrafficPolicy defines the policy for outbound
-                        traffic.
-                      properties:
-                        averageDataRate:
-                          description: AverageDataRate indicates the average data
-                            rate.
-                          type: string
-                        totalDataTransfer:
-                          description: TotalDataTransfer indicates the total data
-                            transferred.
-                          type: string
-                      type: object
                     publicAccess:
                       description: publicAccess indicates whether nodes in this group
                         receive public access.

@@ -19,6 +19,7 @@ package svc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
@@ -170,7 +171,7 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 			ComponentRef: hv1a1.ComponentRef{
 				APIVersion: "svc.skycluster.io/v1alpha1",
 				Kind:       "XKube",
-				Name:       owner.Name,
+				Name:       fmt.Sprintf("%s-%d", owner.Name, i),
 				Namespace:  owner.Namespace, // namespace-scoped
 			},
 			VirtualServiceConstraint: virtualServiceConstraints,
@@ -244,20 +245,6 @@ func (r *XKubeReconciler) ensureDataflowPolicy(ctx context.Context, owner *svcv1
 			// For a multi-component app we leave DataDependencies empty.
 			DataDependencies: func () []pv1a1.DataDapendency {
 				DataDependencies := []pv1a1.DataDapendency{}
-				for _, nodeGroup := range owner.Spec.NodeGroups {
-					DataDependencies = append(DataDependencies, pv1a1.DataDapendency{
-						From: hv1a1.ComponentRef{
-							APIVersion: "skycluster.io/v1alpha1",
-							Kind:       "NoOp",
-						},
-						To: hv1a1.ComponentRef{
-							APIVersion: "skycluster.io/v1alpha1",
-							Kind:       "NoOp",
-						},
-						TotalDataTransfer: nodeGroup.OutboundTraffic.TotalDataTransfer,
-						AverageDataRate:   nodeGroup.OutboundTraffic.AverageDataRate,
-					})
-				}
 				return DataDependencies
 			}(),
 		},

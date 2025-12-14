@@ -575,7 +575,6 @@ func (r *ILPTaskReconciler) getPodStatusAndResult(podName string) (deployPlan st
 	return "", nil
 }
 
-
 func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName string) error {
 	// Delete the optimization pod best effort
 	pod := &corev1.PodList{}
@@ -595,7 +594,6 @@ func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName 
 	}
 	return nil
 }
-
 
 func generateTasksEdgesJson(df pv1a1.DataflowPolicy) (string, error) {
 	type taskEdgeStruct struct {

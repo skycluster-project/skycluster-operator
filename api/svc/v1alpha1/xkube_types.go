@@ -54,20 +54,6 @@ type NodeGroup struct {
 	// AutoScaling settings (optional).
 	// +optional
 	AutoScaling *AutoScaling `json:"autoScaling,omitempty"`
-
-	// OutboundTrafficPolicy defines the policy for outbound traffic.
-	// +optional
-	OutboundTraffic *OutboundTraffic `json:"outboundTraffic,omitempty"`
-}
-
-type OutboundTraffic struct {
-	// TotalDataTransfer indicates the total data transferred.
-	// +optional
-	TotalDataTransfer string `json:"totalDataTransfer"`
-
-	// AverageDataRate indicates the average data rate.
-	// +optional
-	AverageDataRate string `json:"averageDataRate"`
 }
 
 // AutoScaling contains optional autoscaler settings for a node group.
