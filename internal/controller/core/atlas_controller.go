@@ -28,7 +28,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -99,8 +98,11 @@ func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if atlas.Spec.Approve {
 		for _, xrd := range manifests {
 			var obj map[string]any
-			if err := yaml.Unmarshal([]byte(xrd.Manifest), &obj); err != nil {
-				r.Logger.Error(err, "error unmarshalling manifest yaml.", "manifest", xrd.Manifest)
+			if xrd.Manifest == nil || len(xrd.Manifest.Raw) == 0 {
+				continue
+			}
+			if err := json.Unmarshal(xrd.Manifest.Raw, &obj); err != nil {
+				r.Logger.Error(err, "error unmarshalling manifest json.", "manifest", string(xrd.Manifest.Raw))
 				return ctrl.Result{}, err
 			}
 
@@ -439,9 +441,9 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			obj.SetAnnotations(objAnnt)
 		}
 		
-		yamlObj, err := generateYAMLManifest(obj)
+		jsonBytes, err := generateJsonManifest(obj)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "Error generating YAML manifest.")
+			return nil, nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
 		manifests[pName] = hv1a1.SkyService{
 			ComponentRef: hv1a1.ComponentRef{
@@ -450,7 +452,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 				// Namespace:  obj.GetNamespace(),
 				Name: obj.GetName(),
 			},
-			Manifest: yamlObj,
+			Manifest: &runtime.RawExtension{Raw: jsonBytes},
 			ProviderRef: hv1a1.ProviderRefSpec{
 				Name:        pName,
 				Type:        p.Type,
@@ -545,9 +547,9 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 
 		xrdObj.Object["spec"] = spec
 
-		yamlObj, err := generateYAMLManifest(xrdObj)
+		jsonBytes, err := generateJsonManifest(xrdObj)
 		if err != nil {
-			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
 		manifests = append(manifests, hv1a1.SkyService{
 			ComponentRef: hv1a1.ComponentRef{
@@ -556,7 +558,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 				// Namespace:  xrdObj.GetNamespace(),
 				Name: xrdObj.GetName(),
 			},
-			Manifest: yamlObj,
+			Manifest: &runtime.RawExtension{Raw: jsonBytes},
 			ProviderRef: hv1a1.ProviderRefSpec{
 				// Name:   pName,
 				// Type: znPrimary.Type,
@@ -606,13 +608,13 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 		name = name + "-" + rand
 		xrdObj.SetName(name)
 
-		spec := r.buildK8SSpec(appId, k8sMetadata, pp, idx, znPrimary, znSecondaryPtr)
+		spec := r.buildK8SSpec(appId, skySvc.Manifest, k8sMetadata, pp, idx, znPrimary, znSecondaryPtr)
 
 		xrdObj.Object["spec"] = spec
 
-		yamlObj, err := generateYAMLManifest(xrdObj)
+		jsonBytes, err := generateJsonManifest(xrdObj)
 		if err != nil {
-			return nil, errors.Wrap(err, "Error generating YAML manifest.")
+			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
 		manifests[pName] = hv1a1.SkyService{
 			ComponentRef: hv1a1.ComponentRef {
@@ -621,7 +623,7 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 				Namespace:  xrdObj.GetNamespace(),
 				Name:       xrdObj.GetName(),
 			},
-			Manifest: yamlObj,
+			Manifest: &runtime.RawExtension{Raw: jsonBytes},
 			ProviderRef: hv1a1.ProviderRefSpec{
 				Name:   pName,
 				Type: znPrimary.Type,
@@ -637,7 +639,10 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 }
 
 // buildK8SSpec builds the spec map for XKube manifests
-func (r *AtlasReconciler) buildK8SSpec(appId string, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) map[string]any {
+func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtension, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) map[string]any {
+	var k8sSpec map[string]any
+	if err := json.Unmarshal(manifest.Raw, &k8sSpec); err != nil {return nil}
+
 	spec := map[string]any{
 		"applicationId": appId,
 		"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
@@ -777,9 +782,9 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 
 	xrdObj.Object["spec"] = spec
 
-	yamlObj, err := generateYAMLManifest(xrdObj)
+	jsonBytes, err := generateJsonManifest(xrdObj)
 	if err != nil {
-		return nil, errors.Wrap(err, "Error generating YAML manifest.")
+		return nil, errors.Wrap(err, "Error generating JSON manifest.")
 	}
 	return &hv1a1.SkyService{
 		ComponentRef: hv1a1.ComponentRef{
@@ -788,7 +793,7 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 			// Namespace:  xrdObj.GetNamespace(),
 			Name: xrdObj.GetName(),
 		},
-		Manifest: yamlObj,
+		Manifest: &runtime.RawExtension{Raw: jsonBytes},
 	}, nil
 	
 }

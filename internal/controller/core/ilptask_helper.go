@@ -422,7 +422,6 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 					// Find matching profiles
 					for _, off := range profiles {
 						// if deploy cost is 0 , it means we could not find its price, so we skip it
-						r.Logger.Info("Compute profile found", "profile", off.name, "deployCost", off.deployCost)
 						if off.deployCost == 0 { continue }
 						if !offeringMatches(pat, off) { continue }
 

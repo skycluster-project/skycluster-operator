@@ -162,24 +162,15 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						for componentName, services := range requiredServices {
 							if len(services) == 0 { continue }
 							// Use the cheapest service (first one after sorting by price)
-							selectedService := services[0]
-							r.Logger.Info("Selected service for component", "component", componentName, "service", selectedService.Name)
+							// selectedService := services[0]
+							topNServices := min(len(services), 5)
+							r.Logger.Info("Selected services for component", "component", componentName, "total", len(services))
 							
 							// Find the existing component and update its manifest
 							for i := range deployPlan.Component {
 								if deployPlan.Component[i].ComponentRef.Name == componentName {
-									// Create a manifest for the ComputeProfile virtual service
-									manifest := map[string]interface{}{
-										"apiVersion": selectedService.ApiVersion,
-										"kind":       selectedService.Kind,
-										"metadata": map[string]interface{}{
-											"name": selectedService.Name,
-										},
-										"spec": map[string]interface{}{
-											"name": selectedService.Name,
-											"count": selectedService.Count,
-										},
-									}
+									// set the first 5 services as the manifest
+									manifest := map[string]any{"services": services[:topNServices]}
 									manifestBytes, err := json.Marshal(manifest)
 									if err != nil {
 										r.Logger.Error(err, "failed to marshal compute profile manifest", "component", componentName)
@@ -188,10 +179,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 
 									// Set the manifest for the existing component
 									deployPlan.Component[i].Manifest = &runtime.RawExtension{Raw: manifestBytes}
-									r.Logger.Info("Set required virtual service manifest for component", 
-										"component", componentName, 
-										"service", selectedService.Name,
-										"kind", selectedService.Kind)
 									break
 								}
 							}
@@ -210,7 +197,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 						task.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "OptimizationSucceeded", "ILPTask optimization succeeded")
 
 						// generate atlas object
-						if err = r.ensureAtlas(task, appId1, dp.Spec.ExecutionEnvironment,deployPlan); err != nil {
+						if err = r.ensureAtlas(task, appId1, dp.Spec.ExecutionEnvironment, deployPlan); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "failed to ensure Atlas after optimization")
 						}
 						if err = r.ensureAtlasMesh(task, appId1, deployPlan); err != nil {

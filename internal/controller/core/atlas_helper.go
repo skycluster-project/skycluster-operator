@@ -211,10 +211,7 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 			for _, zo := range zoneOfferings {
 				if zo.Zone != zone {continue}
 				for _, of := range zo.Offerings {
-					if ok, err := offeringMatches2(pat, of); !ok {
-						r.Logger.Info("offering does not match", "offering", of.NameLabel, "reason", err)
-						continue
-					}
+					if ok, _ := offeringMatches2(pat, of); !ok {continue}
 					priceFloat, err := strconv.ParseFloat(of.Price, 64)
 					if err != nil {continue}
 					
