@@ -151,6 +151,53 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
 						return ctrl.Result{}, errors.Wrap(err, "failed to unmarshal deploy plan")
 					}
+
+					// Find and add required services (virtual services like ComputeProfile) to the deployPlan
+					requiredServices, err := r.findServicesForDeployPlan(req.Namespace, deployPlan, dp)
+					if err != nil {
+						r.Logger.Error(err, "failed to find required services for deploy plan, continuing without them")
+						// Continue without required services rather than failing
+					} else {
+						// Set manifest for existing components with required virtual services
+						for componentName, services := range requiredServices {
+							if len(services) == 0 { continue }
+							// Use the cheapest service (first one after sorting by price)
+							selectedService := services[0]
+							r.Logger.Info("Selected service for component", "component", componentName, "service", selectedService.Name)
+							
+							// Find the existing component and update its manifest
+							for i := range deployPlan.Component {
+								if deployPlan.Component[i].ComponentRef.Name == componentName {
+									// Create a manifest for the ComputeProfile virtual service
+									manifest := map[string]interface{}{
+										"apiVersion": selectedService.ApiVersion,
+										"kind":       selectedService.Kind,
+										"metadata": map[string]interface{}{
+											"name": selectedService.Name,
+										},
+										"spec": map[string]interface{}{
+											"name": selectedService.Name,
+											"count": selectedService.Count,
+										},
+									}
+									manifestBytes, err := json.Marshal(manifest)
+									if err != nil {
+										r.Logger.Error(err, "failed to marshal compute profile manifest", "component", componentName)
+										continue
+									}
+
+									// Set the manifest for the existing component
+									deployPlan.Component[i].Manifest = &runtime.RawExtension{Raw: manifestBytes}
+									r.Logger.Info("Set required virtual service manifest for component", 
+										"component", componentName, 
+										"service", selectedService.Name,
+										"kind", selectedService.Kind)
+									break
+								}
+							}
+						}
+					}
+
 					task.Status.Optimization.DeployMap = deployPlan
 					// at least one component deployed needed.
 					// TODO: check if at least one edge is deployed?

@@ -153,7 +153,8 @@ spec:
                         manifest:
                           description: Manifest is a manifest of a SkyCluster composition
                             API object
-                          type: string
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         name:
                           type: string
                         namespace:
@@ -266,7 +267,8 @@ spec:
                             manifest:
                               description: Manifest is a manifest of a SkyCluster
                                 composition API object
-                              type: string
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
                             name:
                               type: string
                             namespace:
@@ -377,7 +379,8 @@ spec:
                             manifest:
                               description: Manifest is a manifest of a SkyCluster
                                 composition API object
-                              type: string
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
                             name:
                               type: string
                             namespace:
@@ -576,7 +579,8 @@ spec:
                     manifest:
                       description: Manifest is a manifest of a SkyCluster composition
                         API object
-                      type: string
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
                     name:
                       type: string
                     namespace:

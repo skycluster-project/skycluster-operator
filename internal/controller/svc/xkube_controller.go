@@ -170,7 +170,7 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 		deploymentPolicies = append(deploymentPolicies, pv1a1.DeploymentPolicyItem{
 			ComponentRef: hv1a1.ComponentRef{
 				APIVersion: "svc.skycluster.io/v1alpha1",
-				Kind:       "XKube",
+				Kind:       "XNodeGroup",
 				Name:       fmt.Sprintf("%s-%d", owner.Name, i),
 				Namespace:  owner.Namespace, // namespace-scoped
 			},

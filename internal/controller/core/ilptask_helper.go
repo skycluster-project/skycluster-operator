@@ -49,12 +49,12 @@ type flavorPattern struct {
 }
 
 type virtualSvcStruct struct {
-	Name 		 string `json:"name,omitempty"`
-	Spec     *runtime.RawExtension `json:"spec,omitempty"`
+	Name 		    string `json:"name,omitempty"`
+	Spec        *runtime.RawExtension `json:"spec,omitempty"`
 	ApiVersion  string `json:"apiVersion,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Count      string `json:"count,omitempty"`
-	Price      float64 `json:"price,omitempty"`
+	Kind        string `json:"kind,omitempty"`
+	Count       string `json:"count,omitempty"`
+	Price       float64 `json:"price,omitempty"`
 }
 
 type locStruct struct {
@@ -82,7 +82,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 	var optTasks []optTaskStruct
 	for _, cmpnt := range dpPolicies {
 		// TODO: Check the supported Kinds for e2e application support
-		supportedKinds := []string{"Deployment", "XNodeGroup", "XKube"}
+		supportedKinds := []string{"Deployment", "XNodeGroup"}
 		if !slices.Contains(supportedKinds, cmpnt.ComponentRef.Kind) {
 			return nil, fmt.Errorf("unsupported component kind %s for Kubernetes execution environment", cmpnt.ComponentRef.Kind)
 		}
@@ -115,6 +115,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 					if err != nil { return nil, err }
 
 					for _, off := range profiles {
+						if off.deployCost == 0 { continue }
 						if !offeringMatches(pat, off) {continue}
 						// Add this offering as a ComputeProfile alternative
 						newVS := virtualSvcStruct{
@@ -354,6 +355,154 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 	return optTasks, nil
 }
 
+// findServicesForDeployPlan finds the services that must be deployed based on the deployPlan.
+// The deployPlan contains the mapping between tasks and providers, and this function
+// finds the virtual services (like ComputeProfile) that must be deployed for each component
+// in the chosen providers, similar to findVMVirtualServices and findK8SVirtualServices.
+func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a1.DeployMap, dp pv1a1.DeploymentPolicy) (map[string][]virtualSvcStruct, error) {
+	// Map from component name to list of virtual services that must be deployed
+	servicesMap := make(map[string][]virtualSvcStruct)
+
+	// For each component in the deployPlan
+	for _, skySvc := range deployPlan.Component {
+		cmpntRef := skySvc.ComponentRef
+
+		// expect the provider ref to be set from the optimizer
+		if skySvc.ProviderRef.Name == "" {
+			return nil, fmt.Errorf("provider ref not set for component %s", cmpntRef.Name)
+		}
+		provRef := skySvc.ProviderRef
+
+		// Find the matching deployment policy item
+		var matchingDPItem *pv1a1.DeploymentPolicyItem
+		for i := range dp.Spec.DeploymentPolicies {
+			cmpnt := &dp.Spec.DeploymentPolicies[i]
+			if cmpnt.ComponentRef.Name == cmpntRef.Name &&
+				cmpnt.ComponentRef.Kind == cmpntRef.Kind &&
+				cmpnt.ComponentRef.APIVersion == cmpntRef.APIVersion {
+				matchingDPItem = cmpnt
+				break
+			}
+		}
+		
+		if matchingDPItem == nil {
+			return nil, fmt.Errorf("no matching deployment policy item found for component %s (kind: %s, apiVersion: %s)",
+			cmpntRef.Name, cmpntRef.Kind, cmpntRef.APIVersion)
+		}
+
+		// Process VirtualServiceConstraint to find services that must be deployed
+		var requiredServices []virtualSvcStruct
+		for _, vsc := range matchingDPItem.VirtualServiceConstraint {
+			if len(vsc.AnyOf) == 0 { continue }
+
+			// For each alternative virtual service
+			for _, alternativeVS := range vsc.AnyOf {
+				supportedVSKinds := []string{"ComputeProfile"}
+				if !slices.Contains(supportedVSKinds, alternativeVS.Kind) {
+					return nil, fmt.Errorf("unsupported virtual service kind %s for component %s", alternativeVS.Kind, cmpntRef.Name)
+				}
+
+				switch alternativeVS.Kind {
+				case "ComputeProfile":
+					// Parse the flavor pattern from the virtual service spec
+					pat, err := parseFlavorFromJSON(alternativeVS.Spec)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse flavor from JSON for component %s: %w", cmpntRef.Name, err)
+					}
+
+					// Get compute profiles for the chosen provider
+					// Use the provider reference from the deployPlan
+					provRefs := []hv1a1.ProviderRefSpec{provRef}
+					profiles, err := r.getAllComputeProfiles(provRefs)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get compute profiles for provider %s: %w", provRef.Name, err)
+					}
+					r.Logger.Info("Compute profiles found for provider", "provider", provRef.Name, "count", len(profiles))
+
+					// Find matching profiles
+					for _, off := range profiles {
+						// if deploy cost is 0 , it means we could not find its price, so we skip it
+						r.Logger.Info("Compute profile found", "profile", off.name, "deployCost", off.deployCost)
+						if off.deployCost == 0 { continue }
+						if !offeringMatches(pat, off) { continue }
+
+						// Add this offering as a ComputeProfile service that must be deployed
+						apiVersion := alternativeVS.APIVersion
+						if apiVersion == "" {
+							apiVersion = "skycluster.io/v1alpha1"
+						}
+						newVS := virtualSvcStruct{
+							ApiVersion: apiVersion,
+							Kind:       "ComputeProfile",
+							Name:       off.name,
+							Count:      strconv.Itoa(alternativeVS.Count),
+							Price:      off.deployCost,
+						}
+						requiredServices = append(requiredServices, newVS)
+					}
+
+					// For Kubernetes execution environment, also handle Deployment-specific requirements
+					if dp.Spec.ExecutionEnvironment == "Kubernetes" && matchingDPItem.ComponentRef.Kind == "Deployment" {
+						// Calculate minimum compute resource required for this component
+						minCR, err := r.calculateMinComputeResource(ns, matchingDPItem.ComponentRef.Name)
+						if err != nil {
+							return nil, fmt.Errorf("failed to calculate min compute resource for component %s: %w", cmpntRef.Name, err)
+						}
+						if minCR != nil {
+							// Find additional profiles that meet the minimum requirements
+							for _, off := range profiles {
+								if off.cpu < minCR.cpu || off.ram < minCR.ram {
+									continue
+								}
+
+								// Check if this profile is already in the list
+								alreadyAdded := false
+								for _, existing := range requiredServices {
+									if existing.Name == off.name {
+										alreadyAdded = true
+										break
+									}
+								}
+								if !alreadyAdded {
+									apiVersion := alternativeVS.APIVersion
+									if apiVersion == "" {
+										apiVersion = "skycluster.io/v1alpha1"
+									}
+									requiredServices = append(requiredServices, virtualSvcStruct{
+										ApiVersion: apiVersion,
+										Kind:       "ComputeProfile",
+										Name:       off.name,
+										Count:      "1",
+										Price:      off.deployCost,
+									})
+								}
+							}
+						}
+					}
+
+				default:
+					return nil, fmt.Errorf("unsupported virtual service kind %s for component %s", alternativeVS.Kind, cmpntRef.Name)
+				}
+			}
+		}
+
+		// Remove duplicates and sort by price
+		requiredServices = lo.UniqBy(requiredServices, func(v virtualSvcStruct) string {
+			return v.Name
+		})
+		sort.Slice(requiredServices, func(i, j int) bool {
+			return requiredServices[i].Price < requiredServices[j].Price
+		})
+
+		// Store services for this component
+		if len(requiredServices) > 0 {
+			servicesMap[cmpntRef.Name] = requiredServices
+		}
+	}
+
+	return servicesMap, nil
+}
+
 // getAllComputeProfiles fetches all compute profiles (config maps) for the referenced providers
 // if provRefs is empty, fetches all available providers.
 func (r *ILPTaskReconciler) getAllComputeProfiles(provRefs []hv1a1.ProviderRefSpec) ([]computeProfileService, error) {
@@ -438,11 +587,17 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 		if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
 			for _, zo := range zoneOfferings {
 				for _, of := range zo.Offerings{
-					priceFloat, err := strconv.ParseFloat(of.Price, 64)
-					if err != nil {continue}
+					priceFloat, err := strconv.ParseFloat(strings.Trim(of.Price, "$"), 64)
+					if err != nil {
+						r.Logger.Info("Warning: Failed to parse price for offering", "offering", of.NameLabel, "error", err)
+						continue
+					}
 					fRam, err1 := parseMemory(of.RAM)
 					fCPU := float64(of.VCPUs)
-					if err1 != nil {continue }
+					if err1 != nil {
+						r.Logger.Info("Warning: Failed to parse memory for offering", "offering", of.NameLabel, "error", err1)
+						continue
+					}
 
 					vServicesList = append(vServicesList, computeProfileService{
 						name:   of.NameLabel,
@@ -582,10 +737,18 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 		if availCPU < p.cpu {
 			return false
 		}
+		// allow 20% deviation
+		if availCPU > p.cpu + p.cpu * 0.2 {
+			return false
+		}
 	}
 	// RAM
 	if !p.ramAny && p.ram > 0 {
 		if availRAM < p.ram {
+			return false
+		}
+		// allow 50% deviation
+		if availRAM > p.ram + p.ram * 0.5 {
 			return false
 		}
 	}
@@ -604,6 +767,11 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 			// offering lacks GPU info -> cannot satisfy specific model
 			return false
 		}
+	}
+
+	// if gpu is not requested, but offering has gpu, return false
+	if p.gpuModel == "" && p.gpuCount == 0 && p.gpuMem == 0 && off.gpuEnabled {
+		return false
 	}
 
 	// GPU count (if requested)

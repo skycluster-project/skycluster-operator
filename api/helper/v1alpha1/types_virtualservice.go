@@ -29,7 +29,7 @@ type SkyService struct {
 	// defined by user
 	ComponentRef ComponentRef `json:"componentRef"`
 	// Manifest is a manifest of a SkyCluster composition API object
-	Manifest     string                 `json:"manifest,omitempty"`
+	Manifest     *runtime.RawExtension   `json:"manifest,omitempty"`
 	ProviderRef  ProviderRefSpec        `json:"providerRef,omitempty"`
 	Conditions   []metav1.Condition     `json:"conditions,omitempty"`
 }

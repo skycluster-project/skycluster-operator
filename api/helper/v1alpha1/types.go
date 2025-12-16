@@ -81,8 +81,8 @@ type MonitoringSpec struct {
 
 func (s *SkyService) ManifestAsMap() (map[string]any, error) {
 	var m map[string]any
-	if s.Manifest == "" {return nil, nil}
-	err := json.Unmarshal([]byte(s.Manifest), &m)
+	if s.Manifest == nil || len(s.Manifest.Raw) == 0 {return nil, nil}
+	err := json.Unmarshal(s.Manifest.Raw, &m)
 	return m, err
 }
 

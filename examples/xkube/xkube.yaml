@@ -28,8 +28,6 @@ spec:
           ram: 16GB
           gpu:
             model: L4
-        - vcpus: "4"
-          ram: 16GB
       publicAccess: false
       autoScaling:
         minSize: 2
