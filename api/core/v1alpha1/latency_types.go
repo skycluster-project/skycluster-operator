@@ -32,12 +32,12 @@ type LatencySpec struct {
 
 // LatencyStatus defines the observed state of Latency.
 type LatencyStatus struct {
-	LastMeasuredMs  string           `json:"lastMeasuredMs,omitempty"`
-	LastMeasuredAt  *metav1.Time   `json:"lastMeasuredAt,omitempty"`
-	P50             string           `json:"p50,omitempty"`
-	P95             string           `json:"p95,omitempty"`
-	P99             string           `json:"p99,omitempty"`
-	MeasurementCount int           `json:"measurementCount,omitempty"`
+	LastMeasuredMs   string       `json:"lastMeasuredMs,omitempty"`
+	LastMeasuredAt   *metav1.Time `json:"lastMeasuredAt,omitempty"`
+	P50              string       `json:"p50,omitempty"`
+	P95              string       `json:"p95,omitempty"`
+	P99              string       `json:"p99,omitempty"`
+	MeasurementCount int          `json:"measurementCount,omitempty"`
 }
 
 // +kubebuilder:object:root=true

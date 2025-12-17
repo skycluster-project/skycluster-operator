@@ -25,15 +25,15 @@ import (
 
 // AtlasMeshSpec defines the desired state of AtlasMesh
 type AtlasMeshSpec struct {
-	Approve bool `json:"approve"`
-	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
-	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
-	DeployMap DeployMap `json:"deployPlan,omitempty"`
+	Approve             bool                `json:"approve"`
+	DataflowPolicyRef   DataflowPolicyRef   `json:"dataflowPolicyRef,omitempty"`
+	DeploymentPolicyRef DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
+	DeployMap           DeployMap           `json:"deployPlan,omitempty"`
 }
 
 // AtlasMeshStatus defines the observed state of AtlasMesh.
 type AtlasMeshStatus struct {
-	Objects   []hv1a1.SkyService   `json:"objects,omitempty"`
+	Objects    []hv1a1.SkyService `json:"objects,omitempty"`
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
@@ -72,7 +72,6 @@ type AtlasMeshList struct {
 func init() {
 	SchemeBuilder.Register(&AtlasMesh{}, &AtlasMeshList{})
 }
-
 
 // helper to set a condition
 func (s *AtlasMeshStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {

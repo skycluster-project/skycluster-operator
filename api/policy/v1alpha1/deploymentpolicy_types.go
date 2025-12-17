@@ -37,12 +37,12 @@ type PerformanceConstraint struct {
 
 type DeploymentPolicyItem struct {
 	// ComponentRef is the reference to the component, for a Kubernetes application
-	// this could be a reference to a Deployment. 
+	// this could be a reference to a Deployment.
 	ComponentRef hv1a1.ComponentRef `json:"componentRef"`
 	// VirtualServiceConstraint is the virtual service constraint for the component
 	// For VirtualMachine execution environment, ComputeProfile mist be specified,
-	// for Kubernetes execution environment, you can specify ComputeProfile for 
-	// underlying compute resources. 
+	// for Kubernetes execution environment, you can specify ComputeProfile for
+	// underlying compute resources.
 	VirtualServiceConstraint []VirtualServiceConstraint `json:"virtualServiceConstraint,omitempty"`
 	// PerformanceConstraint is the performance constraint for the component
 	PerformanceConstraint PerformanceConstraint `json:"performanceConstraint,omitempty"`
@@ -57,15 +57,15 @@ type VirtualServiceConstraint struct {
 type VirtualServiceSelector struct {
 	hv1a1.VirtualService `json:",inline"`
 	// +kubebuilder:default=1
-	Count          int   `json:"count,omitempty"`
+	Count int `json:"count,omitempty"`
 }
 
 // DeploymentPolicySpec defines the desired state of DeploymentPolicy.
 type DeploymentPolicySpec struct {
 	// ExecutionEnvironment specifies the execution environment for the deployment policy
 	// +kubebuilder:validation:Enum=Kubernetes;VirtualMachine
-	ExecutionEnvironment string `json:"executionEnvironment,omitempty"`
-	DeploymentPolicies []DeploymentPolicyItem `json:"deploymentPolicies"`
+	ExecutionEnvironment string                 `json:"executionEnvironment,omitempty"`
+	DeploymentPolicies   []DeploymentPolicyItem `json:"deploymentPolicies"`
 }
 
 // DeploymentPolicyStatus defines the observed state of DeploymentPolicy.
@@ -98,7 +98,6 @@ type DeploymentPolicyList struct {
 func init() {
 	SchemeBuilder.Register(&DeploymentPolicy{}, &DeploymentPolicyList{})
 }
-
 
 func (s *DeploymentPolicyStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{

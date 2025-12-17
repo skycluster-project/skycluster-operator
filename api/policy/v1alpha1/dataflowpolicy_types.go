@@ -76,7 +76,6 @@ func init() {
 	SchemeBuilder.Register(&DataflowPolicy{}, &DataflowPolicyList{})
 }
 
-
 func (s *DataflowPolicyStatus) SetCondition(condition hv1a1.Condition, status metav1.ConditionStatus, reason, msg string) {
 	meta.SetStatusCondition(&s.Conditions, metav1.Condition{
 		Type:    string(condition),

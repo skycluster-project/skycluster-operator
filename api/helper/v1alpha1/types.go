@@ -36,14 +36,14 @@ var (
 	SKYCLUSTER_VSERVICES_LABEL         = "provider-vservices"
 
 	ReasonServiceNotReady = "ServiceNotReady"
-	ReasonsForServices = []string{"Unreachable", "ExecuteError", "ExecuteUnknown"}
+	ReasonsForServices    = []string{"Unreachable", "ExecuteError", "ExecuteUnknown"}
 )
 
 type ComponentRef struct {
-	APIVersion string `json:"apiVersion,omitempty"`
-	Kind       string `json:"kind,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Namespace  string `json:"namespace,omitempty"`
+	APIVersion string                `json:"apiVersion,omitempty"`
+	Kind       string                `json:"kind,omitempty"`
+	Name       string                `json:"name,omitempty"`
+	Namespace  string                `json:"namespace,omitempty"`
 	Spec       *runtime.RawExtension `json:"spec,omitempty"`
 }
 
@@ -81,7 +81,9 @@ type MonitoringSpec struct {
 
 func (s *SkyService) ManifestAsMap() (map[string]any, error) {
 	var m map[string]any
-	if s.Manifest == nil || len(s.Manifest.Raw) == 0 {return nil, nil}
+	if s.Manifest == nil || len(s.Manifest.Raw) == 0 {
+		return nil, nil
+	}
 	err := json.Unmarshal(s.Manifest.Raw, &m)
 	return m, err
 }
@@ -109,7 +111,9 @@ func GetRegionAlias(region string) string {
 	}
 
 	normalized := strings.ToLower(strings.TrimSpace(region))
-	if alias, found := aliases[normalized]; found {return alias}
+	if alias, found := aliases[normalized]; found {
+		return alias
+	}
 
 	for key, alias := range aliases {
 		if strings.Contains(normalized, key) || strings.Contains(key, normalized) {

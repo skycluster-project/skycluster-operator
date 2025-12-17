@@ -29,6 +29,6 @@ type InstanceOffering struct {
 // used in svc group for abstract flavor spec (user-facing)
 type ComputeFlavor struct {
 	VCPUs string `json:"vcpus,omitempty" yaml:"vcpus,omitempty"`
-	RAM  string `json:"ram,omitempty" yaml:"ram,omitempty"`
-	GPU GPU `json:"gpu,omitempty" yaml:"gpu,omitempty"`
+	RAM   string `json:"ram,omitempty" yaml:"ram,omitempty"`
+	GPU   GPU    `json:"gpu,omitempty" yaml:"gpu,omitempty"`
 }

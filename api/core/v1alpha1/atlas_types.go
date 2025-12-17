@@ -26,12 +26,12 @@ import (
 type DeployMapEdge struct {
 	From    hv1a1.SkyService `json:"from"`
 	To      hv1a1.SkyService `json:"to"`
-	Latency string     `json:"latency,omitempty"`
+	Latency string           `json:"latency,omitempty"`
 }
 
 type DeployMap struct {
-	Component []hv1a1.SkyService    `json:"components,omitempty"`
-	Edges     []DeployMapEdge `json:"edges,omitempty"`
+	Component []hv1a1.SkyService `json:"components,omitempty"`
+	Edges     []DeployMapEdge    `json:"edges,omitempty"`
 }
 
 // AtlasSpec defines the desired state of Atlas.
@@ -40,10 +40,10 @@ type AtlasSpec struct {
 	Approve bool `json:"approve"`
 	// ExecutionEnvironment is the environment in which the atlas creates resources
 	// +kubebuilder:validation:Enum=Kubernetes;VirtualMachine
-	ExecutionEnvironment string `json:"executionEnvironment,omitempty"`
-	DataflowPolicyRef  DataflowPolicyRef `json:"dataflowPolicyRef,omitempty"`
+	ExecutionEnvironment string              `json:"executionEnvironment,omitempty"`
+	DataflowPolicyRef    DataflowPolicyRef   `json:"dataflowPolicyRef,omitempty"`
 	DeploymentPolicyRef  DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
-	DeployMap DeployMap `json:"deployPlan,omitempty"`
+	DeployMap            DeployMap           `json:"deployPlan,omitempty"`
 }
 
 // AtlasStatus defines the observed state of Atlas.

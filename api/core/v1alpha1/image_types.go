@@ -25,23 +25,23 @@ import (
 
 // ImageSpec defines the desired state of Image
 type ImageSpec struct {
-	ProviderRef string   `json:"providerRef"`
+	ProviderRef string          `json:"providerRef"`
 	Images      []ImageOffering `json:"images,omitempty" yaml:"images,omitempty"`
 }
 
-	// ImageStatus defines the observed state of Image.
-	type ImageStatus struct {
-		Region             string             `json:"region" yaml:"region"`
-		Images             []ImageOffering    `json:"images,omitempty" yaml:"images,omitempty"`
-		ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
-		LastUpdateTime     metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
-		Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
-	}
+// ImageStatus defines the observed state of Image.
+type ImageStatus struct {
+	Region             string             `json:"region" yaml:"region"`
+	Images             []ImageOffering    `json:"images,omitempty" yaml:"images,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	LastUpdateTime     metav1.Time        `json:"lastUpdateTime,omitempty" yaml:"lastUpdateTime,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
 
 type ImageOffering struct {
 	// +kubebuilder:validation:Enum=ubuntu-20.04;ubuntu-22.04;ubuntu-24.04;ubuntu-24.04-gpu;eks-optimized
 	NameLabel  string `json:"nameLabel" yaml:"nameLabel"`
-	Pattern 	 string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Pattern    string `json:"pattern,omitempty" yaml:"pattern,omitempty"`
 	Name       string `json:"name,omitempty" yaml:"name,omitempty"`
 	Generation string `json:"generation,omitempty" yaml:"generation,omitempty"`
 	Zone       string `json:"zone,omitempty" yaml:"zone,omitempty"`

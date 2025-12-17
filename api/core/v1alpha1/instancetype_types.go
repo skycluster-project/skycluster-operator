@@ -25,7 +25,7 @@ import (
 )
 
 type ZoneOfferings struct {
-	Zone      string             `json:"zone" yaml:"zone"`
+	Zone      string                   `json:"zone" yaml:"zone"`
 	Offerings []hv1a1.InstanceOffering `json:"zoneOfferings" yaml:"zoneOfferings"`
 }
 

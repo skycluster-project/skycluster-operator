@@ -26,29 +26,29 @@ import (
 
 type OptimizationSpec struct {
 	// +kubebuilder:validation:Enum=Pending;Running;Succeeded;Failed;Unknown
-	Status       string                      `json:"status,omitempty"`
-	Result       string                      `json:"result,omitempty"`
-	DeployMap    DeployMap                 `json:"deployMap,omitempty"`
-	ConfigMapRef corev1.LocalObjectReference `json:"configMapRef,omitempty"`
-	PodRef       corev1.LocalObjectReference `json:"podRef,omitempty"`
-	DataflowResourceVersion        string    `json:"dataflowResourceVersion,omitempty"`
-	DeploymentPlanResourceVersion  string    `json:"deploymentPlanResourceVersion,omitempty"`
+	Status                        string                      `json:"status,omitempty"`
+	Result                        string                      `json:"result,omitempty"`
+	DeployMap                     DeployMap                   `json:"deployMap,omitempty"`
+	ConfigMapRef                  corev1.LocalObjectReference `json:"configMapRef,omitempty"`
+	PodRef                        corev1.LocalObjectReference `json:"podRef,omitempty"`
+	DataflowResourceVersion       string                      `json:"dataflowResourceVersion,omitempty"`
+	DeploymentPlanResourceVersion string                      `json:"deploymentPlanResourceVersion,omitempty"`
 }
 
 // ILPTaskSpec defines the desired state of ILPTask.
 type ILPTaskSpec struct {
-	DataflowPolicyRef  DataflowPolicyRef  `json:"dataflowPolicyRef,omitempty"`
-	DeploymentPolicyRef  DeploymentPolicyRef  `json:"deploymentPlanRef,omitempty"`
+	DataflowPolicyRef   DataflowPolicyRef   `json:"dataflowPolicyRef,omitempty"`
+	DeploymentPolicyRef DeploymentPolicyRef `json:"deploymentPlanRef,omitempty"`
 }
 
 type DeploymentPolicyRef struct {
-	corev1.LocalObjectReference `json:",inline"`
-	DeploymentPlanResourceVersion 		 string `json:"resourceVersion,omitempty"`
+	corev1.LocalObjectReference   `json:",inline"`
+	DeploymentPlanResourceVersion string `json:"resourceVersion,omitempty"`
 }
 
 type DataflowPolicyRef struct {
 	corev1.LocalObjectReference `json:",inline"`
-	DataflowResourceVersion      string `json:"resourceVersion,omitempty"`
+	DataflowResourceVersion     string `json:"resourceVersion,omitempty"`
 }
 
 // ILPTaskStatus defines the observed state of ILPTask.
