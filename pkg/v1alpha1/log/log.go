@@ -8,7 +8,6 @@ import (
 	zapCtrl "sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
-
 func customLoggerFormat() zapCtrl.EncoderConfigOption {
 	return func(encoderConfig *zapcore.EncoderConfig) {
 		encoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder

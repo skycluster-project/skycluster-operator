@@ -393,17 +393,17 @@ func (r *ImageReconciler) buildRunner(img *cv1a1.Image, pf *cv1a1.ProviderProfil
 						Image: "etesami/image-finder:latest",
 						// ImagePullPolicy: corev1.PullAlways,
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Env:   envVars,
+						Env:             envVars,
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},
 						},
 					}},
 					Containers: []corev1.Container{{
-						Name:    "harvest",
-						Image:   "busybox",
+						Name:            "harvest",
+						Image:           "busybox",
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Command: []string{"/bin/sh", "-c"},
-						Args:    []string{"cat " + outputPath},
+						Command:         []string{"/bin/sh", "-c"},
+						Args:            []string{"cat " + outputPath},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},
 						},

@@ -53,7 +53,6 @@ type ILPTaskReconciler struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=ilptasks/finalizers,verbs=update
 
-
 func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciling ILPTask started", "namespace", req.Namespace, "name", req.Name)
 	
@@ -285,15 +284,15 @@ func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, d
 		r.Logger.Info("Creating new AtlasMesh for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.AtlasMesh{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: task.Name + "-" + RandSuffix(task.Name),
-				Labels: map[string]string{"skycluster.io/app-id": appId},
-				Namespace:    task.Namespace,
+				Name:      task.Name + "-" + RandSuffix(task.Name),
+				Labels:    map[string]string{"skycluster.io/app-id": appId},
+				Namespace: task.Namespace,
 			},
 			Spec: cv1a1.AtlasMeshSpec{
-				Approve: false,
-				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
-				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
-				DeployMap: deployPlan,
+				Approve:             false,
+				DataflowPolicyRef:   task.Spec.DataflowPolicyRef,
+				DeploymentPolicyRef: task.Spec.DeploymentPolicyRef,
+				DeployMap:           deployPlan,
 			},
 		}
 		// set owner reference to ILPTask
@@ -337,16 +336,16 @@ func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, execE
 		r.Logger.Info("Creating new Atlas for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.Atlas{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: task.Name + "-" + RandSuffix(task.Name),
-				Labels: map[string]string{"skycluster.io/app-id": appId},
-				Namespace:    task.Namespace,
+				Name:      task.Name + "-" + RandSuffix(task.Name),
+				Labels:    map[string]string{"skycluster.io/app-id": appId},
+				Namespace: task.Namespace,
 			},
 			Spec: cv1a1.AtlasSpec{
-				Approve: false,
+				Approve:              false,
 				ExecutionEnvironment: execEnv,
-				DataflowPolicyRef:  task.Spec.DataflowPolicyRef,
+				DataflowPolicyRef:    task.Spec.DataflowPolicyRef,
 				DeploymentPolicyRef:  task.Spec.DeploymentPolicyRef,
-				DeployMap: deployPlan,
+				DeployMap:            deployPlan,
 			},
 		}
 		// set owner reference to ILPTask
@@ -360,4 +359,3 @@ func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, execE
 
 	return nil
 }
-

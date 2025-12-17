@@ -48,7 +48,6 @@ func SetupDeviceNodeWebhookWithManager(mgr ctrl.Manager) error {
 		Complete()
 }
 
-
 // +kubebuilder:webhook:path=/mutate-core-skycluster-io-v1alpha1-devicenode,mutating=true,failurePolicy=fail,sideEffects=None,groups=core.skycluster.io,resources=devicenodes,verbs=create;update,versions=v1alpha1,name=mdevicenode-v1alpha1.kb.io,admissionReviewVersions=v1
 
 // DeviceNodeCustomDefaulter struct is responsible for setting default values on the custom resource of the
@@ -145,8 +144,6 @@ func (v *DeviceNodeCustomValidator) ValidateDelete(ctx context.Context, obj runt
 
 	return nil, nil
 }
-
-
 
 func (d *DeviceNodeCustomDefaulter) addUpdateDefaultLabels(dn *cv1a1.DeviceNode, provider *cv1a1.ProviderProfile) map[string]string {
 	if dn.Labels == nil {

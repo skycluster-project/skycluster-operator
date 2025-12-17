@@ -22,7 +22,6 @@ import (
 	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
 )
 
-
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
 	
@@ -66,9 +65,9 @@ func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPoli
 	}
 
 	dataMap := map[string]string{
-		"tasks.json":         tasksJson,
-		"tasks-edges.json":   tasksEdges,
-		"providers.json":     providers,
+		"tasks.json":          tasksJson,
+		"tasks-edges.json":    tasksEdges,
+		"providers.json":      providers,
 		"providers-attr.json": providersAttr,
 	}
 
@@ -131,13 +130,13 @@ func (r *ILPTaskReconciler) generateProvidersJson() (string, error) {
 	}
 
 	type providerStruct struct {
-		UpstreamName  string `json:"upstreamName,omitempty"`
-		Name          string `json:"name,omitempty"`
-		Platform      string `json:"platform,omitempty"`
-		RegionAlias   string `json:"regionAlias,omitempty"`
-		Zone          string `json:"zone,omitempty"`
-		PType         string `json:"pType,omitempty"`
-		Region        string `json:"region,omitempty"`
+		UpstreamName string `json:"upstreamName,omitempty"`
+		Name         string `json:"name,omitempty"`
+		Platform     string `json:"platform,omitempty"`
+		RegionAlias  string `json:"regionAlias,omitempty"`
+		Zone         string `json:"zone,omitempty"`
+		PType        string `json:"pType,omitempty"`
+		Region       string `json:"region,omitempty"`
 	}
 	var providerList []providerStruct
 	for _, p := range providers.Items {
@@ -175,19 +174,19 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 	}
 	type providerStruct struct {
 		Name        string `json:"name,omitempty"`
-		Platform   string `json:"platform,omitempty"`
+		Platform    string `json:"platform,omitempty"`
 		RegionAlias string `json:"regionAlias,omitempty"`
-		Zone       string `json:"zone,omitempty"`
-		PType      string `json:"pType,omitempty"`
-		Region     string `json:"region,omitempty"`
+		Zone        string `json:"zone,omitempty"`
+		PType       string `json:"pType,omitempty"`
+		Region      string `json:"region,omitempty"`
 	}
 	type providerAttrStruct struct {
-		SrcName 	string  `json:"srcName,omitempty"`
-		DstName 	string  `json:"dstName,omitempty"`
-		Src 			providerStruct `json:"src,omitempty"`
-		Dst 			providerStruct `json:"dst,omitempty"`
-		Latency 	float64 `json:"latency"`
-		EgressCostDataRate float64 `json:"egressCost_dataRate"`
+		SrcName            string         `json:"srcName,omitempty"`
+		DstName            string         `json:"dstName,omitempty"`
+		Src                providerStruct `json:"src,omitempty"`
+		Dst                providerStruct `json:"dst,omitempty"`
+		Latency            float64        `json:"latency"`
+		EgressCostDataRate float64        `json:"egressCost_dataRate"`
 	}
 
 	var providerList []providerAttrStruct
@@ -219,19 +218,19 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 							return "", fmt.Errorf("failed to parse inter-zone egress cost for providers %s and %s", p.Name, p2.Name)
 						}
 						providerList = append(providerList, providerAttrStruct{
-							SrcName: 	p1Name,
-							DstName: 	p2Name,
+							SrcName: p1Name,
+							DstName: p2Name,
 							Src: providerStruct{
-								Platform:    p.Spec.Platform,
-								Region:      p.Spec.Region,
-								Zone:        pz1.Name,
+								Platform: p.Spec.Platform,
+								Region:   p.Spec.Region,
+								Zone:     pz1.Name,
 							},
 							Dst: providerStruct{
-								Platform:    p2.Spec.Platform,
-								Region:      p2.Spec.Region,
-								Zone:        pz2.Name,
+								Platform: p2.Spec.Platform,
+								Region:   p2.Spec.Region,
+								Zone:     pz2.Name,
 							},
-							Latency: 	0.0,
+							Latency:            0.0,
 							EgressCostDataRate: lo.Ternary(pz1.Name == pz2.Name, 0.0, egressCostFloat),
 						})
 						continue
@@ -283,17 +282,17 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 					}
 
 					providerList = append(providerList, providerAttrStruct{
-						SrcName: 	p1Name,
-						DstName: 	p2Name,
+						SrcName: p1Name,
+						DstName: p2Name,
 						Src: providerStruct{
-							Platform:    p.Spec.Platform,
-							Region:      p.Spec.Region,
+							Platform: p.Spec.Platform,
+							Region:   p.Spec.Region,
 						},
 						Dst: providerStruct{
-							Platform:    p2.Spec.Platform,
-							Region:      p2.Spec.Region,
+							Platform: p2.Spec.Platform,
+							Region:   p2.Spec.Region,
 						},	
-						Latency: 	latencyValueFloat,
+						Latency:            latencyValueFloat,
 						EgressCostDataRate: egressCostFloat,
 					})
 
@@ -317,7 +316,7 @@ func (r *ILPTaskReconciler) calculateMinComputeResource(ns string, deployName st
 	if err := r.Get(context.TODO(), client.ObjectKey{
 		Namespace: ns, Name: deployName,
 	}, depObj); err != nil {
-		return nil, errors.Wrap(err, "error getting deployment: " + deployName)
+		return nil, errors.Wrap(err, "error getting deployment: "+deployName)
 	}
 	// Each deployment has a single pod but may contain multiple containers
 	// For each deployment (and subsequently each pod) we dervie the
@@ -359,11 +358,11 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	
 	initContainers := make([]corev1.Container, 0)
 	initContainers = append(initContainers, corev1.Container{
-		Name:  "prepare-vservices",
-		Image: "etesami/optimizer-helper:v0.0.4",
+		Name:            "prepare-vservices",
+		Image:           "etesami/optimizer-helper:v0.0.4",
 		ImagePullPolicy: corev1.PullIfNotPresent,
-		Command: []string{"/bin/sh", "-c"},
-		Args:    []string{"/vservices"},
+		Command:         []string{"/bin/sh", "-c"},
+		Args:            []string{"/vservices"},
 		Env: []corev1.EnvVar{
 			{
 				Name:  "OUTPUT_PATH",
@@ -379,8 +378,8 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	})
 	for file, content := range filesMap {
 		initContainers = append(initContainers, corev1.Container{
-			Name:  "prepare-" + strings.ReplaceAll(file, ".", "-"),
-			Image: "busybox",
+			Name:    "prepare-" + strings.ReplaceAll(file, ".", "-"),
+			Image:   "busybox",
 			Command: []string{"/bin/sh", "-c"},
 			Args:    []string{content},
 			VolumeMounts: []corev1.VolumeMount{
@@ -396,9 +395,9 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 		})
 	}
 	initContainers = append(initContainers, corev1.Container{
-		Name:  "prepare-scripts",
-		Image: "busybox",
-		Command: []string{"/bin/sh","-c"},
+		Name:    "prepare-scripts",
+		Image:   "busybox",
+		Command: []string{"/bin/sh", "-c"},
 		Args:    []string{initCommandForScripts},
 		VolumeMounts: []corev1.VolumeMount{
 			{
@@ -410,7 +409,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 				MountPath: "/scripts",
 			},
 		},
-	},)
+	})
 
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -419,17 +418,17 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 			Labels: map[string]string{
 				"skycluster.io/managed-by": "skycluster",
 				"skycluster.io/component":  "optimization",
-				"ilptask": taskMeta.Name, 
+				"ilptask":                  taskMeta.Name,
 			},
 		},
 		Spec: corev1.PodSpec{
 			ServiceAccountName: "skycluster-sva",
 			RestartPolicy:      corev1.RestartPolicyNever,
-			InitContainers: 	 initContainers,
+			InitContainers:     initContainers,
 			Containers: []corev1.Container{
 				{
-					Name:  "ubuntu-python",
-					Image: "etesami/optimizer-engine:latest",
+					Name:            "ubuntu-python",
+					Image:           "etesami/optimizer-engine:latest",
 					ImagePullPolicy: corev1.PullAlways,
 					Command: []string{
 						"/bin/bash", "-c",
@@ -487,7 +486,9 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	}
 	
 	if !podFound {
-		if err := r.Create(context.TODO(), pod); err != nil { return "", err }
+		if err := r.Create(context.TODO(), pod); err != nil {
+			return "", err
+		}
 		r.Logger.Info("Created new optimization pod for ILPTask", "pod", pod.Name)
 	}
 
@@ -501,7 +502,6 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 		_ = r.Delete(context.TODO(), pod)
 		return "", errors.Wrapf(err, "failed to get ILPTask %s/%s to claim pod; deleted created pod", taskMeta.Namespace, taskMeta.Name)
 	}
-
 
 	if orig.Status.Optimization.PodRef.Name != "" {
 			// Another reconcile already claimed a pod; delete what we created and return the claimed pod
@@ -528,7 +528,7 @@ func (r *ILPTaskReconciler) getOptimizationConfigMaps() (map[string]string, erro
 	scripts := make(map[string]string)
 	var configMapList corev1.ConfigMapList
 	if err := r.List(context.TODO(), &configMapList, client.MatchingLabels{
-		"skycluster.io/managed-by":  "skycluster",
+		"skycluster.io/managed-by":        "skycluster",
 		hv1a1.SKYCLUSTER_CONFIGTYPE_LABEL: "optimization-scripts",
 	}); err != nil { return nil, err }
 
@@ -580,7 +580,7 @@ func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName 
 	pod := &corev1.PodList{}
 	if err := r.List(ctx, pod, client.MatchingLabels{
 		"skycluster.io/component": "optimization",
-		"ilptask": taskName,
+		"ilptask":                 taskName,
 	}); err != nil {
 		return err
 	}
@@ -597,10 +597,10 @@ func (r *ILPTaskReconciler) removeOptimizationPod(ctx context.Context, taskName 
 
 func generateTasksEdgesJson(df pv1a1.DataflowPolicy) (string, error) {
 	type taskEdgeStruct struct {
-		SrcTask          string `json:"srcTask,omitempty"`
-		DstTask          string `json:"dstTask,omitempty"`
-		Latency         string `json:"latency,omitempty"`
-		DataRate       string `json:"dataRate,omitempty"`
+		SrcTask  string `json:"srcTask,omitempty"`
+		DstTask  string `json:"dstTask,omitempty"`
+		Latency  string `json:"latency,omitempty"`
+		DataRate string `json:"dataRate,omitempty"`
 	}
 	var taskEdges []taskEdgeStruct
 	for _, df := range df.Spec.DataDependencies {

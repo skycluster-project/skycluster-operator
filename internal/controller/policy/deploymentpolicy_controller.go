@@ -58,9 +58,9 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		if client.IgnoreNotFound(err) == nil {
 			newILP := &cv1a1.ILPTask{
 				ObjectMeta: metav1.ObjectMeta{Name: dp.Name, Namespace: dp.Namespace},
-				Spec:       cv1a1.ILPTaskSpec{
+				Spec: cv1a1.ILPTaskSpec{
 					DeploymentPolicyRef: cv1a1.DeploymentPolicyRef{
-						LocalObjectReference: corev1.LocalObjectReference{Name: dp.Name},
+						LocalObjectReference:          corev1.LocalObjectReference{Name: dp.Name},
 						DeploymentPlanResourceVersion: dp.GetResourceVersion(), // to trigger ILPTask reconciliation
 					},
 				},
@@ -89,7 +89,6 @@ func (r *DeploymentPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 	}
 
-
 	if err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
 		r.Logger.Info("Conflict detected, retrying...")
 		curILP := &cv1a1.ILPTask{}
@@ -116,7 +115,7 @@ func (r *DeploymentPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *cv1a1.ILPTask, name string, ver string) error {
 	orig := ilp.DeepCopy()
 	ilp.Spec.DeploymentPolicyRef = cv1a1.DeploymentPolicyRef{
-		LocalObjectReference: corev1.LocalObjectReference{Name: name},
+		LocalObjectReference:          corev1.LocalObjectReference{Name: name},
 		DeploymentPlanResourceVersion: ver,
 	}
 	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {

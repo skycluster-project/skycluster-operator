@@ -31,7 +31,7 @@ import (
 type LatencyReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	Logger     logr.Logger
+	Logger logr.Logger
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=providerprofiles,verbs=get;list;watch;update;patch

@@ -69,7 +69,7 @@ func (d *InstanceTypeCustomDefaulter) Default(_ context.Context, obj runtime.Obj
 	if !ok {
 		return fmt.Errorf("expected an InstanceType object but got %T", obj)
 	}
-	
+
 	provider := &cv1a1.ProviderProfile{}
 	if err := d.client.Get(context.Background(), client.ObjectKey{Name: it.Spec.ProviderRef, Namespace: it.Namespace}, provider); err != nil {
 		d.logger.Info("unable to fetch ProviderProfile for image", "name", it.Spec.ProviderRef)

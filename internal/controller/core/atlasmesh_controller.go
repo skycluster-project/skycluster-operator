@@ -77,7 +77,6 @@ type priorityLabels struct {
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshes/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=atlasmeshes/finalizers,verbs=update
 
-
 func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciler started")
 
@@ -107,23 +106,33 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// Manifest are submitted through "Object" CRD from Crossplane
 
 	nsManifests, err := r.generateNamespaceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate namespace manifests") }
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate namespace manifests")
+	}
 	manifests = append(manifests, nsManifests...)
 
 	cdManifests, err := r.generateConfigDataManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate config data manifests") }
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate config data manifests")
+	}
 	manifests = append(manifests, cdManifests...)
 
 	depManifests, err := r.generateDeployManifests(atlasmesh.Namespace, atlasmesh.Spec.DeployMap, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests") }
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate application manifests")
+	}
 	manifests = append(manifests, depManifests...)
 
 	svcManifests, err := r.generateServiceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests") }
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate service manifests")
+	}
 	manifests = append(manifests, svcManifests...)
 
 	manifestsIstio, err := r.generateIstioConfig(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap, provCfgNameMap)
-	if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests") }
+	if err != nil {
+		return ctrl.Result{}, errors.Wrap(err, "failed to generate istio configuration manifests")
+	}
 	manifests = append(manifests, manifestsIstio...)
 
 	for _, depObj := range manifests {
@@ -131,7 +140,9 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		__obj := map[string]any{}
 		__obj["provider"] = depObj.ProviderRef.ConfigName
 		__obj["manifest"], err = depObj.ManifestAsMap()
-		if err != nil { return ctrl.Result{}, errors.Wrap(err, "failed to convert manifest to map for writing to file") }
+		if err != nil {
+			return ctrl.Result{}, errors.Wrap(err, "failed to convert manifest to map for writing to file")
+		}
 		utils.WriteMapToFile(&__obj, "/tmp/istio2/"+depObj.Name+".yaml")
 	}
 
@@ -150,11 +161,15 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		changed = true
 	} else {
 		for _, m := range newObjects {
-			oldObj, ok := oldMap[m.Name]; 
-			if !ok {changed = true; break}
+			oldObj, ok := oldMap[m.Name]
+			if !ok {
+				changed = true
+				break
+			}
 			if !reflect.DeepEqual(oldObj.Manifest, m.Manifest) {
 				r.Logger.Info("Manifest object spec differs.", "name", m.Name)
-				changed = true; break
+				changed = true
+				break
 			}
 		}
 	}
@@ -173,7 +188,9 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		r.Logger.Info("Approval given, creating manifest objects in the cluster.")
 		for _, m := range manifests {
 			obj, err := generateUnstructuredWrapper(m, &atlasmesh, r.Scheme)
-			if err != nil {return ctrl.Result{}, errors.Wrap(err, "failed to generate unstructured wrapper")}
+			if err != nil {
+				return ctrl.Result{}, errors.Wrap(err, "failed to generate unstructured wrapper")
+			}
 
 			// Write the objects to disk for debugging
 			utils.WriteObjectToFile(obj, "/tmp/manifests/app-"+obj.GetName()+".yaml")
@@ -206,9 +223,13 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						// We only expect the provider config and manifest to change
 						// TODO: handle provider config change later
 						current.Object["spec"].(map[string]any)["manifest"] = objManifest
-						if err := r.Update(ctx, current); err != nil { return ctrl.Result{}, errors.Wrap(err, "error updating manifest object") }
+						if err := r.Update(ctx, current); err != nil {
+							return ctrl.Result{}, errors.Wrap(err, "error updating manifest object")
 					}
-				} else { return ctrl.Result{}, errors.Wrap(err, "error creating manifest object") }
+					}
+				} else {
+					return ctrl.Result{}, errors.Wrap(err, "error creating manifest object")
+				}
 			}
 		}
 	}
@@ -223,12 +244,14 @@ func generateUnstructuredWrapper(skyObj *hv1a1.SkyService, owner *cv1a1.AtlasMes
 	obj.SetName(skyObj.Name)
 	obj.SetNamespace(owner.Namespace)
 	manifestMap, err := skyObj.ManifestAsMap()
-	if err != nil { return nil, errors.Wrap(err, "failed to convert manifest to map") }
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to convert manifest to map")
+	}
 	obj.Object["spec"] = map[string]any{
-		"manifest":     manifestMap,
+		"manifest":              manifestMap,
 		"compositeDeletePolicy": "Foreground",
 		"providerConfigRef": map[string]any{
-			"name":      skyObj.ProviderRef.ConfigName,
+			"name": skyObj.ProviderRef.ConfigName,
 		},
 	}
 	obj.SetGroupVersionKind(schema.GroupVersionKind{
@@ -335,7 +358,9 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 			deploy := &appsv1.Deployment{}
 			if err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns, Name: deployItem.ComponentRef.Name,
-			}, deploy); err != nil {return nil, errors.Wrap(err, "error getting Deployment.")}
+			}, deploy); err != nil {
+				return nil, errors.Wrap(err, "error getting Deployment.")
+			}
 
 			// collect all providers used in the deployment plan
 			selectedProvNames = append(selectedProvNames, deployItem.ProviderRef.Name)
@@ -367,7 +392,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      cmObj.Name,
 					Namespace: cmObj.Namespace,
-					Labels:   labels,
+					Labels:    labels,
 				},
 				Data: cmObj.Data,
 			}
@@ -385,7 +410,9 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
-			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			if err != nil {
+				return nil, errors.Wrap(err, "error generating object wrapper.")
+			}
 			manifests = append(manifests, obj)
 		}
 	}
@@ -407,7 +434,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      secObj.Name,
 					Namespace: secObj.Namespace,
-					Labels:   labels,
+					Labels:    labels,
 				},
 				Data: secObj.Data,
 			}
@@ -425,7 +452,9 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
-			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			if err != nil {
+				return nil, errors.Wrap(err, "error generating object wrapper.")
+			}
 			manifests = append(manifests, obj)
 		}
 	}
@@ -448,7 +477,9 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			deploy := &appsv1.Deployment{}
 			if err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns, Name: deployItem.ComponentRef.Name,
-			}, deploy); err != nil {return nil, errors.Wrap(err, "error getting Deployment.")}
+			}, deploy); err != nil {
+				return nil, errors.Wrap(err, "error getting Deployment.")
+			}
 
 			// collect all providers used in the deployment plan
 			selectedProvNames = append(selectedProvNames, deployItem.ProviderRef.Name)
@@ -494,12 +525,14 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			// prepare namespace object
 			newNs := &corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: nsObj.Name,
+					Name:   nsObj.Name,
 					Labels: labels,
 				},
 			}
 			objMap, err := objToMap(newNs)
-			if err != nil {return nil, errors.Wrap(err, "error converting Namespace to map.")}
+			if err != nil {
+				return nil, errors.Wrap(err, "error converting Namespace to map.")
+			}
 	
 			objMap["kind"] = "Namespace"
 			objMap["apiVersion"] = "v1"
@@ -510,7 +543,9 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, "", objMap, provCfgNameMap[pName])
-			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			if err != nil {
+				return nil, errors.Wrap(err, "error generating object wrapper.")
+			}
 			manifests = append(manifests, obj)
 		}
 	}
@@ -537,7 +572,9 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 	if err := r.List(context.TODO(), selectedServices, client.MatchingLabels{
 		"skycluster.io/app-scope": "distributed",
 		"skycluster.io/app-id":    appId,
-	}); err != nil {return nil, errors.Wrap(err, "error listing Services.")}
+	}); err != nil {
+		return nil, errors.Wrap(err, "error listing Services.")
+	}
 
 	for _, svc := range selectedServices.Items {
 
@@ -547,7 +584,6 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 		}
 		labels["skycluster.io/managed-by"] = "skycluster"
 		labels["skycluster.io/service-name"] = svc.Name
-
 		
 		// selectedProvNames contains the list of provider names selected for deployments
 		// a service manifest must be created for each provider
@@ -555,7 +591,9 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 			// prepare service object
 			newSvc := deepCopyService(svc, true)
 			objMap, err := objToMap(newSvc)
-			if err != nil {return nil, errors.Wrap(err, "error converting service to map.")}
+			if err != nil {
+				return nil, errors.Wrap(err, "error converting service to map.")
+			}
 
 			objMap["kind"] = "Service"
 			objMap["apiVersion"] = "v1"
@@ -566,7 +604,9 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, newSvc.Namespace, objMap, provCfgNameMap[pName])
-			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			if err != nil {
+				return nil, errors.Wrap(err, "error generating object wrapper.")
+			}
 			manifests = append(manifests, obj)
 		}
 	}
@@ -595,7 +635,9 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			deploy := &appsv1.Deployment{}
 			if err := r.Get(context.TODO(), client.ObjectKey{
 				Namespace: ns, Name: deployItem.ComponentRef.Name,
-			}, deploy); err != nil {return nil, errors.Wrap(err, "error getting Deployment.")}
+			}, deploy); err != nil {
+				return nil, errors.Wrap(err, "error getting Deployment.")
+			}
 
 			// Create a replicated deployment with node selector, labels, annotations
 			// Discard all other fields that are not necessary
@@ -622,7 +664,7 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 				newDeploy.Spec.Template.ObjectMeta.Labels, 
 				map[string]string{
 					"skycluster.io/managed-by": "skycluster",
-					"skycluster.io/component": deployItemUniqName,
+					"skycluster.io/component":  deployItemUniqName,
 				},
 				allLabels,
 			)
@@ -633,7 +675,7 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			sort.Strings(keys)
 
 			// pod labels
-			newDeploy.Spec.Template.ObjectMeta.Labels = func () map[string]string {
+			newDeploy.Spec.Template.ObjectMeta.Labels = func() map[string]string {
 				sortedMap := make(map[string]string, len(lb))
 				for _, k := range keys {sortedMap[k] = lb[k]}
 				return sortedMap
@@ -643,13 +685,17 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			// } 
 
 			// deployment spec.selector
-			if newDeploy.Spec.Selector == nil {newDeploy.Spec.Selector = &metav1.LabelSelector{}}
-			if newDeploy.Spec.Selector.MatchLabels == nil {newDeploy.Spec.Selector.MatchLabels = make(map[string]string)}
+			if newDeploy.Spec.Selector == nil {
+				newDeploy.Spec.Selector = &metav1.LabelSelector{}
+			}
+			if newDeploy.Spec.Selector.MatchLabels == nil {
+				newDeploy.Spec.Selector.MatchLabels = make(map[string]string)
+			}
 
 			newDeploy.Spec.Selector.MatchLabels = lo.Assign(
 				newDeploy.Spec.Selector.MatchLabels,
 				map[string]string{
-					"skycluster.io/component": deployItemUniqName,
+					"skycluster.io/component":  deployItemUniqName,
 					"skycluster.io/managed-by": "skycluster",
 				},
 			)
@@ -658,14 +704,16 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			deplLabels := newDeploy.ObjectMeta.Labels
 			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels, 
 				map[string]string{
-					"skycluster.io/component": deployItemUniqName,
+					"skycluster.io/component":  deployItemUniqName,
 					"skycluster.io/managed-by": "skycluster",
 				},
 			) 
 			
 			// yamlObj, err := generateYAMLManifest(newDeploy)
 			objMap, err := objToMap(newDeploy)
-			if err != nil {return nil, errors.Wrap(err, "error converting Deployment to map.")}
+			if err != nil {
+				return nil, errors.Wrap(err, "error converting Deployment to map.")
+			}
 			
 			objMap["kind"] = "Deployment"
 			objMap["apiVersion"] = "apps/v1"
@@ -676,7 +724,9 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			name = name + "-" + rand
 
 			obj, err := generateObjectWrapper(name, newDeploy.Namespace, objMap, provCfgNameMap[deployItem.ProviderRef.Name])
-			if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+			if err != nil {
+				return nil, errors.Wrap(err, "error generating object wrapper.")
+			}
 
 			manifests = append(manifests, obj)
 		}
@@ -722,7 +772,6 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 	
 	// Within the destination rule, we define the failover priorities for each 
 	// route destination defined in the virtual service
-	
 	
 	// The labels in DestinationRule must match with the labels in the target pods
 	// The target pod that matches the largest number of labels is selected.
@@ -780,7 +829,6 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 	// Deployment Y:
 	//    failover-src-a-2: a-y
 	//    failover-src-b-2: b-y
-
 	
 	labels := make(map[string]*priorityLabels)
 
@@ -880,10 +928,10 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 		}
 		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
 			key:   bkKey,
-			value: ShortenLabelKey(fromName + "-" + bkName) + "-backup",
+			value: ShortenLabelKey(fromName+"-"+bkName) + "-backup",
 		})
 		// must add backup label to primary target (as all labels)
-		labels[toName].allLabels[bkKey] = ShortenLabelKey(fromName + "-" + bkName) + "-backup" // add to primary target
+		labels[toName].allLabels[bkKey] = ShortenLabelKey(fromName+"-"+bkName) + "-backup" // add to primary target
 
 		// backup only gets the primary target label and not the backup (hence it has fewer labels)
 		labels[bkName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
@@ -937,14 +985,18 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		dep := &appsv1.Deployment{}
 		if err := r.Get(context.TODO(), client.ObjectKey{
 			Namespace: ns, Name: to.ComponentRef.Name,
-		}, dep); err != nil {return nil, errors.Wrap(err, "error getting Deployment for edge target.")}
+		}, dep); err != nil {
+			return nil, errors.Wrap(err, "error getting Deployment for edge target.")
+		}
 
 		// find the service that matches the deployment labels
 		svcList := &corev1.ServiceList{}
 		if err := r.List(context.TODO(), svcList, client.MatchingLabels{
 			"skycluster.io/app-scope": "distributed",
 			"skycluster.io/app-id":    appId,
-		}); err != nil {return nil, errors.Wrap(err, "error listing Services for istio configuration.")}
+		}); err != nil {
+			return nil, errors.Wrap(err, "error listing Services for istio configuration.")
+		}
 
 		for _, svc := range svcList.Items {
 			if deploymentHasLabels(dep, svc.Spec.Selector) {
@@ -964,7 +1016,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 								},
 							},
 							Spec: istiov1.VirtualService{
-								Hosts:    []string{svc.Name},
+								Hosts: []string{svc.Name},
 							},
 						},
 					}
@@ -1001,7 +1053,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 					Route: []*istiov1.HTTPRouteDestination{
 						{
 							Destination: &istiov1.Destination{
-								Host: svc.Name,
+								Host:   svc.Name,
 								Subset: from.ComponentRef.Name,
 							},
 						},
@@ -1011,8 +1063,8 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 				vs.VirtualService.Spec.Http = append(vs.VirtualService.Spec.Http, http)
 				
 				labelAndKeys := make([]string, 0)
-				for _, kv := range labels[fromName].sourceLabels[to.ComponentRef.Name + "-" + to.ProviderRef.Name] {
-					labelAndKeys = append(labelAndKeys, kv.key + "=" + kv.value)
+				for _, kv := range labels[fromName].sourceLabels[to.ComponentRef.Name+"-"+to.ProviderRef.Name] {
+					labelAndKeys = append(labelAndKeys, kv.key+"="+kv.value)
 				}
 
 				// Now per each source deployment (from), we add a subset to the destination rule
@@ -1034,9 +1086,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 							},
 						},
 						OutlierDetection: &istiov1.OutlierDetection{
-							ConsecutiveErrors:	5,
-							Interval: 				 &duration.Duration{Seconds: 5},
-							BaseEjectionTime: &duration.Duration{Seconds: 30},
+							ConsecutiveErrors:  5,
+							Interval:           &duration.Duration{Seconds: 5},
+							BaseEjectionTime:   &duration.Duration{Seconds: 30},
 							MaxEjectionPercent: 30,
 						},
 					},
@@ -1052,7 +1104,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 
 	for _, vs := range virtualSvcs {
 		objMap, err := objToMap(vs.VirtualService)
-		if err != nil {return nil, errors.Wrap(err, "error converting VirtualService to map.")}
+		if err != nil {
+			return nil, errors.Wrap(err, "error converting VirtualService to map.")
+		}
 		
 		objMap["kind"] = "VirtualService"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
@@ -1063,14 +1117,18 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		name = name + "-" + rand
 
 		obj, err := generateObjectWrapper(name, vs.VirtualService.Namespace, objMap, provCfgNameMap[vs.ProviderCfgName])
-		if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+		if err != nil {
+			return nil, errors.Wrap(err, "error generating object wrapper.")
+		}
 
 		manifests = append(manifests, obj)
 	}
 
 	for _, dr := range dstRules {
 		objMap, err := objToMap(dr.DstRule)
-		if err != nil {return nil, errors.Wrap(err, "error converting DestinationRule to map.")}
+		if err != nil {
+			return nil, errors.Wrap(err, "error converting DestinationRule to map.")
+		}
 		
 		objMap["kind"] = "DestinationRule"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
@@ -1081,7 +1139,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		name = name + "-" + rand
 
 		obj, err := generateObjectWrapper(name, dr.DstRule.Namespace, objMap, provCfgNameMap[dr.ProviderCfgName])
-		if err != nil { return nil, errors.Wrap(err, "error generating object wrapper.") }
+		if err != nil {
+			return nil, errors.Wrap(err, "error generating object wrapper.")
+		}
 
 		manifests = append(manifests, obj)
 	}
@@ -1094,9 +1154,10 @@ func generateObjectWrapper(name string, ns string, objAny map[string]any, provid
 	obj.Name = name
 	if ns != "" {obj.Namespace = ns}
 	b, err := json.Marshal(objAny)
-	if err != nil { return nil, errors.Wrap(err, "failed to marshal objectAny to JSON") }
-	// obj.Manifest = runtime.RawExtension{Raw: b}
-	obj.Manifest = string(b)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal objectAny to JSON")
+	}
+	obj.Manifest = &runtime.RawExtension{Raw: b}
 	obj.ProviderRef = hv1a1.ProviderRefSpec{
 		ConfigName: providerConfigName,
 	}

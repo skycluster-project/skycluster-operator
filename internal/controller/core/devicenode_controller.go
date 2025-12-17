@@ -43,7 +43,7 @@ import (
 type DeviceNodeReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
-	Logger  logr.Logger
+	Logger logr.Logger
 }
 
 // +kubebuilder:rbac:groups=core.skycluster.io,resources=devicenodes,verbs=get;list;watch;create;update;patch;delete
@@ -73,8 +73,10 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	}
 
 	// if zone is not supported, return
-	pZones := lo.Map(provider.Spec.Zones, func(z cv1a1.ZoneSpec, _ int) string {return z.Name})
-	if !lo.Contains(pZones, strings.ToLower(dn.Spec.DeviceSpec.Zone)) {return ctrl.Result{}, nil}
+	pZones := lo.Map(provider.Spec.Zones, func(z cv1a1.ZoneSpec, _ int) string { return z.Name })
+	if !lo.Contains(pZones, strings.ToLower(dn.Spec.DeviceSpec.Zone)) {
+		return ctrl.Result{}, nil
+	}
 
 	dn.Status.Region = provider.Spec.Region
 	dn.Status.Zone = dn.Spec.DeviceSpec.Zone
@@ -115,7 +117,6 @@ func (r *DeviceNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-
 func (r *DeviceNodeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, req ctrl.Request, dnSpec *cv1a1.DeviceZoneSpec) error {
 	// early return if both are nil
 	if dnSpec == nil { 
@@ -145,7 +146,6 @@ func (r *DeviceNodeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.Pr
 	return nil
 }
 
-
 func (r *DeviceNodeReconciler) createOrUpdateConfigMapData(ctx context.Context, req ctrl.Request, cm *corev1.ConfigMap, dnSpec *cv1a1.DeviceZoneSpec) (bool, error) {
 
 	if dnSpec == nil || dnSpec.Type == "" {
@@ -172,7 +172,7 @@ func (r *DeviceNodeReconciler) createOrUpdateConfigMapData(ctx context.Context, 
 
 	// If identical, no update needed
 	if old, exists := dt[req.Name]; exists && reflect.DeepEqual(old, *dnSpec) {
-		return false,nil
+		return false, nil
 	}
 
 	// Set/replace entry

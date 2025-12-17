@@ -80,11 +80,11 @@ Conditions: [Ready, JobRunning, ResyncRequired]
 - Set static status: st.region
 - If not a cloud provider, copy spec to status, [Ready Y] and trigger ProviderProfile controller
 
-- Changes Detected && JobRunning: [conflict] set [N Ready, Y ResyncRequired], requeue 
-- ResyncRequired: 
+- Changes Detected && JobRunning: [conflict] set [N Ready, Y ResyncRequired], requeue
+- ResyncRequired:
     create a new Job, requeue, [N Ready, Y JobRunning, N ResyncRequired]
-- JobRunning: 
-    - not finished: requeue, 
+- JobRunning:
+    - not finished: requeue,
 		- failed: return
 		- finished:	[N JobRunning, N ResyncRequired]
 			- Failed: return error
@@ -411,11 +411,11 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 						},
 					}},
 					Containers: []corev1.Container{{
-						Name:    "harvest",
-						Image:   "busybox",
+						Name:            "harvest",
+						Image:           "busybox",
 						ImagePullPolicy: corev1.PullIfNotPresent,
-						Command: []string{"/bin/sh", "-c"},
-						Args:    []string{"cat " + outputPath},
+						Command:         []string{"/bin/sh", "-c"},
+						Args:            []string{"cat " + outputPath},
 						VolumeMounts: []corev1.VolumeMount{
 							{Name: "work", MountPath: "/data"},
 						},

@@ -56,7 +56,7 @@ func (v *DeploymentPolicyCustomValidator) ValidateCreate(_ context.Context, obj 
 	if !ok {
 		return nil, fmt.Errorf("expected a DeploymentPolicy object but got %T", obj)
 	}
-	
+
 	labels := []string{"skycluster.io/app-id", "skycluster.io/app-scope"}
 	if dp.Labels == nil {
 		return nil, fmt.Errorf("missing required labels on DeploymentPolicy '%s': %v", dp.GetName(), labels)
@@ -77,7 +77,7 @@ func (v *DeploymentPolicyCustomValidator) ValidateCreate(_ context.Context, obj 
 				for _, sel := range vsc.AnyOf {
 					if strings.EqualFold(sel.Kind, "ComputeProfile") {
 						computeCount++
-						// as long as an alternative set contains a ComputeProfile, 
+						// as long as an alternative set contains a ComputeProfile,
 						// we are done with this set, because we only need to count how many
 						// alternative sets contain ComputeProfile selectors
 						// and if there is more than one, we will raise an error
@@ -101,7 +101,7 @@ func (v *DeploymentPolicyCustomValidator) ValidateUpdate(_ context.Context, oldO
 	if !ok {
 		return nil, fmt.Errorf("expected a DeploymentPolicy object for the newObj but got %T", newObj)
 	}
-	
+
 	labels := []string{"skycluster.io/app-id", "skycluster.io/app-scope"}
 	if dp.Labels == nil {
 		return nil, fmt.Errorf("missing required labels on DeploymentPolicy '%s': %v", dp.GetName(), labels)
@@ -122,7 +122,7 @@ func (v *DeploymentPolicyCustomValidator) ValidateUpdate(_ context.Context, oldO
 				for _, sel := range vsc.AnyOf {
 					if strings.EqualFold(sel.Kind, "ComputeProfile") {
 						computeCount++
-						// as long as an alternative set contains a ComputeProfile, 
+						// as long as an alternative set contains a ComputeProfile,
 						// we are done with this set, because we only need to count how many
 						// alternative sets contain ComputeProfile selectors
 						// and if there is more than one, we will raise an error

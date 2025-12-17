@@ -41,7 +41,7 @@ func SetupXInstanceWebhookWithManager(mgr ctrl.Manager) error {
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen from generating DeepCopy methods,
 // as it is used only for temporary operations and does not need to be deeply copied.
-type XInstanceCustomDefaulter struct {}
+type XInstanceCustomDefaulter struct{}
 
 var _ webhook.CustomDefaulter = &XInstanceCustomDefaulter{}
 

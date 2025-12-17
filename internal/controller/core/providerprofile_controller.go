@@ -315,7 +315,7 @@ func (r *ProviderProfileReconciler) ensureInstanceTypes(ctx context.Context, pf 
 		return nil, fmt.Errorf("unable to fetch InstanceTypes for ProviderProfile %s: %w", pf.Name, err)
 	}
 
-	it := &cv1a1.InstanceType {
+	it := &cv1a1.InstanceType{
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:    pf.Namespace,
 			GenerateName: fmt.Sprintf("%s-", pf.Name),
@@ -357,8 +357,8 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile)
 		pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
 			Type:        cost.Type,
 			Destination: cost.Destination,
-			Unit:       cost.Unit,
-			Tiers:      cost.Tiers,
+			Unit:        cost.Unit,
+			Tiers:       cost.Tiers,
 		})
 	}
 	
@@ -369,64 +369,64 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile)
 		switch strings.ToLower(plt) {
 		case "aws":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "internet",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"}},
+				Type:  "internet",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-zone",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+				Type:  "inter-zone",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-region",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
+				Type:  "inter-region",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
 			})
 		case "azure":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "internet",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.087"}},
+				Type:  "internet",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.087"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-zone",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+				Type:  "inter-zone",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-region",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
+				Type:  "inter-region",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
 			})
 		case "gcp":
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "internet",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.12"}},
+				Type:  "internet",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.12"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-zone",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
+				Type:  "inter-zone",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"}},
 			})
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "inter-region",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
+				Type:  "inter-region",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"}},
 			})
 		default:
 			pf.Status.EgressCostSpecs = append(pf.Status.EgressCostSpecs, cv1a1.EgressCostSpec{
-				Type:       "internet",
-				Unit:       "GB",
-				Tiers:      []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.0"}},
+				Type:  "internet",
+				Unit:  "GB",
+				Tiers: []cv1a1.EgressTier{{FromGB: 0, ToGB: 1000, PricePerGB: "0.0"}},
 			})
 		}
 	}
 	return nil
 }
 
-func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1a1.ProviderProfile) (error) {
+func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1a1.ProviderProfile) error {
 	// Create Latency objects between this provider and all other providers if not exists
 	var provList cv1a1.ProviderProfileList
 	if err := r.List(ctx, &provList, client.InNamespace(pf.Namespace)); err != nil {
@@ -459,14 +459,14 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 					Namespace: pf.Namespace,
 					Name:      latName,
 					Labels: map[string]string{
-						"skycluster.io/provider-pair": utils.SanitizeName(a) + "-" + utils.SanitizeName(b),
+						"skycluster.io/provider-pair":     utils.SanitizeName(a) + "-" + utils.SanitizeName(b),
 						"skycluster.io/provider-platform": pf.Spec.Platform,
-						"skycluster.io/provider-region": pf.Spec.Region,
+						"skycluster.io/provider-region":   pf.Spec.Region,
 					},
 				},
 				Spec: cv1a1.LatencySpec{
-					ProviderRefA:  corev1.LocalObjectReference{Name: a},
-					ProviderRefB:  corev1.LocalObjectReference{Name: b},
+					ProviderRefA:   corev1.LocalObjectReference{Name: a},
+					ProviderRefB:   corev1.LocalObjectReference{Name: b},
 					FixedLatencyMs: fmt.Sprintf("%.2f", fixedMs),
 				},
 			}
@@ -517,19 +517,19 @@ func (r *ProviderProfileReconciler) ensureImages(ctx context.Context, pf *cv1a1.
 			Images: []cv1a1.ImageOffering{
 				{
 					NameLabel: "ubuntu-20.04",
-					Pattern: "*hvm-ssd*/ubuntu-focal-20.04-amd64-server*",
+					Pattern:   "*hvm-ssd*/ubuntu-focal-20.04-amd64-server*",
 				},
 				{
 					NameLabel: "ubuntu-22.04",
-					Pattern: "*hvm-ssd*/ubuntu-jammy-22.04-amd64-server*",
+					Pattern:   "*hvm-ssd*/ubuntu-jammy-22.04-amd64-server*",
 				},
 				{
 					NameLabel: "ubuntu-24.04",
-					Pattern: "*hvm-ssd*/ubuntu-noble-24.04-amd64-server*",
+					Pattern:   "*hvm-ssd*/ubuntu-noble-24.04-amd64-server*",
 				},
 				{
 					NameLabel: "ubuntu-24.04-gpu",
-					Pattern: "*skypilot-aws-gpu-ubuntu-241104*",
+					Pattern:   "*skypilot-aws-gpu-ubuntu-241104*",
 				},
 			},
 		},
@@ -748,13 +748,13 @@ func (r *ProviderProfileReconciler) updateConfigMap(ctx context.Context, pf *cv1
 	if lo.Contains([]string{"aws", "azure", "gcp"}, strings.ToLower(pf.Spec.Platform)) {
 		managedClusters := []map[string]any{
 			{
-				"nameLabel":  "ManagedKubernetes",
-				"name":    lo.If(pf.Spec.Platform == "aws", "EKS").ElseIf(pf.Spec.Platform == "gcp", "GKE").Else("AKS"),
-				"price":   lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
+				"nameLabel": "ManagedKubernetes",
+				"name":      lo.If(pf.Spec.Platform == "aws", "EKS").ElseIf(pf.Spec.Platform == "gcp", "GKE").Else("AKS"),
+				"price":     lo.If(pf.Spec.Platform == "aws", "0.10").ElseIf(pf.Spec.Platform == "gcp", "0.15").Else("0.10"),
 				"overhead": map[string]any{
-					"instanceType":  lo.If(pf.Spec.Platform == "aws", "m5.xlarge").ElseIf(pf.Spec.Platform == "gcp", "e2-standard-2").Else("Standard_D2s_v3"),
-					"cost": lo.If(pf.Spec.Platform == "aws", "0.096").ElseIf(pf.Spec.Platform == "gcp", "0.067").Else("0.096"),
-					"count": 1,
+					"instanceType": lo.If(pf.Spec.Platform == "aws", "m5.xlarge").ElseIf(pf.Spec.Platform == "gcp", "e2-standard-2").Else("Standard_D2s_v3"),
+					"cost":         lo.If(pf.Spec.Platform == "aws", "0.096").ElseIf(pf.Spec.Platform == "gcp", "0.067").Else("0.096"),
+					"count":        1,
 				},
 			},
 		}

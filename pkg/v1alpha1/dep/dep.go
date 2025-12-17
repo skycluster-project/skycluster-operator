@@ -1,7 +1,6 @@
 // +k8s:deepcopy-gen=package
 package dep
 
-
 type Dependency struct {
 	NameRef   string `json:"name"`
 	Kind      string `json:"kind"`

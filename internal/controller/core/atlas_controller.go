@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -37,9 +38,8 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	svccv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
-
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	svccv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
 
@@ -94,7 +94,7 @@ func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "error creating manifests.")
 	}
-	
+
 	if atlas.Spec.Approve {
 		for _, xrd := range manifests {
 			var obj map[string]any
@@ -152,8 +152,8 @@ func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		if err := r.Status().Update(ctx, atlas); err != nil {
 			return ctrl.Result{}, errors.Wrap(err, "error updating Atlas status")
 		}
-  }
-	
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -171,7 +171,7 @@ func (r *AtlasReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.Atlas) ([]hv1a1.SkyService, []hv1a1.SkyService, error) {
 	deployMap := atlas.Spec.DeployMap
 	manifests := make([]hv1a1.SkyService, 0)
-	
+
 	// ######### Providers
 	// Each deployment comes with component info (e.g. kind and apiVersion and name)
 	// as well as the provider info (e.g. name, region, zone, type) that it should be deployed on
@@ -227,7 +227,7 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	// 	if _, ok := requiredVirtSvcs[pName]; !ok {
 	// 		requiredVirtSvcs[pName] = make([]pv1a1.VirtualServiceSelector, 0)
 	// 	}
-		
+
 	// 	// find required cheapest virtual service for this component per each alternative set
 	// 	// (requested ComputeProfile)
 	// 	computeProfiles, err := r.findReqComputeProfile(ns, skySrvc, *dpPolicy)
@@ -243,14 +243,14 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	// switch dpPolicy.Spec.ExecutionEnvironment {
 	// case "Kubernetes" :
 	// 	// when the execution environment is Kubernetes, we assume that all involved providers
-	// 	// will be used to create a (managed) Kubernetes cluster. Therefore, a combination of 
+	// 	// will be used to create a (managed) Kubernetes cluster. Therefore, a combination of
 	// 	// providers with Kubernetes clusters and without Kubernetes clusters is not supported.
 	// 	// The reason is that we aim for running application, an we either support running it
 	// 	// on a Kubernetes cluster (managed by us), or within VMs, not both at the same time.
 	// 	// User is able to manually provision VMs along with managed Kubernetes if needed.
 	// 	// We filter all ComputeProfile (flavors) and use them to create worker pools in the cluster
-		
-	// 	// for each provider, generate Kubernetes manifests, 
+
+	// 	// for each provider, generate Kubernetes manifests,
 	// 	//   with node groups consolidated from all required virtual services for that provider
 	// 	kubernetesManifests, err := r.generateMgmdK8sManifests(appId, requiredVirtSvcs, provToMetadataIdx)
 	// 	if err != nil {
@@ -272,11 +272,11 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	// 		// }
 	// 	// }
 	// 		// requiredVirtSvcs[pName] = lo.UniqBy(requiredVirtSvcs[pName], func(v pv1a1.VirtualServiceSelector) string {
-		
+
 	// default:
 	// 	return nil, nil, errors.New("unsupported execution environment: " + dpPolicy.Spec.ExecutionEnvironment)
 	// }
-	
+
 	// Handle ManagedKubernetes virtual services
 	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
 	// r.Logger.Info("Generating SkyK8SCluster manifests.")
@@ -316,7 +316,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 	// a map from platform to map[providerName]index in metadata list
 	// aws -> { us-east-1a: 0, us-east-1b: 1 }
 	indexedSortedProviders := buildIndexMap(uniqueProviders)
-	
+
 	// Now we have all unique providers
 	// We can now generate the manifests for each provider
 	// we use settings corresponding to each provider stored in a configmap (ip ranges, etc.)
@@ -353,7 +353,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 		// prepare static values and subnets
 		idx := indexedSortedProviders[p.Platform][pName]
 		cidr := provMetadata[p.Platform][idx].VPCCIDR
-		zoneCount := len(lo.Filter(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec, _ int) bool { 
+		zoneCount := len(lo.Filter(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec, _ int) bool {
 			return z.Enabled
 		}))
 		subnets, err := helper.Subnets(cidr, zoneCount)
@@ -393,10 +393,10 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 					}
 					if p.Platform == "baremetal" && providerProfiles[pName].Spec.Zones[i].Type == "public" {
 						subnet["default"] = true
-					} 
+					}
 					if p.Platform == "openstack" {
 						subnet["default"] = true
-					} 
+					}
 					subnetList = append(subnetList, subnet)
 				}
 				return subnetList
@@ -440,7 +440,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			objAnnt["skycluster.io/external-resources"] = "[{\"apiVersion\":\"identity.openstack.crossplane.io/v1alpha1\",\"kind\":\"ProjectV3\",\"id\":\"1e1c724728544ec2a9058303ddc8f30b\"}]"
 			obj.SetAnnotations(objAnnt)
 		}
-		
+
 		jsonBytes, err := generateJsonManifest(obj)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating JSON manifest.")
@@ -490,7 +490,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 		if len(computeProfileList) == 0 {
 			return nil, errors.New("No ComputeProfile found for component: " + cmpnt.ComponentRef.Name)
 		}
-		// computeProfileList contains a list of possible ComputeProfiles 
+		// computeProfileList contains a list of possible ComputeProfiles
 		// that satisfy the request. In some cases such as spot instances,
 		// a selected ComputeProfile may not be available at the time of provisioning.
 		// In such cases, we create multiple XInstance objects with different
@@ -586,6 +586,13 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 	manifests := map[string]hv1a1.SkyService{}
 	for _, skySvc := range deployMap.Component {
 
+		if !strings.Contains(skySvc.ComponentRef.Kind, "XNodeGroup") {
+			continue
+		}
+
+		// for each node group, we create a XKube object
+		// this is a Kubernetes cluster in selected provider(s)
+
 		pName := skySvc.ProviderRef.Name
 		pp := provProfiles[pName]
 		idx := provToIdx[pp.Spec.Platform][pName]
@@ -616,43 +623,55 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
-		manifests[pName] = hv1a1.SkyService{
-			ComponentRef: hv1a1.ComponentRef {
-				APIVersion: xrdObj.GetAPIVersion(),
-				Kind:       xrdObj.GetKind(),
-				Namespace:  xrdObj.GetNamespace(),
-				Name:       xrdObj.GetName(),
-			},
-			Manifest: &runtime.RawExtension{Raw: jsonBytes},
-			ProviderRef: hv1a1.ProviderRefSpec{
-				Name:   pName,
-				Type: znPrimary.Type,
-				Platform: pp.Spec.Platform,
-				Region: pp.Spec.Region,
-				RegionAlias: pp.Spec.RegionAlias,
-				Zone:   znPrimary.Name,
-			},
+		// multiple XNodeGroup objects can be used for the same XKube object
+		if _, ok := manifests[pName]; !ok {
+			manifests[pName] = hv1a1.SkyService{
+				ComponentRef: hv1a1.ComponentRef{
+					APIVersion: xrdObj.GetAPIVersion(),
+					Kind:       xrdObj.GetKind(),
+					Namespace:  xrdObj.GetNamespace(),
+					Name:       xrdObj.GetName(),
+				},
+				Manifest: &runtime.RawExtension{Raw: jsonBytes},
+				ProviderRef: hv1a1.ProviderRefSpec{
+					Name:        pName,
+					Type:        znPrimary.Type,
+					Platform:    pp.Spec.Platform,
+					Region:      pp.Spec.Region,
+					RegionAlias: pp.Spec.RegionAlias,
+					Zone:        znPrimary.Name,
+				},
+			}
+		} else {
+			// raw, err := appendXNodeGroupManifest(manifests[pName].Manifest, skySvc.Manifest)
+			// if err != nil {return nil, errors.Wrap(err, "Error appending XNodeGroup manifest.")}
+			// svc := manifests[pName]
+			// svc.Manifest = raw
+			// manifests[pName] = svc
+			r.Logger.Info("WARNING: XNodeGroup manifest already exists for provider", "provider", pName)
 		}
 	}
-	
+
 	return manifests, nil
 }
 
 // buildK8SSpec builds the spec map for XKube manifests
 func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtension, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) map[string]any {
 	var k8sSpec map[string]any
-	if err := json.Unmarshal(manifest.Raw, &k8sSpec); err != nil {return nil}
+	if err := json.Unmarshal(manifest.Raw, &k8sSpec); err != nil {
+		return nil
+	}
 
 	spec := map[string]any{
 		"applicationId": appId,
-		"serviceCidr":  k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
-		"nodeCidr": func () string {
+		"serviceCidr":   k8sMetadata[pp.Spec.Platform][idx].ServiceCidr,
+		"nodeCidr": func() string {
 			if pp.Spec.Platform == "gcp" {
 				return k8sMetadata[pp.Spec.Platform][idx].NodeCidr
 			}
 			return ""
 		}(),
-		"podCidr": func () map[string]any {
+		"podCidr": func() map[string]any {
 			fields := make(map[string]any)
 			if pp.Spec.Platform == "aws" {
 				fields["public"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Public
@@ -661,7 +680,7 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 			fields["cidr"] = k8sMetadata[pp.Spec.Platform][idx].PodCidr.Cidr
 			return fields
 		}(),
-		"nodeGroups": func () []map[string]any {
+		"nodeGroups": func() []map[string]any {
 			fields := make([]map[string]any, 0)
 			if pp.Spec.Platform == "aws" {
 				// default node group
@@ -692,13 +711,13 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 				// workers only
 				// manually limit this to prevent charging too much
 				f := make(map[string]any)
-					f["nodeCount"] = 3
-					f["instanceType"] = "2vCPU-4GB"
-					f["publicAccess"] = false
-					f["autoScaling"] = map[string]any{
-						"enabled": true,
-						"minSize": 1,
-						"maxSize": 8,
+				f["nodeCount"] = 3
+				f["instanceType"] = "2vCPU-4GB"
+				f["publicAccess"] = false
+				f["autoScaling"] = map[string]any{
+					"enabled": true,
+					"minSize": 1,
+					"maxSize": 8,
 				}
 				fields = append(fields, f)
 				// for _, vs := range uniqueProfiles {
@@ -716,7 +735,7 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 			}
 			return fields
 		}(),
-		"principal": func () map[string]any {
+		"principal": func() map[string]any {
 			fields := make(map[string]any)
 			if pp.Spec.Platform == "aws" {
 				fields["type"] = "servicePrincipal"
@@ -724,14 +743,14 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 			}
 			return fields
 		}(),
-		"providerRef": func () map[string]any {
+		"providerRef": func() map[string]any {
 			fields := map[string]any{
 				"platform": pp.Spec.Platform,
-				"region": pp.Spec.Region,
+				"region":   pp.Spec.Region,
 			}
 			if pp.Spec.Platform == "aws" && znSecondary != nil {
 				fields["zones"] = map[string]string{
-					"primary": znPrimary.Name,
+					"primary":   znPrimary.Name,
 					"secondary": znSecondary.Name,
 				}
 			}
@@ -748,7 +767,7 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 
 // only one mesh per application
 func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1a1.SkyService) (*hv1a1.SkyService, error) {
-	
+
 	clusterNames := make([]string, 0)
 	for _, xkube := range xKubeList {
 		kName := xkube.ComponentRef.Name
@@ -759,7 +778,7 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 	sort.SliceStable(clusterNames, func(i, j int) bool {
 		return clusterNames[i] < clusterNames[j]
 	})
-	
+
 	// we need to create a XKube object
 	xrdObj := &unstructured.Unstructured{}
 	xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -795,5 +814,5 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 		},
 		Manifest: &runtime.RawExtension{Raw: jsonBytes},
 	}, nil
-	
+
 }

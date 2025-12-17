@@ -108,7 +108,9 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 			}
 		}
 		if needsPatch {
-			if err := r.Update(ctx, existing); err != nil { return err }
+			if err := r.Update(ctx, existing); err != nil {
+				return err
+			}
 		}
 		return nil
 	} else if !apierrors.IsNotFound(err) {
@@ -123,7 +125,7 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 			Namespace: owner.Namespace,
 			Labels: map[string]string{
 				"skycluster.io/app-id":    appID,
-				"skycluster.io/app-scope":  "distributed",
+				"skycluster.io/app-scope": "distributed",
 			},
 		},
 	}
@@ -133,13 +135,15 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 	for i, nodeGroup := range owner.Spec.NodeGroups {
 		// Create VirtualServiceConstraints for each instance type in the node group
 		virtualServiceConstraints := []pv1a1.VirtualServiceConstraint{}
-		
+
 		// Build AnyOf selectors for all instance types in this node group
 		anyOfSelectors := []pv1a1.VirtualServiceSelector{}
 		for _, instanceType := range nodeGroup.InstanceTypes {
 			flavorJson, err := json.Marshal(instanceType)
-			if err != nil { return err }
-			
+			if err != nil {
+				return err
+			}
+
 			r.Logger.Info("XKube node group instance type", "nodeGroup", i, "flavorSpec", string(flavorJson))
 
 			anyOfSelectors = append(anyOfSelectors, pv1a1.VirtualServiceSelector{
@@ -191,7 +195,9 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 
 	if err := r.Create(ctx, dp); err != nil {
 		// If already exists concurrently, that's fine
-		if apierrors.IsAlreadyExists(err) { return nil }
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
 		return err
 	}
 	r.Logger.Info("Created DeploymentPolicy for XKube", "deploymentPolicy", name, "xkube", owner.Name)
@@ -237,13 +243,13 @@ func (r *XKubeReconciler) ensureDataflowPolicy(ctx context.Context, owner *svcv1
 			Name:      name,
 			Namespace: owner.Namespace,
 			Labels: map[string]string{
-				"skycluster.io/app-id":   appID,
+				"skycluster.io/app-id":    appID,
 				"skycluster.io/app-scope": "distributed",
 			},
 		},
 		Spec: pv1a1.DataflowPolicySpec{
 			// For a multi-component app we leave DataDependencies empty.
-			DataDependencies: func () []pv1a1.DataDapendency {
+			DataDependencies: func() []pv1a1.DataDapendency {
 				DataDependencies := []pv1a1.DataDapendency{}
 				return DataDependencies
 			}(),
@@ -255,7 +261,9 @@ func (r *XKubeReconciler) ensureDataflowPolicy(ctx context.Context, owner *svcv1
 	}
 
 	if err := r.Create(ctx, df); err != nil {
-		if apierrors.IsAlreadyExists(err) { return nil }
+		if apierrors.IsAlreadyExists(err) {
+			return nil
+		}
 		return err
 	}
 	r.Logger.Info("Created DataflowPolicy for XKube", "dataflowPolicy", name, "xkube", owner.Name)

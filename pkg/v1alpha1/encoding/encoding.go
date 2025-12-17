@@ -20,7 +20,7 @@ func EncodeJSONStringToYAML(jsonString string) (string, error) {
 }
 
 func EncodeObjectToYAML(obj interface{}) (string, error) {
-	if obj == nil{
+	if obj == nil {
 		return "", errors.New("object to encode cannot be nil")
 	}
 	data, err := yaml.Marshal(obj)
@@ -29,4 +29,3 @@ func EncodeObjectToYAML(obj interface{}) (string, error) {
 	}
 	return string(data), nil
 }
-

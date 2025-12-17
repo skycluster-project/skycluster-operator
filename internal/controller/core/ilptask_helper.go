@@ -24,17 +24,17 @@ import (
 )
 
 type computeProfileService struct {
-	name    string
-	cpu     float64
-	ram     float64
-	usedCPU float64
-	usedRAM float64
-	gpuEnabled bool
-	gpuModel   string
-	gpuCount	 string
-	gpuMem     string
+	name            string
+	cpu             float64
+	ram             float64
+	usedCPU         float64
+	usedRAM         float64
+	gpuEnabled      bool
+	gpuModel        string
+	gpuCount        string
+	gpuMem          string
 	gpuManufacturer string
-	deployCost     float64
+	deployCost      float64
 }
 
 type flavorPattern struct {
@@ -43,36 +43,36 @@ type flavorPattern struct {
 	ram       float64
 	ramAny    bool
 	gpuCount  int    // 0 = not specified
-	gpuModel   string // empty = not specified
+	gpuModel  string // empty = not specified
 	gpuMem    float64
 	gpuMemAny bool
 }
 
 type virtualSvcStruct struct {
-	Name 		    string `json:"name,omitempty"`
-	Spec        *runtime.RawExtension `json:"spec,omitempty"`
-	ApiVersion  string `json:"apiVersion,omitempty"`
-	Kind        string `json:"kind,omitempty"`
-	Count       string `json:"count,omitempty"`
-	Price       float64 `json:"price,omitempty"`
+	Name       string                `json:"name,omitempty"`
+	Spec       *runtime.RawExtension `json:"spec,omitempty"`
+	ApiVersion string                `json:"apiVersion,omitempty"`
+	Kind       string                `json:"kind,omitempty"`
+	Count      string                `json:"count,omitempty"`
+	Price      float64               `json:"price,omitempty"`
 }
 
 type locStruct struct {
-	Name 	 string `json:"name,omitempty"`
-	PType 	string `json:"pType,omitempty"`
+	Name        string `json:"name,omitempty"`
+	PType       string `json:"pType,omitempty"`
 	RegionAlias string `json:"regionAlias,omitempty"`
-	Region 	string `json:"region,omitempty"`
-	Platform 	string `json:"platform,omitempty"`
+	Region      string `json:"region,omitempty"`
+	Platform    string `json:"platform,omitempty"`
 }
 
 type optTaskStruct struct {
-	Task               string         `json:"task"`
-	ApiVersion         string          `json:"apiVersion"`
-	Kind               string          `json:"kind"`
-	PermittedLocations []locStruct     `json:"permittedLocations"`
-	RequiredLocations  [][]locStruct   `json:"requiredLocations"`
-	RequestedVServices [][]virtualSvcStruct  `json:"requestedVServices"`
-	MaxReplicas        string          `json:"maxReplicas"`
+	Task               string               `json:"task"`
+	ApiVersion         string               `json:"apiVersion"`
+	Kind               string               `json:"kind"`
+	PermittedLocations []locStruct          `json:"permittedLocations"`
+	RequiredLocations  [][]locStruct        `json:"requiredLocations"`
+	RequestedVServices [][]virtualSvcStruct `json:"requestedVServices"`
+	MaxReplicas        string               `json:"maxReplicas"`
 }
 
 // findK8SVirtualServices processes the deployment policies and extracts the virtual services
@@ -119,11 +119,11 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 						if !offeringMatches(pat, off) {continue}
 						// Add this offering as a ComputeProfile alternative
 						newVS := virtualSvcStruct{
-							ApiVersion:  "skycluster.io/v1alpha1",
+							ApiVersion: "skycluster.io/v1alpha1",
 							Kind:       "ComputeProfile",
 							Name:       off.name, // name is mapped to nameLabel
 							Price:      off.deployCost,
-							Count:  strconv.Itoa(alternativeVS.Count),
+							Count:      strconv.Itoa(alternativeVS.Count),
 						}
 						altVSList = append(altVSList, newVS)
 					}
@@ -200,11 +200,11 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 		perLocList := make([]locStruct, 0)
 		for _, perLoc := range cmpnt.LocationConstraint.Permitted {
 			newLoc := locStruct{
-				Name:       perLoc.Name,
-				PType:      perLoc.Type,
+				Name:        perLoc.Name,
+				PType:       perLoc.Type,
 				RegionAlias: perLoc.RegionAlias,
-				Region:     perLoc.Region,
-				Platform:   perLoc.Platform,
+				Region:      perLoc.Region,
+				Platform:    perLoc.Platform,
 			}
 			perLocList = append(perLocList, newLoc)
 		}
@@ -214,11 +214,11 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 			altReqLocList := make([]locStruct, 0)
 			for _, altReqLoc := range reqLoc.AnyOf {
 				newLoc := locStruct{
-					Name:       altReqLoc.Name,
-					PType:      altReqLoc.Type,
+					Name:        altReqLoc.Name,
+					PType:       altReqLoc.Type,
 					RegionAlias: altReqLoc.RegionAlias,
-					Region:     altReqLoc.Region,
-					Platform:   altReqLoc.Platform,
+					Region:      altReqLoc.Region,
+					Platform:    altReqLoc.Platform,
 				}
 				altReqLocList = append(altReqLocList, newLoc)
 			}
@@ -232,7 +232,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 			PermittedLocations: perLocList,
 			RequiredLocations:  reqLocList,
 			RequestedVServices: vsList,
-			MaxReplicas:        func () string {
+			MaxReplicas: func() string {
 				// TODO: receive this from deployment policy
 				// if cmpnt.ComponentRef.Name == "central-storage" {return "1"}
 				return "-1"
@@ -314,11 +314,11 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 		perLocList := make([]locStruct, 0)
 		for _, perLoc := range cmpnt.LocationConstraint.Permitted {
 			newLoc := locStruct{
-				Name:       perLoc.Name,
-				PType:      perLoc.Type,
+				Name:        perLoc.Name,
+				PType:       perLoc.Type,
 				RegionAlias: perLoc.RegionAlias,
-				Region:     perLoc.Region,
-				Platform:   perLoc.Platform,
+				Region:      perLoc.Region,
+				Platform:    perLoc.Platform,
 			}
 			perLocList = append(perLocList, newLoc)
 		}
@@ -328,11 +328,11 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 			altReqLocList := make([]locStruct, 0)
 			for _, altReqLoc := range reqLoc.AnyOf {
 				newLoc := locStruct{
-					Name:       altReqLoc.Name,
-					PType:      altReqLoc.Type,
+					Name:        altReqLoc.Name,
+					PType:       altReqLoc.Type,
 					RegionAlias: altReqLoc.RegionAlias,
-					Region:     altReqLoc.Region,
-					Platform:   altReqLoc.Platform,
+					Region:      altReqLoc.Region,
+					Platform:    altReqLoc.Platform,
 				}
 				altReqLocList = append(altReqLocList, newLoc)
 			}
@@ -346,7 +346,7 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 			PermittedLocations: perLocList,
 			RequiredLocations:  reqLocList,
 			RequestedVServices: vsList,
-			MaxReplicas:        func () string {
+			MaxReplicas: func() string {
 				// if cmpnt.ComponentRef.Name == "dashboard" {return "1"}
 				return "-1"
 			}(),
@@ -508,8 +508,8 @@ func (r *ILPTaskReconciler) getAllComputeProfiles(provRefs []hv1a1.ProviderRefSp
 	provProfiles := make([]cv1a1.ProviderProfileSpec, 0)
 	for _, provRef := range provRefs {
 		provProfiles = append(provProfiles, cv1a1.ProviderProfileSpec{
-			Platform: provRef.Platform,
-			Region:   provRef.Region,
+			Platform:    provRef.Platform,
+			Region:      provRef.Region,
 			RegionAlias: provRef.RegionAlias,
 		})
 	}
@@ -547,10 +547,18 @@ func (r *ILPTaskReconciler) getCandidateProviders(filter []cv1a1.ProviderProfile
 	for _, item := range providers.Items {
 		for _, ref := range filter {
 			match := true
-			if ref.Platform != "" && item.Spec.Platform != ref.Platform { match = false }
-			if ref.Region != "" && item.Spec.Region != ref.Region { match = false }
-			if ref.RegionAlias != "" && item.Spec.RegionAlias != ref.RegionAlias { match = false }
-			if match { candidateProviders = append(candidateProviders, item) }
+			if ref.Platform != "" && item.Spec.Platform != ref.Platform {
+				match = false
+			}
+			if ref.Region != "" && item.Spec.Region != ref.Region {
+				match = false
+			}
+			if ref.RegionAlias != "" && item.Spec.RegionAlias != ref.RegionAlias {
+				match = false
+			}
+			if match {
+				candidateProviders = append(candidateProviders, item)
+			}
 		}
 	}
 
@@ -563,11 +571,11 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 	// List all config maps by labels
 	var configMaps corev1.ConfigMapList
 	if err := r.List(context.Background(), &configMaps, client.MatchingLabels{
-		"skycluster.io/config-type": "provider-profile",
-		"skycluster.io/managed-by": "skycluster",
-		"skycluster.io/provider-profile": p.Name,
+		"skycluster.io/config-type":       "provider-profile",
+		"skycluster.io/managed-by":        "skycluster",
+		"skycluster.io/provider-profile":  p.Name,
 		"skycluster.io/provider-platform": p.Spec.Platform,
-		"skycluster.io/provider-region": p.Spec.Region,
+		"skycluster.io/provider-region":   p.Spec.Region,
 	}); err != nil {
 		return nil, err
 	}
@@ -585,7 +593,7 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 		var zoneOfferings []cv1a1.ZoneOfferings
 		if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
 			for _, zo := range zoneOfferings {
-				for _, of := range zo.Offerings{
+				for _, of := range zo.Offerings {
 					priceFloat, err := strconv.ParseFloat(strings.Trim(of.Price, "$"), 64)
 					if err != nil {
 						r.Logger.Info("Warning: Failed to parse price for offering", "offering", of.NameLabel, "error", err)
@@ -599,15 +607,15 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 					}
 
 					vServicesList = append(vServicesList, computeProfileService{
-						name:   of.NameLabel,
-						cpu: 	fCPU,
-						ram: fRam,
-						gpuEnabled:    of.GPU.Enabled,
-						gpuModel: of.GPU.Model,
-						gpuCount: of.GPU.Unit,
-						gpuMem: of.GPU.Memory,
+						name:            of.NameLabel,
+						cpu:             fCPU,
+						ram:             fRam,
+						gpuEnabled:      of.GPU.Enabled,
+						gpuModel:        of.GPU.Model,
+						gpuCount:        of.GPU.Unit,
+						gpuMem:          of.GPU.Memory,
 						gpuManufacturer: of.GPU.Manufacturer,
-						deployCost:     priceFloat,
+						deployCost:      priceFloat,
 					})
 				}
 			}
@@ -737,7 +745,7 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 			return false
 		}
 		// allow 20% deviation
-		if availCPU > p.cpu + p.cpu * 0.2 {
+		if availCPU > p.cpu+p.cpu*0.2 {
 			return false
 		}
 	}
@@ -747,7 +755,7 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 			return false
 		}
 		// allow 50% deviation
-		if availRAM > p.ram + p.ram * 0.5 {
+		if availRAM > p.ram+p.ram*0.5 {
 			return false
 		}
 	}
@@ -761,7 +769,9 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 	if p.gpuModel != "" {
 		// check off.gpuModel first
 		if offGPUModel != "" {
-			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false}
+			if !strings.EqualFold(offGPUModel, p.gpuModel) {
+				return false
+			}
 		} else {
 			// offering lacks GPU info -> cannot satisfy specific model
 			return false

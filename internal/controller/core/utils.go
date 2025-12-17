@@ -29,27 +29,27 @@ import (
 )
 
 func SetTimeAnnotation(obj metav1.Object, key string, t metav1.Time) {
-    anns := obj.GetAnnotations()
-    if anns == nil {
-        anns = map[string]string{}
-    }
-    anns[key] = t.UTC().Format(time.RFC3339) // serialize
-    obj.SetAnnotations(anns)
+	anns := obj.GetAnnotations()
+	if anns == nil {
+		anns = map[string]string{}
+	}
+	anns[key] = t.UTC().Format(time.RFC3339) // serialize
+	obj.SetAnnotations(anns)
 }
 
 // retrieve metav1.Time from annotations
 func GetTimeAnnotation(obj metav1.Object, key string) (*metav1.Time, error) {
-    anns := obj.GetAnnotations()
-    v, ok := anns[key]
-    if !ok {
-        return nil, fmt.Errorf("annotation %q not found", key)
-    }
-    parsed, err := time.Parse(time.RFC3339, v) // parse
-    if err != nil {
-        return nil, err
-    }
-    mt := metav1.NewTime(parsed)
-    return &mt, nil
+	anns := obj.GetAnnotations()
+	v, ok := anns[key]
+	if !ok {
+		return nil, fmt.Errorf("annotation %q not found", key)
+	}
+	parsed, err := time.Parse(time.RFC3339, v) // parse
+	if err != nil {
+		return nil, err
+	}
+	mt := metav1.NewTime(parsed)
+	return &mt, nil
 }
 
 func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
@@ -242,9 +242,9 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 			Kind:       deploy.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      deploy.Name,
-			Namespace: deploy.Namespace,
-			Labels:    deploy.Labels,
+			Name:        deploy.Name,
+			Namespace:   deploy.Namespace,
+			Labels:      deploy.Labels,
 			Annotations: deploy.Annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -255,8 +255,10 @@ func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
 	}
 	// remove unwanted annotations
 	if newDeploy.Annotations != nil {
-		for _, ant := range antToRemove {delete(newDeploy.Annotations, ant)}
-	} 
+		for _, ant := range antToRemove {
+			delete(newDeploy.Annotations, ant)
+		}
+	}
 	if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
 		newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)
 	}
@@ -277,12 +279,12 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 	labels := make(map[string]string)
 	if svc.Labels != nil {
 		maps.Copy(labels, svc.Labels)
-	} 
+	}
 
 	annot := make(map[string]string)
 	if svc.Annotations != nil {
 		maps.Copy(annot, svc.Annotations)
-	} 
+	}
 
 	selector := make(map[string]string)
 	if svc.Spec.Selector != nil {
@@ -295,9 +297,9 @@ func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
 			Kind:       svc.Kind,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-			Labels:    labels,
+			Name:        svc.Name,
+			Namespace:   svc.Namespace,
+			Labels:      labels,
 			Annotations: annot,
 		},
 		Spec: corev1.ServiceSpec{
@@ -362,9 +364,9 @@ func RandSuffix(s string) string {
 	// Use a hash of the input as the seed
 	h := fnv.New64a()
 	h.Write([]byte(s))
-	
+
 	// use local rand to avoid affecting global seed
-	r := rand.New(rand.NewSource(int64(h.Sum64()))) 
+	r := rand.New(rand.NewSource(int64(h.Sum64())))
 
 	b := make([]byte, length)
 	for i := range b {
@@ -373,15 +375,14 @@ func RandSuffix(s string) string {
 	return string(b)
 }
 
-
 // ShortenLabelKey shortens a Kubernetes label key deterministically.
 // If key contains a prefix (prefix/name), the prefix is preserved.
 // The name part is truncated and suffixed with "-<hash>" so the result is <=63 chars
 // and begins/ends with an alphanumeric character.
 func ShortenLabelKey(key string) string {
 	maxNameLen := 45
-	hashLen    := 14
-	nameRE     := regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`)
+	hashLen := 14
+	nameRE := regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`)
 
 	parts := strings.SplitN(key, "/", 2)
 	var prefix, name string
@@ -483,15 +484,21 @@ func wildcardComputeProfileMatch(pattern, str string) bool {
 func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) (bool, string) {
 	availCPU := off.VCPUs
 	availRAM, err := strconv.Atoi(strings.ReplaceAll(off.RAM, "GB", ""))
-	if err != nil {return false, "parsing offering RAM"}
+	if err != nil {
+		return false, "parsing offering RAM"
+	}
 
 	// CPU
 	if !p.cpuAny && p.cpu > 0 {
-		if availCPU < int(p.cpu) {return false, "offering CPU less than requested"}
+		if availCPU < int(p.cpu) {
+			return false, "offering CPU less than requested"
+		}
 	}
 	// RAM
 	if !p.ramAny && p.ram > 0 {
-		if availRAM < int(p.ram) {return false, "offering RAM less than requested"}
+		if availRAM < int(p.ram) {
+			return false, "offering RAM less than requested"
+		}
 	}
 
 	// prefer structured fields on offering
@@ -503,7 +510,9 @@ func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) (bool, string
 	if p.gpuModel != "" {
 		// check off.gpuModel first
 		if offGPUModel != "" {
-			if !strings.EqualFold(offGPUModel, p.gpuModel) {return false, "offering GPU model does not match requested"}
+			if !strings.EqualFold(offGPUModel, p.gpuModel) {
+				return false, "offering GPU model does not match requested"
+			}
 		} else {
 			// offering lacks GPU info -> cannot satisfy specific model
 			return false, "offering lacks GPU model information"
@@ -512,19 +521,27 @@ func offeringMatches2(p flavorPattern, off hv1a1.InstanceOffering) (bool, string
 
 	// GPU count (if requested)
 	if p.gpuCount > 0 {
-		if !off.GPU.Enabled {return false, "offering GPU not enabled"}
+		if !off.GPU.Enabled {
+			return false, "offering GPU not enabled"
+		}
 		// prefer structured count
 		if offGPUCountOk {
-			if offGPUCount < p.gpuCount {return false, "offering GPU count less than requested"}
+			if offGPUCount < p.gpuCount {
+				return false, "offering GPU count less than requested"
+			}
 		} // else: no count info -> assume may satisfy
 	}
 
-	// GPU memory: 
+	// GPU memory:
 	if !p.gpuMemAny && p.gpuMem > 0 {
-		if !off.GPU.Enabled {return false, "offering GPU not enabled"}
+		if !off.GPU.Enabled {
+			return false, "offering GPU not enabled"
+		}
 		// prefer structured memory
 		if offGPUMemoryOk {
-			if offGPUMemory < p.gpuMem {return false, "offering GPU memory less than requested"}
+			if offGPUMemory < p.gpuMem {
+				return false, "offering GPU memory less than requested"
+			}
 		} // else: no memory info -> assume may satisfy
 	}
 

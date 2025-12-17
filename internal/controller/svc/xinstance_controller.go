@@ -109,7 +109,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 			Name:      name,
 			Namespace: owner.Namespace,
 			Labels: map[string]string{
-				"skycluster.io/app-id": appID,
+				"skycluster.io/app-id":    appID,
 				"skycluster.io/app-scope": "distributed",
 			},
 		},
@@ -117,7 +117,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 
 	flavorJson, err := json.Marshal(hv1a1.ComputeFlavor{
 		VCPUs: owner.Spec.Flavor.VCPUs,
-		RAM:  owner.Spec.Flavor.RAM,
+		RAM:   owner.Spec.Flavor.RAM,
 		GPU: hv1a1.GPU{
 			Model:  owner.Spec.Flavor.GPU.Model,
 			Unit:   owner.Spec.Flavor.GPU.Unit,
@@ -148,8 +148,8 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 							{
 								// VirtualServiceSelector embeds hv1a1.VirtualService inline.
 								VirtualService: hv1a1.VirtualService{
-									Kind:       "ComputeProfile",
-									Spec:       &runtime.RawExtension{Raw: flavorJson},
+									Kind: "ComputeProfile",
+									Spec: &runtime.RawExtension{Raw: flavorJson},
 								},
 								Count: 1,
 							},
@@ -221,7 +221,7 @@ func (r *XInstanceReconciler) ensureDataflowPolicy(ctx context.Context, owner *s
 			Name:      name,
 			Namespace: owner.Namespace,
 			Labels: map[string]string{
-				"skycluster.io/app-id": appID,
+				"skycluster.io/app-id":    appID,
 				"skycluster.io/app-scope": "distributed",
 			},
 		},

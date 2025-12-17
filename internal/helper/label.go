@@ -6,7 +6,7 @@ import (
 
 func DefaultLabels(p, r, z string) map[string]string {
 	l := map[string]string{
-		"skycluster.io/managed-by":  "skycluster",
+		"skycluster.io/managed-by": "skycluster",
 	}
 	l = lo.Assign(l, lo.Ternary(p != "",
 		map[string]string{"skycluster.io/provider-platform": p}, nil))

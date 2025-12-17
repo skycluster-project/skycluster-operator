@@ -119,7 +119,6 @@ func (r *AtlasReconciler) fetchDeploymentPolicy(ns string, dpRef cv1a1.Deploymen
 	return dp, nil
 }
 
-
 // findCheapestVirtualSvcs finds the cheapest virtual service from a list of alternatives
 // dpPolicy := r.fetchDeploymentPolicy(ns, dpRef)
 // findReqVirtualSvcs(ns, skySrv, dpPolicy)
@@ -152,14 +151,20 @@ func (r *AtlasReconciler) findCheapestVirtualSvcs(ns string, providerRef hv1a1.P
 func (r *AtlasReconciler) fetchVirtualServiceCfgMap(ns string, providerRef hv1a1.ProviderRefSpec) (map[string]string, error) {
 	cm := &corev1.ConfigMapList{}
 	if err := r.List(context.Background(), cm, client.MatchingLabels{
-		"skycluster.io/config-type": "provider-profile",
-		"skycluster.io/managed-by": "skycluster",
+		"skycluster.io/config-type":       "provider-profile",
+		"skycluster.io/managed-by":        "skycluster",
 		"skycluster.io/provider-platform": providerRef.Platform,
-		"skycluster.io/provider-profile": providerRef.Name,
-		"skycluster.io/provider-region": providerRef.Region,
-	}); err != nil { return nil, errors.Wrap(err, "listing provider profile ConfigMaps") }
-	if len(cm.Items) == 0 { return nil, errors.New("no provider profile ConfigMaps found") }
-	if len(cm.Items) > 1 { return nil, errors.New("multiple provider profile ConfigMaps found") }
+		"skycluster.io/provider-profile":  providerRef.Name,
+		"skycluster.io/provider-region":   providerRef.Region,
+	}); err != nil {
+		return nil, errors.Wrap(err, "listing provider profile ConfigMaps")
+	}
+	if len(cm.Items) == 0 {
+		return nil, errors.New("no provider profile ConfigMaps found")
+	}
+	if len(cm.Items) > 1 {
+		return nil, errors.New("multiple provider profile ConfigMaps found")
+	}
 	
 	return cm.Items[0].Data, nil
 }
@@ -202,7 +207,9 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 	case "ComputeProfile":
 		// TODO: ideally this should be adopted for default case below
 		pat, err := parseFlavorFromJSON(vs.Spec)
-		if err != nil {return -1, errors.Wrap(err, "parsing flavor from JSON")}
+		if err != nil {
+			return -1, errors.Wrap(err, "parsing flavor from JSON")
+		}
 
 		r.Logger.Info("pat spec", "cpu", pat.cpu, "memoryGB", pat.gpuModel)
 
@@ -271,9 +278,11 @@ func (r *AtlasReconciler) findReqComputeProfile(ns string, skySrvc hv1a1.SkyServ
 			// specified alternative virtual services, defined by user
 			// must include the cheapest one per set
 			cheapestVirtualSvcs, err := r.findCheapestVirtualSvcs(ns, provRef, vsSet.AnyOf)
-			if err != nil {return nil, errors.Wrap(err, "finding cheapest virtual services")}
+			if err != nil {
+				return nil, errors.Wrap(err, "finding cheapest virtual services")
+			}
 			if cheapestVirtualSvcs == nil {
-				return nil, errors.New("no available virtual service found for component " + cmpntRef.Name )
+				return nil, errors.New("no available virtual service found for component " + cmpntRef.Name)
 			}
 			reqVirtualSvcs = append(reqVirtualSvcs, *cheapestVirtualSvcs)
 		}

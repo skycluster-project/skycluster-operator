@@ -12,8 +12,6 @@ func TruncatedName(name, newName string) string {
 	return name + newName
 }
 
-
-
 // EnsureK8sName returns a version of name that conforms to Kubernetes resource
 // name rules (DNS-1123 labels separated by dots). It removes invalid characters,
 // lowercases, enforces per-label max length 63 and total max length 253,

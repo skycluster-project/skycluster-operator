@@ -568,7 +568,7 @@ func CanonicalPair(a, b string) (string, string) {
 	sort.Strings(ns)
 	return ns[0], ns[1]
 }
-	
+
 func SanitizeName(s string) string {
 	s = strings.ToLower(s)
 	out := make([]rune, 0, len(s))
@@ -602,7 +602,6 @@ func ComputeFixedLatency(r1, r2 string) int {
 	return 20 + diff*5
 }
 
-
 // helper: extract metro like "us-east" from "us-east-1"
 func metroFromRegion(region string) string {
 	parts := strings.Split(region, "-")
@@ -623,7 +622,7 @@ func GenerateSyntheticLatency(srcRegion, dstRegion, srcRegionAlias, dstRegionAli
 		if mean <= 0 {
 			return 0
 		}
-		mu := math.Log((mean*mean) / math.Sqrt(std*std+mean*mean))
+		mu := math.Log((mean * mean) / math.Sqrt(std*std+mean*mean))
 		sigma := math.Sqrt(math.Log(1 + (std/mean)*(std/mean)))
 
 		// sample standard normal via Box-Muller
@@ -659,7 +658,6 @@ func GenerateSyntheticLatency(srcRegion, dstRegion, srcRegionAlias, dstRegionAli
 		// intercontinental
 		return lognormal(200, 50)
 	}
-
 
 	// cloudCloudLatency := func(sameContinent bool) float64 {
 	// 	if sameContinent {
