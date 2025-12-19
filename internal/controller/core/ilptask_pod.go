@@ -24,7 +24,7 @@ import (
 
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
 	// Creating tasks.csv
-	
+
 	// write all JSON strings to a temporary directory for quick inspection
 	tmpDir, err := os.MkdirTemp("/tmp", "ilp-debug-")
 	if err != nil {
@@ -79,7 +79,9 @@ func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPoli
 	// skycluster.io/config-type: optimization-status
 
 	scripts, err := r.getOptimizationConfigMaps()
-	if err != nil { return "", err }
+	if err != nil {
+		return "", err
+	}
 
 	// Define Pod
 	// If they differ the name of SkyCluster should be passed
@@ -97,20 +99,24 @@ func (r *ILPTaskReconciler) generateTasksJson(dp pv1a1.DeploymentPolicy) (string
 	if len(dp.Spec.DeploymentPolicies) == 0 {
 		return "", fmt.Errorf("no deployment policies found in deployment policy")
 	}
-	
+
 	var optTasks []optTaskStruct
 	var err error
 	switch execEnv {
-		case "Kubernetes":
-			optTasks, err = r.findK8SVirtualServices(dp.Namespace, dp.Spec.DeploymentPolicies)
-			if err != nil {return "", err}
-		case "VirtualMachine":
-			optTasks, err = r.findVMVirtualServices(dp.Spec.DeploymentPolicies)
-			if err != nil {return "", err}
-		default:
-			return "", fmt.Errorf("unsupported execution environment: %s", execEnv)
+	case "Kubernetes":
+		optTasks, err = r.findK8SVirtualServices(dp.Namespace, dp.Spec.DeploymentPolicies)
+		if err != nil {
+			return "", err
+		}
+	case "VirtualMachine":
+		optTasks, err = r.findVMVirtualServices(dp.Spec.DeploymentPolicies)
+		if err != nil {
+			return "", err
+		}
+	default:
+		return "", fmt.Errorf("unsupported execution environment: %s", execEnv)
 	}
-	
+
 	if len(optTasks) == 0 {
 		return "", fmt.Errorf("no optimization tasks found in deployment policy")
 	}
@@ -141,7 +147,9 @@ func (r *ILPTaskReconciler) generateProvidersJson() (string, error) {
 	var providerList []providerStruct
 	for _, p := range providers.Items {
 		for _, zone := range p.Spec.Zones {
-			if !zone.Enabled {continue}
+			if !zone.Enabled {
+				continue
+			}
 			providerList = append(providerList, providerStruct{
 				UpstreamName: p.Name,
 				Name:         p.Spec.Platform + "-" + p.Spec.Region + "-" + zone.Name,
@@ -195,9 +203,13 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 		for _, p2 := range providers.Items {
 
 			for _, pz1 := range p.Spec.Zones {
-				if !pz1.Enabled {continue}
+				if !pz1.Enabled {
+					continue
+				}
 				for _, pz2 := range p2.Spec.Zones {
-					if !pz2.Enabled {continue}
+					if !pz2.Enabled {
+						continue
+					}
 
 					p1Name := p.Spec.Platform + "-" + p.Spec.Region + "-" + pz1.Name
 					p2Name := p2.Spec.Platform + "-" + p2.Spec.Region + "-" + pz2.Name
@@ -206,9 +218,9 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 					sameRegion := p.Spec.Region == p2.Spec.Region
 
 					// consider inter-zone latencies as negligible
-					// consider inter-zone costs as 0.01 per GB and 
+					// consider inter-zone costs as 0.01 per GB and
 
-					if samePlatform && sameRegion { 
+					if samePlatform && sameRegion {
 						// same regions: intra-zone latency is zero, cost are 0 if same zones
 						egressCostStr := lo.Filter(p.Status.EgressCostSpecs, func(t cv1a1.EgressCostSpec, _ int) bool {
 							return t.Type == "inter-zone"
@@ -235,7 +247,7 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 						})
 						continue
 					}
-					
+
 					// assuming we are within the first tier of egress cost specs
 					// TODO: fix tier selection based on the maount of data transfer
 					egressCostStr := "0.0"
@@ -248,11 +260,11 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 							return t.Type == "internet"
 						})[0].Tiers[0].PricePerGB
 					}
-					
+
 					aName := p.Spec.Platform + "-" + p.Spec.Region
 					bName := p2.Spec.Platform + "-" + p2.Spec.Region
 					a, b := utils.CanonicalPair(aName, bName)
-					
+
 					var lt *cv1a1.Latency
 					for _, lat := range latencies.Items {
 						if lat.Labels["skycluster.io/provider-pair"] == utils.SanitizeName(a)+"-"+utils.SanitizeName(b) {
@@ -291,7 +303,7 @@ func (r *ILPTaskReconciler) generateProvidersAttrJson(ns string) (string, error)
 						Dst: providerStruct{
 							Platform: p2.Spec.Platform,
 							Region:   p2.Spec.Region,
-						},	
+						},
 						Latency:            latencyValueFloat,
 						EgressCostDataRate: egressCostFloat,
 					})
@@ -343,19 +355,19 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	scriptFiles := make([]string, 0)
 	for file, content := range scripts {
 		// Use a heredoc for safe multiline content
-    heredoc := fmt.Sprintf("cat << 'EOF' > /scripts/%s\n%s\nEOF", file, content)
-    scriptFiles = append(scriptFiles, heredoc)
+		heredoc := fmt.Sprintf("cat << 'EOF' > /scripts/%s\n%s\nEOF", file, content)
+		scriptFiles = append(scriptFiles, heredoc)
 	}
 	initCommandForScripts := strings.Join(scriptFiles, "\n")
-	
+
 	// Split into separate init containers since some files may be large
 	filesMap := make(map[string]string)
 	for file, content := range dataMap {
 		// Use a heredoc for safe multiline content
-    heredoc := fmt.Sprintf("cat << 'EOF' > /shared/%s\n%s\nEOF", file, content)
-    filesMap[file] = heredoc
+		heredoc := fmt.Sprintf("cat << 'EOF' > /shared/%s\n%s\nEOF", file, content)
+		filesMap[file] = heredoc
 	}
-	
+
 	initContainers := make([]corev1.Container, 0)
 	initContainers = append(initContainers, corev1.Container{
 		Name:            "prepare-vservices",
@@ -466,7 +478,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	}
 	// The pod is in skycluster namespace
 	// The ilptask is in the default namespace, and cross namespace reference is not allowed
-	
+
 	// 1) Check for any existing optimization pod for this ILPTask (someone else may have created it)
 	podFound := false
 	var podList corev1.PodList
@@ -484,7 +496,7 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 			}
 		}
 	}
-	
+
 	if !podFound {
 		if err := r.Create(context.TODO(), pod); err != nil {
 			return "", err
@@ -504,10 +516,10 @@ func (r *ILPTaskReconciler) buildOptimizationPod(taskMeta *cv1a1.ILPTask, script
 	}
 
 	if orig.Status.Optimization.PodRef.Name != "" {
-			// Another reconcile already claimed a pod; delete what we created and return the claimed pod
-			r.Logger.Info("ILPTask already has a claimed optimization pod; cleaning up created pod", "claimedPod", orig.Status.Optimization.PodRef.Name, "createdPod", pod.Name)
-			_ = r.Delete(context.TODO(), pod)
-			return orig.Status.Optimization.PodRef.Name, nil
+		// Another reconcile already claimed a pod; delete what we created and return the claimed pod
+		r.Logger.Info("ILPTask already has a claimed optimization pod; cleaning up created pod", "claimedPod", orig.Status.Optimization.PodRef.Name, "createdPod", pod.Name)
+		_ = r.Delete(context.TODO(), pod)
+		return orig.Status.Optimization.PodRef.Name, nil
 	}
 
 	// Patch the ILPTask status to set the pod ref using MergeFrom(orig) to detect conflicts
@@ -530,7 +542,9 @@ func (r *ILPTaskReconciler) getOptimizationConfigMaps() (map[string]string, erro
 	if err := r.List(context.TODO(), &configMapList, client.MatchingLabels{
 		"skycluster.io/managed-by":        "skycluster",
 		hv1a1.SKYCLUSTER_CONFIGTYPE_LABEL: "optimization-scripts",
-	}); err != nil { return nil, err }
+	}); err != nil {
+		return nil, err
+	}
 
 	if len(configMapList.Items) == 0 {
 		return nil, errors.New("no configmap found (optimization-starter)")
@@ -541,7 +555,7 @@ func (r *ILPTaskReconciler) getOptimizationConfigMaps() (map[string]string, erro
 			scripts[key] = val
 		}
 	}
-	
+
 	return scripts, nil
 }
 
@@ -611,9 +625,11 @@ func generateTasksEdgesJson(df pv1a1.DataflowPolicy) (string, error) {
 			DataRate: df.TotalDataTransfer,
 		})
 	}
-	
-	if len(taskEdges) == 0 {return "", nil}
-	
+
+	if len(taskEdges) == 0 {
+		return "", nil
+	}
+
 	b, err := json.Marshal(taskEdges)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal optimization task edges: %v", err)

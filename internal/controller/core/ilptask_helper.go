@@ -78,7 +78,7 @@ type optTaskStruct struct {
 // findK8SVirtualServices processes the deployment policies and extracts the virtual services
 // when execution environment is Kubernetes.
 func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1.DeploymentPolicyItem) ([]optTaskStruct, error) {
-	
+
 	var optTasks []optTaskStruct
 	for _, cmpnt := range dpPolicies {
 		// TODO: Check the supported Kinds for e2e application support
@@ -93,13 +93,13 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 			if len(vsc.AnyOf) == 0 {
 				return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, vsc)
 			}
-			
+
 			altVSList := make([]virtualSvcStruct, 0)
-			additionalVSList := make([]virtualSvcStruct, 0)			
+			additionalVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 
 				// add any requested virtual service as is
-				// e.g., ComputeProfile kind with spec 
+				// e.g., ComputeProfile kind with spec
 				// we filter all compute profiles and use them as alternatives
 				// meaning cheapest suitable will be chosen by optimizer
 				supportedVSKinds := []string{"ComputeProfile"}
@@ -109,14 +109,22 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 
 				if alternativeVS.Kind == "ComputeProfile" {
 					pat, err := parseFlavorFromJSON(alternativeVS.Spec)
-					if err != nil {return nil, err}
+					if err != nil {
+						return nil, err
+					}
 
 					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
-					if err != nil { return nil, err }
+					if err != nil {
+						return nil, err
+					}
 
 					for _, off := range profiles {
-						if off.deployCost == 0 { continue }
-						if !offeringMatches(pat, off) {continue}
+						if off.deployCost == 0 {
+							continue
+						}
+						if !offeringMatches(pat, off) {
+							continue
+						}
 						// Add this offering as a ComputeProfile alternative
 						newVS := virtualSvcStruct{
 							ApiVersion: "skycluster.io/v1alpha1",
@@ -133,7 +141,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				case "Deployment":
 					// If the component is a Deployment, we make sure there are compute profile
 					// alternatives for deployments.
-					
+
 					// Compute the minimum compute resource required for this component (i.e. deployment)
 					minCR, err := r.calculateMinComputeResource(ns, cmpnt.ComponentRef.Name)
 					if err != nil {
@@ -145,20 +153,26 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 
 					// Try to fetch flavors for the provider identified by alternativeVS.Name (fallback to component name)
 					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
-					if err != nil { return nil, err }
+					if err != nil {
+						return nil, err
+					}
 
 					// collect all suitable offerings
 					for _, off := range profiles {
-						if off.cpu < minCR.cpu { continue }
-						if off.ram < minCR.ram { continue } // GiB
+						if off.cpu < minCR.cpu {
+							continue
+						}
+						if off.ram < minCR.ram {
+							continue
+						} // GiB
 
 						// Add this offering as a ComputeProfile alternative
 						additionalVSList = append(additionalVSList, virtualSvcStruct{
-								ApiVersion: alternativeVS.APIVersion,
-								Kind:       "ComputeProfile",
-								Name:       off.name, // name is mapped to nameLabel
-								Count:      "1",
-								Price:      off.deployCost,
+							ApiVersion: alternativeVS.APIVersion,
+							Kind:       "ComputeProfile",
+							Name:       off.name, // name is mapped to nameLabel
+							Count:      "1",
+							Price:      off.deployCost,
 						})
 					}
 
@@ -168,14 +182,14 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 					// if it is tied to a specific provider, it targets the provider's Kubernetes cluster
 					// If no provider is specified, the optimizer will choose the best provider minimizing
 					// the node group costs plus other deployment costs (e.g., control plane).
-					
+
 					// Since the ComputeProfile is already handled above, we do not need to do anything here.
 					r.Logger.Info("XNodeGroup/XKube component detected, handled via ComputeProfile alternatives", "component", cmpnt.ComponentRef.Name)
-				
+
 				default:
 					return nil, fmt.Errorf("unsupported virtual service kind %s for Kubernetes execution environment", alternativeVS.Kind)
 				}
-				
+
 				// remove duplicates; for an alternative VS it does not make sense to have duplicates
 				additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
 					return v.Name
@@ -258,8 +272,8 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 			if len(vsc.AnyOf) == 0 {
 				return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, vsc)
 			}
-			
-			additionalVSList := make([]virtualSvcStruct, 0)			
+
+			additionalVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 				supportedVSKinds := []string{"ComputeProfile"}
 				if !slices.Contains(supportedVSKinds, alternativeVS.Kind) {
@@ -272,20 +286,26 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 					// fetch ComputeProfile spec
 					vmSpec := alternativeVS.Spec
 					pat, err := parseFlavorFromJSON(vmSpec)
-					if err != nil {return nil, err}
+					if err != nil {
+						return nil, err
+					}
 
 					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
-					if err != nil { return nil, err }
+					if err != nil {
+						return nil, err
+					}
 
 					for _, off := range profiles {
-						if !offeringMatches(pat, off) {continue}
+						if !offeringMatches(pat, off) {
+							continue
+						}
 						// Add this offering as a ComputeProfile alternative
 						additionalVSList = append(additionalVSList, virtualSvcStruct{
-								ApiVersion: "skycluster.io/v1alpha1",
-								Kind:       "ComputeProfile",
-								Name:       off.name, // name is mapped to nameLabel
-								Count:      "1",
-								Price:      off.deployCost,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Name:       off.name, // name is mapped to nameLabel
+							Count:      "1",
+							Price:      off.deployCost,
 						})
 					}
 
@@ -384,16 +404,18 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 				break
 			}
 		}
-		
+
 		if matchingDPItem == nil {
 			return nil, fmt.Errorf("no matching deployment policy item found for component %s (kind: %s, apiVersion: %s)",
-			cmpntRef.Name, cmpntRef.Kind, cmpntRef.APIVersion)
+				cmpntRef.Name, cmpntRef.Kind, cmpntRef.APIVersion)
 		}
 
 		// Process VirtualServiceConstraint to find services that must be deployed
 		var requiredServices []virtualSvcStruct
 		for _, vsc := range matchingDPItem.VirtualServiceConstraint {
-			if len(vsc.AnyOf) == 0 { continue }
+			if len(vsc.AnyOf) == 0 {
+				continue
+			}
 
 			// For each alternative virtual service
 			for _, alternativeVS := range vsc.AnyOf {
@@ -422,8 +444,12 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 					// Find matching profiles
 					for _, off := range profiles {
 						// if deploy cost is 0 , it means we could not find its price, so we skip it
-						if off.deployCost == 0 { continue }
-						if !offeringMatches(pat, off) { continue }
+						if off.deployCost == 0 {
+							continue
+						}
+						if !offeringMatches(pat, off) {
+							continue
+						}
 
 						// Add this offering as a ComputeProfile service that must be deployed
 						apiVersion := alternativeVS.APIVersion
@@ -515,7 +541,9 @@ func (r *ILPTaskReconciler) getAllComputeProfiles(provRefs []hv1a1.ProviderRefSp
 	}
 
 	candidates, err := r.getCandidateProviders(provProfiles)
-	if err != nil { return nil, err }
+	if err != nil {
+		return nil, err
+	}
 
 	allComputeProfiles := make([]computeProfileService, 0)
 	for _, c := range candidates {
@@ -537,12 +565,14 @@ func (r *ILPTaskReconciler) getCandidateProviders(filter []cv1a1.ProviderProfile
 		return nil, err
 	}
 	candidateProviders := make([]cv1a1.ProviderProfile, 0)
-	
+
 	// If no filter is provided, return all providers
 	// TODO: Check if any conflict arises from this logic.
 	// Since in the optimization module, if the candidate providers list is empty,
-	// all providers are considered. 
-	if len(filter) == 0 {return providers.Items, nil}
+	// all providers are considered.
+	if len(filter) == 0 {
+		return providers.Items, nil
+	}
 
 	for _, item := range providers.Items {
 		for _, ref := range filter {
@@ -567,7 +597,7 @@ func (r *ILPTaskReconciler) getCandidateProviders(filter []cv1a1.ProviderProfile
 
 // getComputeProfileForProvider fetches the compute profile (config map) for a given provider profile.
 func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile) ([]computeProfileService, error) {
-	
+
 	// List all config maps by labels
 	var configMaps corev1.ConfigMapList
 	if err := r.List(context.Background(), &configMaps, client.MatchingLabels{
@@ -621,7 +651,7 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 			}
 		}
 	}
-	
+
 	return vServicesList, nil
 }
 
@@ -692,7 +722,9 @@ func parseFlavorFromJSON(flavorJSON *runtime.RawExtension) (flavorPattern, error
 
 func parseGPUCountString(s string) (int, bool) {
 	var numberRe = regexp.MustCompile(`[\d.]+`)
-	if strings.TrimSpace(s) == "" {return 0, false}
+	if strings.TrimSpace(s) == "" {
+		return 0, false
+	}
 	if m := numberRe.FindString(s); m != "" {
 		if v, err := strconv.Atoi(m); err == nil {
 			return v, true
@@ -785,19 +817,27 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 
 	// GPU count (if requested)
 	if p.gpuCount > 0 {
-		if !off.gpuEnabled {return false}
+		if !off.gpuEnabled {
+			return false
+		}
 		// prefer structured count
 		if offGPUCountOk {
-			if offGPUCount < p.gpuCount {return false}
+			if offGPUCount < p.gpuCount {
+				return false
+			}
 		} // else: no count info -> assume may satisfy
 	}
 
-	// GPU memory: 
+	// GPU memory:
 	if !p.gpuMemAny && p.gpuMem > 0 {
-		if !off.gpuEnabled {return false}
+		if !off.gpuEnabled {
+			return false
+		}
 		// prefer structured memory
 		if offGPUMemoryOk {
-			if offGPUMemory < p.gpuMem {return false}
+			if offGPUMemory < p.gpuMem {
+				return false
+			}
 		} // else: no memory info -> assume may satisfy
 	}
 

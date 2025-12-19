@@ -124,7 +124,9 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 			Memory: owner.Spec.Flavor.GPU.Memory,
 		},
 	})
-	if err != nil {return err}
+	if err != nil {
+		return err
+	}
 	r.Logger.Info("XInstance flavor spec", "flavorSpec", string(flavorJson))
 
 	// Build a minimal DeploymentPolicySpec for a single component.
@@ -159,8 +161,8 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 				// LocationConstraint: permissive (no specific provider filters) to allow optimizer to choose
 				LocationConstraint: hv1a1.LocationConstraint{
 					Permitted: lo.Ternary(owner.Spec.ProviderRef.Platform != "", []hv1a1.ProviderRefSpec{
-							owner.Spec.ProviderRef,
-						}, []hv1a1.ProviderRefSpec{}),
+						owner.Spec.ProviderRef,
+					}, []hv1a1.ProviderRefSpec{}),
 				},
 			},
 		},

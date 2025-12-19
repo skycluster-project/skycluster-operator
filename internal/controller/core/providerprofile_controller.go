@@ -81,7 +81,7 @@ Reconcile behavior:
 
   - Major clouds:
 		- Ensure Image, InstanceType if they don't exist (major clouds only)
-		- [ResyncRequired Y] if dependencies not found (major cloud only)	
+		- [ResyncRequired Y] if dependencies not found (major cloud only)
 
 	- Update status: [observedGeneration]
 	- Requeue  [Ready false]
@@ -284,12 +284,12 @@ func (r *ProviderProfileReconciler) handlerPlatformCloud(ctx context.Context, pf
 // handlerPlatformBareMetal creates a ConfigMap and set status as ready.
 func (r *ProviderProfileReconciler) handlerPlatformBareMetal(ctx context.Context, pf *cv1a1.ProviderProfile, req ctrl.Request) (ctrl.Result, error) {
 	if err := r.updateConfigMap(ctx, pf, nil, nil); err != nil {
-	
+
 		msg := fmt.Sprintf("Failed to update ConfigMap for ProviderProfile %s: %v", pf.Name, err)
 		r.Logger.Error(err, msg)
 		pf.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "ConfigMapUpdateFailed", msg)
 		_ = r.Status().Update(ctx, pf)
-	
+
 		return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, nil
 
 	} else {
@@ -298,7 +298,7 @@ func (r *ProviderProfileReconciler) handlerPlatformBareMetal(ctx context.Context
 		_ = r.Status().Update(ctx, pf)
 		// we are good for now, request a requeue after a longer period
 		return ctrl.Result{RequeueAfter: 12 * time.Hour}, nil
-	
+
 	}
 }
 
@@ -361,7 +361,7 @@ func (r *ProviderProfileReconciler) ensureEgressCosts(pf *cv1a1.ProviderProfile)
 			Tiers:       cost.Tiers,
 		})
 	}
-	
+
 	if len(pf.Status.EgressCostSpecs) == 0 {
 		// set default egress costs based on platform
 		plt := pf.Spec.Platform
@@ -470,7 +470,9 @@ func (r *ProviderProfileReconciler) ensureLatencies(ctx context.Context, pf *cv1
 					FixedLatencyMs: fmt.Sprintf("%.2f", fixedMs),
 				},
 			}
-			if err := r.Create(ctx, &newLat); err != nil {return err}
+			if err := r.Create(ctx, &newLat); err != nil {
+				return err
+			}
 		} else if err != nil {
 			return err
 		} else { // exists - optionally ensure; update
@@ -603,18 +605,22 @@ func (r *ProviderProfileReconciler) cleanUpLatencyData(ctx context.Context, pf *
 	}
 
 	sel, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
-			MatchExpressions: []metav1.LabelSelectorRequirement{{
+		MatchExpressions: []metav1.LabelSelectorRequirement{{
 			Key:      "skycluster.io/provider-pair",
 			Operator: metav1.LabelSelectorOpIn,
 			Values:   labels,
 		}},
 	})
-	if err != nil { return err }
+	if err != nil {
+		return err
+	}
 
 	if err := r.DeleteAllOf(ctx, &cv1a1.Latency{},
 		client.InNamespace(pf.Namespace),
 		client.MatchingLabelsSelector{Selector: sel},
-	); err != nil {return err}
+	); err != nil {
+		return err
+	}
 
 	return nil
 }

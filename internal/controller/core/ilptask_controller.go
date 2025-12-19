@@ -55,7 +55,7 @@ type ILPTaskReconciler struct {
 
 func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger.Info("Reconciling ILPTask started", "namespace", req.Namespace, "name", req.Name)
-	
+
 	// Fetch the ILPTask instance
 	task := &cv1a1.ILPTask{}
 	if err := r.Get(ctx, req.NamespacedName, task); err != nil {
@@ -87,7 +87,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// requeue on error
 		return ctrl.Result{}, err
 	}
-	
+
 	dp := pv1a1.DeploymentPolicy{}
 	if err := r.Get(ctx, req.NamespacedName, &dp); err != nil {
 		r.Logger.Error(err, "unable to fetch DeploymentPlan", "name", dpName)
@@ -99,7 +99,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if !ok1 || !ok2 || appId1 != appId2 {
 		return ctrl.Result{}, errors.New("objects DataflowPolicy and DeploymentPolicy must have the same skycluster.io/app-id label")
 	}
-	
+
 	currDFRV := df.ObjectMeta.ResourceVersion
 	currDPRV := dp.ObjectMeta.ResourceVersion
 
@@ -123,12 +123,14 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		// Pod not found -> create one to run optimization
 		r.Logger.Info("Creating optimization pod for ILPTask")
 		_, err := r.prepareAndBuildOptimizationPod(df, dp, task)
-		if err != nil { return ctrl.Result{}, err }
-		
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
 		return ctrl.Result{RequeueAfter: 3 * time.Second}, nil
 
 	} else { // pod already created - check status
-		
+
 		r.Logger.Info("Fetching optimization pod for ILPTask", "podName", podName)
 		pod := &corev1.Pod{}
 		err := r.Get(ctx, types.NamespacedName{Namespace: hv1a1.SKYCLUSTER_NAMESPACE, Name: podName}, pod)
@@ -138,13 +140,13 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if pod.Status.Phase == corev1.PodSucceeded {
 				// Pod completed - read result from a ConfigMap or pod logs in real implementation.
 				// For now, we set Result based on PodSucceeded/Failed.
-				
+
 				if pod.Status.Phase == corev1.PodSucceeded {
 					optDeployPlan, err := r.getPodStatusAndResult(podName)
 					if err != nil {
 						return ctrl.Result{}, errors.Wrap(err, "failed to get pod status and result")
 					}
-					
+
 					// if the result is optimal we set the deployment plan
 					deployPlan := cv1a1.DeployMap{}
 					if err = json.Unmarshal([]byte(optDeployPlan), &deployPlan); err != nil {
@@ -159,12 +161,14 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					} else {
 						// Set manifest for existing components with required virtual services
 						for componentName, services := range requiredServices {
-							if len(services) == 0 { continue }
+							if len(services) == 0 {
+								continue
+							}
 							// Use the cheapest service (first one after sorting by price)
 							// selectedService := services[0]
 							topNServices := min(len(services), 5)
 							r.Logger.Info("Selected services for component", "component", componentName, "total", len(services))
-							
+
 							// Find the existing component and update its manifest
 							for i := range deployPlan.Component {
 								if deployPlan.Component[i].ComponentRef.Name == componentName {
@@ -187,7 +191,7 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					task.Status.Optimization.DeployMap = deployPlan
 					// at least one component deployed needed.
 					// TODO: check if at least one edge is deployed?
-					if len(deployPlan.Component) > 0 { 
+					if len(deployPlan.Component) > 0 {
 						// If the optimization result is "Optimal" and status is "Succeeded",
 						// We have the deployment plan and we can update the SkyCluster object. (trigger deployment)
 						// skyCluster, err = r.updateSkyCluster(ctx, req, deployPlan, "Optimal", "Succeeded")
@@ -207,8 +211,8 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 					task.Status.Optimization.Status = "Failed"
 					task.Status.Optimization.Result = "Infeasible"
 					task.Status.SetCondition(hv1a1.Ready, metav1.ConditionFalse, "OptimizationFailed", "ILPTask optimization failed")
-				} 
-				
+				}
+
 				// update stored resource versions to current so we won't rerun unnecessarily
 				task.Status.Optimization.DataflowResourceVersion = currDFRV
 				task.Status.Optimization.DeploymentPlanResourceVersion = currDPRV

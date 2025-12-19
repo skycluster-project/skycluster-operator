@@ -92,7 +92,7 @@ func (r *DeviceNodeReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			return ctrl.Result{RequeueAfter: hint.RequeuePollThreshold}, err
 		}
 	}
-	
+
 	dn.Status.SetCondition(hv1a1.Ready, metav1.ConditionTrue, "Reconciled", "DeviceNode reconciled successfully")
 
 	// Update the DeviceNode status
@@ -119,7 +119,7 @@ func (r *DeviceNodeReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 func (r *DeviceNodeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.ProviderProfile, req ctrl.Request, dnSpec *cv1a1.DeviceZoneSpec) error {
 	// early return if both are nil
-	if dnSpec == nil { 
+	if dnSpec == nil {
 		return nil
 	}
 	ll := hint.DefaultLabels(pf.Spec.Platform, pf.Spec.Region, "")
@@ -142,7 +142,7 @@ func (r *DeviceNodeReconciler) updateConfigMap(ctx context.Context, pf *cv1a1.Pr
 	if err != nil {
 		return fmt.Errorf("failed to create or update ConfigMap data: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -179,7 +179,9 @@ func (r *DeviceNodeReconciler) createOrUpdateConfigMapData(ctx context.Context, 
 	dt[req.Name] = *dnSpec
 
 	out, err := yaml.Marshal(dt)
-	if err != nil {return false, err}
+	if err != nil {
+		return false, err
+	}
 
 	cm.Data[deviceType] = string(out)
 	if err := r.Update(ctx, cm); err != nil {

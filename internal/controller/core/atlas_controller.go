@@ -107,7 +107,9 @@ func (r *AtlasReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			}
 
 			svcKind := xrd.ComponentRef.Kind
-			if svcKind != "XProvider" && svcKind != "XKube" {continue} // only create providers for now
+			if svcKind != "XProvider" && svcKind != "XKube" {
+				continue
+			} // only create providers for now
 
 			unstrObj := &unstructured.Unstructured{Object: obj}
 			unstrObj.SetAPIVersion(xrd.ComponentRef.APIVersion)
@@ -186,7 +188,9 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	}
 
 	dpPolicy, err := r.fetchDeploymentPolicy(ns, atlas.Spec.DeploymentPolicyRef)
-	if err != nil { return nil, nil, errors.Wrap(err, "fetching deployment policy") }
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "fetching deployment policy")
+	}
 
 	// // ######### Handle execution environment: Kubernetes
 	if atlas.Spec.ExecutionEnvironment == "Kubernetes" {
@@ -310,7 +314,9 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 	for _, cmpnt := range cmpnts {
 		// ProviderName uniquely identifies a provider, set by the optimizer
 		providerName := cmpnt.ProviderRef.Name
-		if _, ok := uniqueProviders[providerName]; ok { continue }
+		if _, ok := uniqueProviders[providerName]; ok {
+			continue
+		}
 		uniqueProviders[providerName] = cmpnt.ProviderRef
 	}
 	// a map from platform to map[providerName]index in metadata list
@@ -332,7 +338,9 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 
 	manifests := map[string]hv1a1.SkyService{}
 	for pName, p := range uniqueProviders {
-		if p.Platform == "baremetal" { continue } // skip baremetal provider creation
+		if p.Platform == "baremetal" {
+			continue
+		} // skip baremetal provider creation
 
 		obj := &unstructured.Unstructured{}
 		obj.SetAPIVersion("skycluster.io/v1alpha1")
@@ -346,10 +354,14 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 		obj.SetName(name)
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
-		if !ok {return nil, nil, errors.New("No primary zone found")}
+		if !ok {
+			return nil, nil, errors.New("No primary zone found")
+		}
 		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
-		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {return nil, nil, errors.New("No secondary zone found")}
-		
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {
+			return nil, nil, errors.New("No secondary zone found")
+		}
+
 		// prepare static values and subnets
 		idx := indexedSortedProviders[p.Platform][pName]
 		cidr := provMetadata[p.Platform][idx].VPCCIDR
@@ -357,7 +369,9 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			return z.Enabled
 		}))
 		subnets, err := helper.Subnets(cidr, zoneCount)
-		if err != nil { return nil, nil, errors.Wrap(err, "Error calculating subnets.") }
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "Error calculating subnets.")
+		}
 
 		spec := map[string]any{
 			"applicationId": appId,
@@ -374,8 +388,10 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 					fields["volumeType"] = "gp2"
 					fields["volumeSize"] = 30
 				}
-				fields["flavor"] = func () string {
-					if p.Platform == "aws" || p.Platform == "openstack" {return "4vCPU-16GB"}
+				fields["flavor"] = func() string {
+					if p.Platform == "aws" || p.Platform == "openstack" {
+						return "4vCPU-16GB"
+					}
 					return "2vCPU-8GB"
 				}()
 				return fields
@@ -473,7 +489,9 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 
 	manifests := make([]hv1a1.SkyService, 0)
 	for _, cmpnt := range deployMap.Component {
-		if cmpnt.ComponentRef.Kind != "XInstance" {continue}
+		if cmpnt.ComponentRef.Kind != "XInstance" {
+			continue
+		}
 
 		// fetch refereced deployment policy item
 		xi := &svccv1a1.XInstance{}
@@ -578,10 +596,14 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 	// and let the cluster autoscaler handle the rest of the scaling for the workload.
 
 	k8sMetadata, err := r.loadProviderMetadata()
-	if err != nil {return nil, errors.Wrap(err, "Error loading provider metadata.")}
+	if err != nil {
+		return nil, errors.Wrap(err, "Error loading provider metadata.")
+	}
 
 	provProfiles, err := r.fetchProviderProfilesMap()
-	if err != nil {return nil, errors.Wrap(err, "Error fetching provider profiles.")}
+	if err != nil {
+		return nil, errors.Wrap(err, "Error fetching provider profiles.")
+	}
 
 	manifests := map[string]hv1a1.SkyService{}
 	for _, skySvc := range deployMap.Component {
@@ -599,11 +621,17 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 
 		// need primary and secondary zones for Kube
 		znPrimary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
-		if !ok {return nil, errors.New("No primary zone found")}
+		if !ok {
+			return nil, errors.New("No primary zone found")
+		}
 		znSecondary, ok := lo.Find(pp.Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
 		var znSecondaryPtr *cv1a1.ZoneSpec
-		if ok {znSecondaryPtr = &znSecondary}
-		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {return nil, errors.New("No secondary zone found")}
+		if ok {
+			znSecondaryPtr = &znSecondary
+		}
+		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, pp.Spec.Platform) {
+			return nil, errors.New("No secondary zone found")
+		}
 
 		// we need to create a XKube object
 		xrdObj := &unstructured.Unstructured{}

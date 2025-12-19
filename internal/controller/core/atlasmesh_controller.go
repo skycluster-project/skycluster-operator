@@ -149,11 +149,15 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	// manifests = append(manifests, manifestsIstio...)
 
 	oldMap := make(map[string]hv1a1.SkyService, len(atlasmesh.Status.Objects))
-	for _, o := range atlasmesh.Status.Objects {oldMap[o.Name] = o}
+	for _, o := range atlasmesh.Status.Objects {
+		oldMap[o.Name] = o
+	}
 
 	newObjects := make([]hv1a1.SkyService, 0, len(manifests))
-	for _, m := range manifests {newObjects = append(newObjects, *m)}	
-	
+	for _, m := range manifests {
+		newObjects = append(newObjects, *m)
+	}
+
 	changed := false
 	r.Logger.Info("Reconciling AtlasMesh manifests.", "oldCount", len(oldMap), "newCount", len(newObjects))
 
@@ -194,7 +198,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 
 			// Write the objects to disk for debugging
 			utils.WriteObjectToFile(obj, "/tmp/manifests/app-"+obj.GetName()+".yaml")
-			
+
 			if err := r.Create(ctx, obj); err != nil {
 				if apierrors.IsAlreadyExists(err) {
 					// r.Logger.Info("Manifest object already exists, checking for updates.", "name", obj.GetName())
@@ -207,8 +211,8 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 					if err := r.Get(ctx, types.NamespacedName{
 						Name:      obj.GetName(),
 						Namespace: obj.GetNamespace(),
-					}, current); err != nil { 
-						return ctrl.Result{}, errors.Wrap(err, "error getting existing manifest object") 
+					}, current); err != nil {
+						return ctrl.Result{}, errors.Wrap(err, "error getting existing manifest object")
 					}
 
 					obj.SetResourceVersion(current.GetResourceVersion())
@@ -225,7 +229,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 						current.Object["spec"].(map[string]any)["manifest"] = objManifest
 						if err := r.Update(ctx, current); err != nil {
 							return ctrl.Result{}, errors.Wrap(err, "error updating manifest object")
-					}
+						}
 					}
 				} else {
 					return ctrl.Result{}, errors.Wrap(err, "error creating manifest object")
@@ -237,7 +241,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 }
 
 func generateUnstructuredWrapper(skyObj *hv1a1.SkyService, owner *cv1a1.AtlasMesh, scheme *runtime.Scheme) (*unstructured.Unstructured, error) {
-	
+
 	obj := &unstructured.Unstructured{}
 	obj.SetAPIVersion("skycluster.io/v1alpha1")
 	obj.SetKind("Object")
@@ -255,17 +259,17 @@ func generateUnstructuredWrapper(skyObj *hv1a1.SkyService, owner *cv1a1.AtlasMes
 		},
 	}
 	obj.SetGroupVersionKind(schema.GroupVersionKind{
-    Group:   "skycluster.io",
-    Version: "v1alpha1",
-    Kind:    "Object",
+		Group:   "skycluster.io",
+		Version: "v1alpha1",
+		Kind:    "Object",
 	})
 	return obj, nil
 }
 
 func equalManifests(a, b interface{}) bool {
-    aJSON, _ := json.Marshal(a)
-    bJSON, _ := json.Marshal(b)
-    return bytes.Equal(aJSON, bJSON)
+	aJSON, _ := json.Marshal(a)
+	bJSON, _ := json.Marshal(b)
+	return bytes.Equal(aJSON, bJSON)
 }
 
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
@@ -533,10 +537,10 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting Namespace to map.")
 			}
-	
+
 			objMap["kind"] = "Namespace"
 			objMap["apiVersion"] = "v1"
-	
+
 			name := "ns-" + newNs.Name + "-" + pName
 			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
@@ -584,7 +588,7 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 		}
 		labels["skycluster.io/managed-by"] = "skycluster"
 		labels["skycluster.io/service-name"] = svc.Name
-		
+
 		// selectedProvNames contains the list of provider names selected for deployments
 		// a service manifest must be created for each provider
 		for _, pName := range selectedProvNames {
@@ -597,7 +601,7 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 
 			objMap["kind"] = "Service"
 			objMap["apiVersion"] = "v1"
-	
+
 			name := "svc-" + newSvc.Name + "-" + pName
 			rand := RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
@@ -621,7 +625,7 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 	manifests := make([]*hv1a1.SkyService, 0)
 	cmpnts := dpMap.Component
 	edges := dpMap.Edges
-	
+
 	labels := derivePriorities(cmpnts, edges)
 
 	// Deployments are created in selected remote clusters. We use "Object" CRD
@@ -646,22 +650,22 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
 			// pod labels get the all labels (its own + added by others for priority/failover)
 			allLabels := labels[deployItemUniqName].allLabels
-			
+
 			// sourcelabels key is the destination deployment for the current deployment
 			// and the values are labels added to the destination
 			// These labels must be added to the source deployment's pod template
 			// sourceLabels := labels[deployItemUniqName].sourceLabels
-			
+
 			// annotations (for istio custom buckets)
 			podAnts := newDeploy.Spec.Template.ObjectMeta.Annotations
 			newDeploy.Spec.Template.ObjectMeta.Annotations = lo.Assign(podAnts,
 				map[string]string{
 					"sidecar.istio.io/statsHistogramBuckets": "{\"istiocustom\":[1,2,4,6,8,10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,43,46,49,52,55,58,62,66,70,75,80,85,90,95,100,105,110,115,120,125,130,135,140,145,150,155,160,170,180,190,200,210,220,230,240,250,260,270,280,290,300,320,340,360,380,390,400,420,440,460,480,500,550,600,650,700,750,800,850,900,950,1000,1100,1200,1300,1400,1500,1600,1700,1800,1900,2000,2500,3000,3500,4000,5000,6000,8000,10000,15000,20000,30000,40000,50000,75000,100000,300000,600000,1800000,3600000]}",
 				},
-			)	
+			)
 
 			lb := lo.Assign(
-				newDeploy.Spec.Template.ObjectMeta.Labels, 
+				newDeploy.Spec.Template.ObjectMeta.Labels,
 				map[string]string{
 					"skycluster.io/managed-by": "skycluster",
 					"skycluster.io/component":  deployItemUniqName,
@@ -671,18 +675,22 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 
 			// sort the labels for consistency
 			keys := make([]string, 0, len(lb))
-			for k := range lb { keys = append(keys, k)}
+			for k := range lb {
+				keys = append(keys, k)
+			}
 			sort.Strings(keys)
 
 			// pod labels
 			newDeploy.Spec.Template.ObjectMeta.Labels = func() map[string]string {
 				sortedMap := make(map[string]string, len(lb))
-				for _, k := range keys {sortedMap[k] = lb[k]}
+				for _, k := range keys {
+					sortedMap[k] = lb[k]
+				}
 				return sortedMap
 			}()
 			// for _, srcLbls := range sourceLabels {
 			// 	maps.Copy(newDeploy.Spec.Template.ObjectMeta.Labels, srcLbls)
-			// } 
+			// }
 
 			// deployment spec.selector
 			if newDeploy.Spec.Selector == nil {
@@ -702,19 +710,19 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 
 			// Add general labels to the deployment
 			deplLabels := newDeploy.ObjectMeta.Labels
-			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels, 
+			newDeploy.ObjectMeta.Labels = lo.Assign(deplLabels,
 				map[string]string{
 					"skycluster.io/component":  deployItemUniqName,
 					"skycluster.io/managed-by": "skycluster",
 				},
-			) 
-			
+			)
+
 			// yamlObj, err := generateYAMLManifest(newDeploy)
 			objMap, err := objToMap(newDeploy)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting Deployment to map.")
 			}
-			
+
 			objMap["kind"] = "Deployment"
 			objMap["apiVersion"] = "apps/v1"
 
@@ -756,52 +764,52 @@ func (r *AtlasMeshReconciler) fetchProviderProfilesMap() (map[string]cv1a1.Provi
 }
 
 func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) map[string]*priorityLabels {
-	
+
 	// using Istio destination rule, we control which target endpoint is used for each deployment
-	// We use failover priority that enables selection of endpoints based on the 
+	// We use failover priority that enables selection of endpoints based on the
 	// matching labels provided in DestionaRule and target pod labels
-	
+
 	// We use VirtualService and DestinationRule to control the traffic routing
-	
+
 	// VirtualService defines the routing rules to the target service endpoints
 	// DestinationRule defines the failover priorities among the target service endpoints
-	
+
 	// For each target service endpoint, we define a virtual service and destination rule
 	// For each source deployment, we define a HTTPRoute in the virtual service
 	// that points to the a route destination for this deployment
-	
-	// Within the destination rule, we define the failover priorities for each 
+
+	// Within the destination rule, we define the failover priorities for each
 	// route destination defined in the virtual service
-	
+
 	// The labels in DestinationRule must match with the labels in the target pods
 	// The target pod that matches the largest number of labels is selected.
 	// For a match to be considered, all previous labels must match as well.
-	
+
 	// The plan for selecting target deployment then is as follows:
 	// For each src deployment -> target deployment as selected by deployment plan
 	// We add same labels to target deployment and DestinationRule for target service endpoint
 	// (in source deployment cluster)
-	
+
 	// For a backup target deployment (if any, typically same zone/region as source deployment):
-	// we add additional labels to the backup target, BUT we also need to add this label 
+	// we add additional labels to the backup target, BUT we also need to add this label
 	// to the primary target deployment as well. Since a target with largest number of matching
 	// labels is selected, the primary target will be selected first. The backup target
 	// will be selected only if the primary target is not available.
-	
+
 	// Here is an example:
 	// Source deployment A (in cluster/provider_1) targets deployment X (in cluster/provider_2)
 	// Source deployment B (in cluster/provider_1) also targets deployment X
 	// Backup target for deployment A and B is deployment Y (in cluster/provider_3)
 	//
 	// The derived labels would be as follows:
-	
+
 	// Virtual Service for X in cluster/provider_1:
 	//  - match: deployment A labels
 	//    route to: destination rule X, subset A
 	//  - match: deployment B labels
 	//    route to: destination rule X, subset B
-	
-	// DestinationRule for service X in cluster_1: 
+
+	// DestinationRule for service X in cluster_1:
 	//  - subset A:
 	//    trafficPolicy:
 	//      loadBalancer:
@@ -814,7 +822,7 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 	//        failoverPriority:
 	//          - failover-src-b-1: b-x
 	//          - failover-src-b-2: b-y
-	
+
 	// Deployment X:
 	//    failover-src-a-1: a-x
 	//    failover-src-a-2: a-y
@@ -829,7 +837,7 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 	// Deployment Y:
 	//    failover-src-a-2: a-y
 	//    failover-src-b-2: b-y
-	
+
 	labels := make(map[string]*priorityLabels)
 
 	// ordered selected destination for each deployment in edges
@@ -879,20 +887,26 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 		labels[toName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
 		// TODO: this must be added to the backup as well
 		// TODO: backup label must be added to the primary target as well
-		
+
 		// find backup target for 'from' deployment
 		backups := lo.Filter(cmpnts, func(c hv1a1.SkyService, _ int) bool {
-			return c.ComponentRef.Name == to.ComponentRef.Name && 
+			return c.ComponentRef.Name == to.ComponentRef.Name &&
 				c.ProviderRef.Name != to.ProviderRef.Name
 		})
-		
+
 		// sort by the number of matching location attributes
 		// score counts how many of the three fields match `from`.
 		score := func(c hv1a1.SkyService) int {
 			s := 0
-			if c.ProviderRef.RegionAlias == from.ProviderRef.RegionAlias {s++}
-			if c.ProviderRef.Region == from.ProviderRef.Region {s++}
-			if c.ProviderRef.Zone == from.ProviderRef.Zone {s++}
+			if c.ProviderRef.RegionAlias == from.ProviderRef.RegionAlias {
+				s++
+			}
+			if c.ProviderRef.Region == from.ProviderRef.Region {
+				s++
+			}
+			if c.ProviderRef.Zone == from.ProviderRef.Zone {
+				s++
+			}
 			return s
 		}
 
@@ -905,7 +919,9 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 			return si > sj
 		})
 
-		if len(backups) == 0 {continue}
+		if len(backups) == 0 {
+			continue
+		}
 		bk := backups[0]
 		bkName := bk.ComponentRef.Name + "-" + bk.ProviderRef.Name
 
@@ -917,11 +933,11 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 		}
 
 		// fName := RandSuffix(fromName)
-		// bName := RandSuffix(bkName) 
+		// bName := RandSuffix(bkName)
 		// bkKey := "failover-" + fName + "-" + bName // backup
 		bkKey := "failover/" + fromName + "-" + bkName // backup
 		bkKey = ShortenLabelKey(bkKey)
-		
+
 		// must add backup label to source (as source labels)
 		if labels[fromName].sourceLabels[toName] == nil {
 			labels[fromName].sourceLabels[toName] = make([]*orderedLabels, 0)
@@ -951,15 +967,15 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 
 	// Generate Istio configuration
 	// We use VirtualService and DestinationRule to control the traffic routing
-	
+
 	// VirtualService defines the routing rules to the target service endpoints
 	// DestinationRule defines the failover priorities among the target service endpoints
-	
+
 	// For each target service endpoint, we define a virtual service and destination rule
 	// For each source deployment, we define a HTTPRoute in the virtual service
 	// that points to the a route destination for this deployment
-	
-	// Within the destination rule, we define the failover priorities for each 
+
+	// Within the destination rule, we define the failover priorities for each
 	// route destination defined in the virtual service
 	type virtualServiceHelper struct {
 		ProviderCfgName string
@@ -972,7 +988,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 
 	virtualSvcs := make(map[string]*virtualServiceHelper)
 	dstRules := make(map[string]*dstRuleHelper)
-	
+
 	for _, edge := range edges {
 		// must fetch labels on the deployment and match with a service
 		// then use service info to create/update virtual service and destination rule
@@ -980,7 +996,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		fromName := from.ComponentRef.Name + "-" + from.ProviderRef.Name
 		to := edge.To
 		// toName := to.ComponentRef.Name + "-" + to.ProviderRef.Name
-		if strings.ToLower(to.ComponentRef.Kind) != "deployment" { continue }
+		if strings.ToLower(to.ComponentRef.Kind) != "deployment" {
+			continue
+		}
 
 		dep := &appsv1.Deployment{}
 		if err := r.Get(context.TODO(), client.ObjectKey{
@@ -1022,7 +1040,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 					}
 				}
 				// init destination rule
-				if _, ok := dstRules[name]; !ok { 
+				if _, ok := dstRules[name]; !ok {
 					dstRules[name] = &dstRuleHelper{
 						ProviderCfgName: from.ProviderRef.Name,
 						DstRule: &istioClient.DestinationRule{
@@ -1033,7 +1051,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 							Spec: istiov1.DestinationRule{
 								Host: svc.Name,
 							},
-					  },
+						},
 					}
 				}
 
@@ -1059,9 +1077,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 						},
 					},
 				}
-				
+
 				vs.VirtualService.Spec.Http = append(vs.VirtualService.Spec.Http, http)
-				
+
 				labelAndKeys := make([]string, 0)
 				for _, kv := range labels[fromName].sourceLabels[to.ComponentRef.Name+"-"+to.ProviderRef.Name] {
 					labelAndKeys = append(labelAndKeys, kv.key+"="+kv.value)
@@ -1097,8 +1115,8 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 
 				break // found the matching service, do not expect to have multiple matches
 			}
-		} 
-		
+		}
+
 		// svc has found and we have created/updated virtual service and destination rule
 	}
 
@@ -1107,7 +1125,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting VirtualService to map.")
 		}
-		
+
 		objMap["kind"] = "VirtualService"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
@@ -1129,7 +1147,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting DestinationRule to map.")
 		}
-		
+
 		objMap["kind"] = "DestinationRule"
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
@@ -1152,7 +1170,9 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 func generateObjectWrapper(name string, ns string, objAny map[string]any, providerConfigName string) (*hv1a1.SkyService, error) {
 	obj := &hv1a1.SkyService{}
 	obj.Name = name
-	if ns != "" {obj.Namespace = ns}
+	if ns != "" {
+		obj.Namespace = ns
+	}
 	b, err := json.Marshal(objAny)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to marshal objectAny to JSON")
@@ -1169,7 +1189,7 @@ func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service 
 
 	// Clear resource version and UID
 	dest.ResourceVersion = ""
-	dest.UID = ""				 
+	dest.UID = ""
 	dest.CreationTimestamp = metav1.Time{}
 	dest.Generation = 0
 	dest.ManagedFields = nil
@@ -1178,13 +1198,15 @@ func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service 
 	dest.Status = corev1.ServiceStatus{}
 	dest.Spec.ClusterIP = ""
 	dest.Spec.ClusterIPs = nil
-	
+
 	dest.Spec.LoadBalancerIP = ""
 	dest.Spec.LoadBalancerSourceRanges = nil
 	dest.Spec.ExternalIPs = nil
 	dest.Spec.ExternalName = ""
-	
-	if clearAnnotations {dest.Annotations = nil}
+
+	if clearAnnotations {
+		dest.Annotations = nil
+	}
 
 	return dest
 }

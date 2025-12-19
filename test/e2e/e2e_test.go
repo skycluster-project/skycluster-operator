@@ -34,16 +34,16 @@ import (
 )
 
 // namespace where the project is deployed in
-const namespace = "operator-system"
+const namespace = "skycluster-system"
 
 // serviceAccountName created for the project
-const serviceAccountName = "operator-controller-manager"
+const serviceAccountName = "skycluster-controller-manager"
 
 // metricsServiceName is the name of the metrics service of the project
-const metricsServiceName = "operator-controller-manager-metrics-service"
+const metricsServiceName = "skycluster-controller-manager-metrics-service"
 
 // metricsRoleBindingName is the name of the RBAC that will be created to allow get the metrics data
-const metricsRoleBindingName = "operator-metrics-binding"
+const metricsRoleBindingName = "skycluster-metrics-binding"
 
 var _ = Describe("Manager", Ordered, func() {
 	var controllerPodName string
@@ -72,6 +72,15 @@ var _ = Describe("Manager", Ordered, func() {
 		cmd = exec.Command("make", "deploy", fmt.Sprintf("IMG=%s", projectImage))
 		_, err = utils.Run(cmd)
 		Expect(err).NotTo(HaveOccurred(), "Failed to deploy the controller-manager")
+
+		// Apply the offerings ConfigMap
+		// Expect(utils.ApplyYAML(
+		// 		context.Background(), 
+		// 		k8sClient, 
+		// 		k8sClient.Scheme(),
+		// 		"test/manifests/cms/offerings.yaml"))
+		//   .To(Succeed())
+
 	})
 
 	// After all tests have been executed, clean up by undeploying the controller, uninstalling CRDs,
@@ -176,7 +185,7 @@ var _ = Describe("Manager", Ordered, func() {
 		It("should ensure the metrics endpoint is serving metrics", func() {
 			By("creating a ClusterRoleBinding for the service account to allow access to metrics")
 			cmd := exec.Command("kubectl", "create", "clusterrolebinding", metricsRoleBindingName,
-				"--clusterrole=operator-metrics-reader",
+				"--clusterrole=skycluster-metrics-reader",
 				fmt.Sprintf("--serviceaccount=%s:%s", namespace, serviceAccountName),
 			)
 			_, err := utils.Run(cmd)
@@ -215,7 +224,7 @@ var _ = Describe("Manager", Ordered, func() {
 			By("waiting for the webhook service endpoints to be ready")
 			verifyWebhookEndpointsReady := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
-					"-l", "kubernetes.io/service-name=operator-webhook-service",
+					"-l", "kubernetes.io/service-name=skycluster-webhook-service",
 					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.addresses[*]}{end}{end}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred(), "Webhook endpoints should exist")
@@ -226,7 +235,7 @@ var _ = Describe("Manager", Ordered, func() {
 			By("waiting for the webhook service endpoints to be ready")
 			verifyWebhookEndpointsReady := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get", "endpointslices.discovery.k8s.io", "-n", namespace,
-					"-l", "kubernetes.io/service-name=skycluster-operator-webhook-service",
+					"-l", "kubernetes.io/service-name=skycluster-skycluster-webhook-service",
 					"-o", "jsonpath={range .items[*]}{range .endpoints[*]}{.addresses[*]}{end}{end}")
 				output, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred(), "Webhook endpoints should exist")
@@ -303,7 +312,7 @@ var _ = Describe("Manager", Ordered, func() {
 			verifyCAInjection := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"validatingwebhookconfigurations.admissionregistration.k8s.io",
-					"operator-validating-webhook-configuration",
+					"skycluster-validating-webhook-configuration",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				vwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -317,7 +326,7 @@ var _ = Describe("Manager", Ordered, func() {
 			verifyCAInjection := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"mutatingwebhookconfigurations.admissionregistration.k8s.io",
-					"operator-mutating-webhook-configuration",
+					"skycluster-mutating-webhook-configuration",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				mwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -331,7 +340,7 @@ var _ = Describe("Manager", Ordered, func() {
 			verifyCAInjection := func(g Gomega) {
 				cmd := exec.Command("kubectl", "get",
 					"mutatingwebhookconfigurations.admissionregistration.k8s.io",
-					"skycluster-operator-mutating-webhook-configuration",
+					"skycluster-skycluster-mutating-webhook-configuration",
 					"-o", "go-template={{ range .webhooks }}{{ .clientConfig.caBundle }}{{ end }}")
 				mwhOutput, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
@@ -351,6 +360,22 @@ var _ = Describe("Manager", Ordered, func() {
 		//    fmt.Sprintf(`controller_runtime_reconcile_total{controller="%s",result="success"} 1`,
 		//    strings.ToLower(<Kind>),
 		// ))
+
+		// It("should have the shared device ConfigMap loaded", func() {
+		// 	ctx := context.Background()
+		
+		// 	cm := &corev1.ConfigMap{}
+		// 	key := types.NamespacedName{
+		// 		Name:      "device-config",
+		// 		Namespace: "default",
+		// 	}
+		
+		// 	Eventually(func() error {
+		// 		return k8sClient.Get(ctx, key, cm)
+		// 	}, time.Second*5, time.Millisecond*200).Should(Succeed())
+		
+		// 	Expect(cm.Data).NotTo(BeEmpty())
+		// })
 	})
 })
 

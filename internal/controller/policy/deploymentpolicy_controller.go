@@ -119,7 +119,9 @@ func (r *DeploymentPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *
 		DeploymentPlanResourceVersion: ver,
 	}
 	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
-		if apierrors.IsConflict(err) {return nil}
+		if apierrors.IsConflict(err) {
+			return nil
+		}
 		return err
 	}
 	return nil

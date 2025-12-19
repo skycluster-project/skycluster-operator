@@ -111,7 +111,9 @@ func (r *DataflowPolicyReconciler) updateILPTaskRef(ctx context.Context, ilp *cv
 		DataflowResourceVersion: ver,
 	}
 	if err := r.Patch(ctx, ilp, client.MergeFrom(orig)); err != nil {
-		if apierrors.IsConflict(err) {return nil}
+		if apierrors.IsConflict(err) {
+			return nil
+		}
 		return err
 	}
 	return nil

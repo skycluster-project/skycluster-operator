@@ -23,9 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
@@ -51,7 +52,57 @@ var _ = Describe("ProviderProfile Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: corev1alpha1.ProviderProfileSpec{
+						Platform:    "aws",
+						Region:      "us-east-1",
+						RegionAlias: "us-east",
+						Continent:   "north-america",
+						Enabled:     true,
+						Zones: []corev1alpha1.ZoneSpec{
+							{
+								Name:         "us-east-1a",
+								LocationName: "us-east-1a",
+								DefaultZone:  true,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+							{
+								Name:         "us-east-1b",
+								LocationName: "us-east-1b",
+								DefaultZone:  false,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+							{
+								Name:         "us-east-1c",
+								LocationName: "us-east-1c",
+								DefaultZone:  false,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+							{
+								Name:         "us-east-1d",
+								LocationName: "us-east-1d",
+								DefaultZone:  false,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+							{
+								Name:         "us-east-1e",
+								LocationName: "us-east-1e",
+								DefaultZone:  false,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+							{
+								Name:         "us-east-1f",
+								LocationName: "us-east-1f",
+								DefaultZone:  false,
+								Enabled:      true,
+								Type:         "cloud",
+							},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
@@ -69,16 +120,33 @@ var _ = Describe("ProviderProfile Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &ProviderProfileReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:   k8sClient,
+				Scheme:   k8sClient.Scheme(),
+				Logger:   logf.Log.WithName("test-providerprofile-controller"),
+				Recorder: nil, // Recorder is not used in the reconcile function
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-			// Example: If you expect a certain status condition after reconciliation, verify it here.
+
+			By("Verifying the ProviderProfile was created and reconciled")
+			Expect(k8sClient.Get(ctx, typeNamespacedName, providerprofile)).To(Succeed())
+
+			By("Verifying the spec fields are set correctly")
+			Expect(providerprofile.Spec.Platform).To(Equal("aws"))
+			Expect(providerprofile.Spec.Region).To(Equal("us-east-1"))
+			Expect(providerprofile.Spec.RegionAlias).To(Equal("us-east"))
+			Expect(providerprofile.Spec.Continent).To(Equal("north-america"))
+			Expect(providerprofile.Spec.Enabled).To(BeTrue())
+			Expect(providerprofile.Spec.Zones).To(HaveLen(6))
+
+			// By("Verifying status fields are populated after reconciliation")
+			// Expect(providerprofile.Status.Platform).To(Equal("aws"))
+			// Expect(providerprofile.Status.Region).To(Equal("us-east-1"))
+			// Expect(providerprofile.Status.Zones).To(HaveLen(6))
+			// Expect(providerprofile.Status.ObservedGeneration).To(Equal(providerprofile.Generation))
 		})
 	})
 })
