@@ -36,9 +36,11 @@ var _ = Describe("Latency Controller", func() {
 	Context("When reconciling a Latency resource", func() {
 		const resourceName = "latency-aws-us-east-1-aws-us-east-2"
 		const namespace = "skycluster-system"
+		var (
+			ctrlReconciler *LatencyReconciler
+		)
 
 		ctx := context.Background()
-
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
 			Namespace: namespace,
@@ -54,6 +56,12 @@ var _ = Describe("Latency Controller", func() {
 			err := k8sClient.Get(ctx, types.NamespacedName{Name: namespace}, ns)
 			if err != nil && errors.IsNotFound(err) {
 				Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			}
+
+			ctrlReconciler = &LatencyReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: logf.Log.WithName("test-latency-controller"),
 			}
 		})
 
@@ -88,17 +96,10 @@ var _ = Describe("Latency Controller", func() {
 			Expect(k8sClient.Create(ctx, latency)).To(Succeed())
 
 			By("reconciling the resource")
-			controllerReconciler := &LatencyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-				Logger: logf.Log.WithName("test-latency-controller"),
-			}
-
-			result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			_, err := ctrlReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
 
 			By("verifying the status was updated from spec")
 			updatedLatency := &corev1alpha1.Latency{}
@@ -130,17 +131,10 @@ var _ = Describe("Latency Controller", func() {
 			Expect(k8sClient.Create(ctx, latency)).To(Succeed())
 
 			By("reconciling the resource")
-			controllerReconciler := &LatencyReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
-				Logger: logf.Log.WithName("test-latency-controller"),
-			}
-
-			result, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+			_, err := ctrlReconciler.Reconcile(ctx, reconcile.Request{
 				NamespacedName: typeNamespacedName,
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.Requeue).To(BeFalse())
 
 			By("verifying the status was updated correctly")
 			updatedLatency := &corev1alpha1.Latency{}

@@ -34,6 +34,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -50,10 +51,11 @@ import (
 // ImageReconciler reconciles a Image object
 type ImageReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	Logger     logr.Logger
-	KubeClient kubernetes.Interface // cached kube client for getting logs efficiently
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
+	Logger       logr.Logger
+	KubeClient   kubernetes.Interface // cached kube client for getting logs efficiently
+	PodLogClient PodLogger            // cached log client for getting logs efficiently
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -294,7 +296,7 @@ func (r *ImageReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			}
 
 			// Persist results to status
-			img.Status.Images = zones
+			st.Images = zones
 
 			// Update ConfigMap with latest images (best-effort to fail early)
 			if err := r.updateConfigMap(ctx, pf, img); err != nil {
@@ -534,41 +536,47 @@ func (r *ImageReconciler) updateProviderProfile(ctx context.Context, pf *cv1a1.P
 	return r.Patch(ctx, pf, client.MergeFrom(orig))
 }
 
+// Define what we actually need from the K8s API
+type PodLogProvider interface {
+	GetLogs(name string, opts *corev1.PodLogOptions) *rest.Request
+}
+
+// PodLogger abstracts the K8s log streaming call
+type PodLogger interface {
+	StreamLogs(ctx context.Context, namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error)
+}
+
+// Real implementation for production
+type K8sPodLogger struct {
+	KubeClient kubernetes.Interface
+}
+
+func (k *K8sPodLogger) StreamLogs(ctx context.Context, namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
+	return k.KubeClient.CoreV1().Pods(namespace).GetLogs(name, opts).Stream(ctx)
+}
+
 // getPodStdOut fetches logs for a specific container from the pod (containerName recommended).
 // It retries with no container specified if the first attempt fails.
+// Pass the kubernetes.Interface directly to make it mockable
 func (r *ImageReconciler) getPodStdOut(ctx context.Context, podName, podNS, containerName string) (string, error) {
-	// Validate kube client
-	if r.KubeClient == nil {
-		cfg := ctrl.GetConfigOrDie()
-		kc, err := kubernetes.NewForConfig(cfg)
+	fetch := func(cName string) (string, error) {
+		stream, err := r.PodLogClient.StreamLogs(ctx, podNS, podName, &corev1.PodLogOptions{Container: cName})
 		if err != nil {
-			return "", fmt.Errorf("failed to create kube client for logs: %w", err)
+			return "", err
 		}
-		r.KubeClient = kc
+		defer stream.Close()
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(stream)
+		return buf.String(), nil
 	}
 
-	// Try to stream logs from the specific container first (more deterministic)
-	opts := &corev1.PodLogOptions{
-		Container: containerName,
-	}
-	streamReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, opts)
-	stream, err := streamReq.Stream(ctx)
+	// Primary attempt
+	logs, err := fetch(containerName)
 	if err != nil {
-		// Fallback: try without specifying container (in case container name differs)
-		fallbackReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
-		stream2, err2 := fallbackReq.Stream(ctx)
-		if err2 != nil {
-			return "", fmt.Errorf("failed to get logs for pod %s (container=%s): %v; fallback error: %v", podName, containerName, err, err2)
-		}
-		stream = stream2
+		return "", fmt.Errorf("failed to get logs for pod %s: %w", podName, err)
 	}
-	defer stream.Close()
 
-	var logs bytes.Buffer
-	if _, err := io.Copy(&logs, stream); err != nil {
-		return "", fmt.Errorf("failed to read logs for pod %s: %w", podName, err)
-	}
-	return logs.String(), nil
+	return logs, nil
 }
 
 // If any of the input data is not nil, it will update the ConfigMap with the data.
