@@ -37,6 +37,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/core/utils"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
 
@@ -106,14 +107,15 @@ var _ = Describe("InstanceType Controller", func() {
 		}
 
 		BeforeEach(func() {
-			instancetype = setupInstanceTypeResource(ctx, resourceName, namespace, typeNamespacedName)
-			secret = setupSecret(ctx, namespace, typeNamespacedName)
-			p, wasCreated := setupProviderProfile(ctx, resourceName, namespace, typeNamespacedName)
+			instancetype = setupInstanceTypeResource(ctx, typeNamespacedName)
+			secret = setupSecret(ctx, k8sClient, typeNamespacedName)
+			p, wasCreated := setupProviderProfile(ctx, k8sClient, typeNamespacedName)
 			if wasCreated {
-				updateProviderProfileStatus(ctx, p, resourceName, namespace)
+				utils.SetProviderProfileStatus(p, resourceName, namespace)
+				Expect(k8sClient.Status().Update(ctx, p)).To(Succeed())
 				provider = p
 			}
-			cm = setupConfigMap(ctx, resourceName, namespace, provider)
+			cm = setupConfigMap(ctx, k8sClient, resourceName, namespace, provider)
 			reconciler = createInstanceTypeReconciler(podOutput)
 		})
 
@@ -362,6 +364,17 @@ var _ = Describe("InstanceType Controller", func() {
 	})
 })
 
+func setupConfigMap(ctx context.Context, k8sClient client.Client, resourceName, namespace string, provider *cv1a1.ProviderProfile) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: resourceName, Namespace: namespace}, cm)
+	if err != nil && errors.IsNotFound(err) {
+		cm = utils.SetupProviderProfileConfigMap(resourceName, namespace, provider)
+		Expect(k8sClient.Create(ctx, cm)).To(Succeed())
+		return cm
+	}
+	return cm
+}
+
 func setupInstanceTypePod(namespace string, provider *cv1a1.ProviderProfile) *corev1.Pod {
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
@@ -422,18 +435,18 @@ func setupInstanceTypePod(namespace string, provider *cv1a1.ProviderProfile) *co
 	}
 }
 
-func setupInstanceTypeResource(ctx context.Context, resourceName, namespace string, typeNamespacedName types.NamespacedName) *cv1a1.InstanceType {
+func setupInstanceTypeResource(ctx context.Context, typeNamespacedName types.NamespacedName) *cv1a1.InstanceType {
 	By("creating the custom resource for the Kind InstanceType")
 	instancetype := &cv1a1.InstanceType{}
 	err := k8sClient.Get(ctx, typeNamespacedName, instancetype)
 	if err != nil && errors.IsNotFound(err) {
 		instancetype = &cv1a1.InstanceType{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: namespace,
+				Name:      typeNamespacedName.Name,
+				Namespace: typeNamespacedName.Namespace,
 			},
 			Spec: cv1a1.InstanceTypeSpec{
-				ProviderRef: resourceName,
+				ProviderRef: typeNamespacedName.Name,
 				Offerings: []cv1a1.ZoneOfferings{
 					{
 						Zone: "us-east-1a",
@@ -462,6 +475,29 @@ func setupInstanceTypeResource(ctx context.Context, resourceName, namespace stri
 	return instancetype
 }
 
+func setupSecret(ctx context.Context, k8sClient client.Client, typeNamespacedName types.NamespacedName) *corev1.Secret {
+	secret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, typeNamespacedName, secret)
+	if err != nil && errors.IsNotFound(err) {
+		secret = utils.SetupProviderCredSecret(typeNamespacedName.Name, typeNamespacedName.Namespace)
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		return secret
+	}
+	return secret
+}
+
+// returns the provider profile and a boolean indicating if it was created
+func setupProviderProfile(ctx context.Context, k8sClient client.Client, typeNamespacedName types.NamespacedName) (*cv1a1.ProviderProfile, bool) {
+	provider := &cv1a1.ProviderProfile{}
+	err := k8sClient.Get(ctx, typeNamespacedName, provider)
+	if err != nil && errors.IsNotFound(err) {
+		provider = utils.SetupProviderProfile(typeNamespacedName.Name, typeNamespacedName.Namespace)
+		Expect(k8sClient.Create(ctx, provider)).To(Succeed())
+		return provider, true
+	}
+	return provider, false
+}
+
 func createInstanceTypeReconciler(podOutput string) *InstanceTypeReconciler {
 	// For testing, we'll use a fake client that can be configured per-test
 	// The actual log streaming will be handled by setting KubeClient in individual tests
@@ -472,6 +508,6 @@ func createInstanceTypeReconciler(podOutput string) *InstanceTypeReconciler {
 		Recorder:     record.NewFakeRecorder(100),
 		Logger:       logr.Discard(),
 		KubeClient:   fkClient,
-		PodLogClient: &FakePodLogger{LogOutput: podOutput},
+		PodLogClient: &utils.FakePodLogger{LogOutput: podOutput},
 	}
 }

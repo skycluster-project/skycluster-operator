@@ -34,12 +34,13 @@ import (
 var _ = Describe("ProviderProfile Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const namespace = "skycluster-system"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: namespace,
 		}
 		providerprofile := &corev1alpha1.ProviderProfile{}
 
@@ -47,69 +48,12 @@ var _ = Describe("ProviderProfile Controller", func() {
 			By("creating the custom resource for the Kind ProviderProfile")
 			err := k8sClient.Get(ctx, typeNamespacedName, providerprofile)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &corev1alpha1.ProviderProfile{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					Spec: corev1alpha1.ProviderProfileSpec{
-						Platform:    "aws",
-						Region:      "us-east-1",
-						RegionAlias: "us-east",
-						Continent:   "north-america",
-						Enabled:     true,
-						Zones: []corev1alpha1.ZoneSpec{
-							{
-								Name:         "us-east-1a",
-								LocationName: "us-east-1a",
-								DefaultZone:  true,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-							{
-								Name:         "us-east-1b",
-								LocationName: "us-east-1b",
-								DefaultZone:  false,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-							{
-								Name:         "us-east-1c",
-								LocationName: "us-east-1c",
-								DefaultZone:  false,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-							{
-								Name:         "us-east-1d",
-								LocationName: "us-east-1d",
-								DefaultZone:  false,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-							{
-								Name:         "us-east-1e",
-								LocationName: "us-east-1e",
-								DefaultZone:  false,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-							{
-								Name:         "us-east-1f",
-								LocationName: "us-east-1f",
-								DefaultZone:  false,
-								Enabled:      true,
-								Type:         "cloud",
-							},
-						},
-					},
-				}
+				resource := createProviderProfileResource(resourceName, namespace)
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &corev1alpha1.ProviderProfile{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -150,3 +94,63 @@ var _ = Describe("ProviderProfile Controller", func() {
 		})
 	})
 })
+
+func createProviderProfileResource(resourceName, namespace string) *corev1alpha1.ProviderProfile {
+	return &corev1alpha1.ProviderProfile{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+		},
+		Spec: corev1alpha1.ProviderProfileSpec{
+			Platform:    "aws",
+			Region:      "us-east-1",
+			RegionAlias: "us-east",
+			Continent:   "north-america",
+			Enabled:     true,
+			Zones: []corev1alpha1.ZoneSpec{
+				{
+					Name:         "us-east-1a",
+					LocationName: "us-east-1a",
+					DefaultZone:  true,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+				{
+					Name:         "us-east-1b",
+					LocationName: "us-east-1b",
+					DefaultZone:  false,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+				{
+					Name:         "us-east-1c",
+					LocationName: "us-east-1c",
+					DefaultZone:  false,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+				{
+					Name:         "us-east-1d",
+					LocationName: "us-east-1d",
+					DefaultZone:  false,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+				{
+					Name:         "us-east-1e",
+					LocationName: "us-east-1e",
+					DefaultZone:  false,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+				{
+					Name:         "us-east-1f",
+					LocationName: "us-east-1f",
+					DefaultZone:  false,
+					Enabled:      true,
+					Type:         "cloud",
+				},
+			},
+		},
+	}
+}

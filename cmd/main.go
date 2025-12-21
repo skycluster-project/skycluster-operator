@@ -47,6 +47,8 @@ import (
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	imgctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/image"
+	itctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/instancetype"
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	svccontroller "github.com/skycluster-project/skycluster-operator/internal/controller/svc"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
@@ -275,7 +277,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DeploymentPolicy")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ImageReconciler{
+	if err := (&imgctrl.ImageReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ImageController"),
@@ -292,7 +294,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "DeviceNode")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.InstanceTypeReconciler{
+	if err := (&itctrl.InstanceTypeReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("InstanceTypeController"),

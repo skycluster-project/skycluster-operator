@@ -35,9 +35,54 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/core/utils"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
-	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
 )
+
+func setupImageResource(ctx context.Context, k8sClient client.Client, resourceName, namespace string) *cv1a1.Image {
+	image := &cv1a1.Image{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: resourceName, Namespace: namespace}, image)
+	if err != nil && errors.IsNotFound(err) {
+		image = utils.SetupImageResource(ctx, resourceName, namespace)
+		Expect(k8sClient.Create(ctx, image)).To(Succeed())
+		return image
+	}
+	return image
+}
+
+func setupSecret(ctx context.Context, k8sClient client.Client, typeNamespacedName types.NamespacedName) *corev1.Secret {
+	secret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, typeNamespacedName, secret)
+	if err != nil && errors.IsNotFound(err) {
+		secret = utils.SetupProviderCredSecret(typeNamespacedName.Name, typeNamespacedName.Namespace)
+		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+		return secret
+	}
+	return secret
+}
+
+// returns the provider profile and a boolean indicating if it was created
+func setupProviderProfile(ctx context.Context, k8sClient client.Client, typeNamespacedName types.NamespacedName) (*cv1a1.ProviderProfile, bool) {
+	provider := &cv1a1.ProviderProfile{}
+	err := k8sClient.Get(ctx, typeNamespacedName, provider)
+	if err != nil && errors.IsNotFound(err) {
+		provider = utils.SetupProviderProfile(typeNamespacedName.Name, typeNamespacedName.Namespace)
+		Expect(k8sClient.Create(ctx, provider)).To(Succeed())
+		return provider, true
+	}
+	return provider, false
+}
+
+func setupConfigMap(ctx context.Context, k8sClient client.Client, resourceName, namespace string, provider *cv1a1.ProviderProfile) *corev1.ConfigMap {
+	cm := &corev1.ConfigMap{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: resourceName, Namespace: namespace}, cm)
+	if err != nil && errors.IsNotFound(err) {
+		cm = utils.SetupProviderProfileConfigMap(resourceName, namespace, provider)
+		Expect(k8sClient.Create(ctx, cm)).To(Succeed())
+		return cm
+	}
+	return cm
+}
 
 var _ = Describe("Image Controller", func() {
 	Context("When reconciling a resource", func() {
@@ -79,14 +124,15 @@ var _ = Describe("Image Controller", func() {
 		}
 
 		BeforeEach(func() {
-			image = setupImageResource(ctx, resourceName, namespace, typeNamespacedName)
-			secret = setupSecret(ctx, namespace, typeNamespacedName)
-			p, wasCreated := setupProviderProfile(ctx, resourceName, namespace, typeNamespacedName)
+			image = setupImageResource(ctx, k8sClient, resourceName, namespace)
+			secret = setupSecret(ctx, k8sClient, typeNamespacedName)
+			p, wasCreated := setupProviderProfile(ctx, k8sClient, typeNamespacedName)
 			if wasCreated {
-				updateProviderProfileStatus(ctx, p, resourceName, namespace)
+				utils.SetProviderProfileStatus(p, resourceName, namespace)
+				Expect(k8sClient.Status().Update(ctx, p)).To(Succeed())
 				provider = p
 			}
-			cm = setupConfigMap(ctx, resourceName, namespace, provider)
+			cm = setupConfigMap(ctx, k8sClient, resourceName, namespace, provider)
 			reconciler = createImageReconciler(podOutput)
 		})
 
@@ -203,7 +249,7 @@ var _ = Describe("Image Controller", func() {
 			Expect(k8sClient.Status().Update(ctx, image)).To(Succeed())
 
 			By("creating the pod")
-			pod := setupPod(namespace, provider)
+			pod := utils.SetupImagePod("runner-pod", "image-finder", namespace, provider)
 			Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
 			By("updating the pod status")
@@ -222,7 +268,7 @@ var _ = Describe("Image Controller", func() {
 
 		It("check the decodeJSONToImageOffering function", func() {
 			By("creating the pod")
-			pod := setupPod(namespace, provider)
+			pod := utils.SetupImagePod("runner-pod", "image-finder", namespace, provider)
 			Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
 			By("checking the decodeJSONToImageOffering function")
@@ -235,7 +281,7 @@ var _ = Describe("Image Controller", func() {
 		})
 
 		It("handles fetching pod logs", func() {
-			pod := setupPod(namespace, provider)
+			pod := utils.SetupImagePod("runner-pod", "image-finder", namespace, provider)
 			Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
 			podOutput, err := reconciler.getPodStdOut(ctx, pod.Name, pod.Namespace, "harvest")
@@ -252,7 +298,7 @@ var _ = Describe("Image Controller", func() {
 		// 	Expect(k8sClient.Status().Update(ctx, image)).To(Succeed())
 
 		// 	By("creating the pod")
-		// 	pod := setupPod(namespace, provider)
+		// 	pod := SetupImagePod(namespace, provider)
 		// 	Expect(k8sClient.Create(ctx, pod)).To(Succeed())
 
 		// 	By("updating the pod status")
@@ -312,221 +358,6 @@ var _ = Describe("Image Controller", func() {
 	})
 })
 
-func setupPod(namespace string, provider *cv1a1.ProviderProfile) *corev1.Pod {
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "runner-pod",
-			Namespace: namespace,
-			Labels: map[string]string{
-				"skycluster.io/job-type":          "image-finder",
-				"skycluster.io/provider-profile":  provider.Name,
-				"skycluster.io/managed-by":        "skycluster",
-				"skycluster.io/provider-platform": provider.Spec.Platform,
-				"skycluster.io/provider-region":   provider.Spec.Region,
-			},
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:  "harvest",
-					Image: "busybox",
-				},
-				{
-					Name:  "runner",
-					Image: "etesami/image-finder:latest",
-				},
-			},
-		},
-		Status: corev1.PodStatus{
-			Conditions: []corev1.PodCondition{
-				{
-					LastProbeTime:      metav1.NewTime(time.Now()),
-					LastTransitionTime: metav1.NewTime(time.Now()),
-					ObservedGeneration: 1,
-					Status:             "True",
-					Type:               corev1.PodInitialized,
-				},
-				{
-					LastProbeTime:      metav1.NewTime(time.Now()),
-					LastTransitionTime: metav1.NewTime(time.Now()),
-					ObservedGeneration: 1,
-					Status:             "True",
-					Type:               corev1.PodReady,
-				},
-				{
-					LastProbeTime:      metav1.NewTime(time.Now()),
-					LastTransitionTime: metav1.NewTime(time.Now()),
-					ObservedGeneration: 1,
-					Status:             "True",
-					Type:               corev1.PodScheduled,
-				},
-			},
-			Phase: corev1.PodSucceeded,
-			ContainerStatuses: []corev1.ContainerStatus{
-				{
-					Name: "harvest",
-					State: corev1.ContainerState{
-						Terminated: &corev1.ContainerStateTerminated{
-							Reason: "Completed",
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
-func setupImageResource(ctx context.Context, resourceName, namespace string, typeNamespacedName types.NamespacedName) *cv1a1.Image {
-	By("creating the custom resource for the Kind Image")
-	image := &cv1a1.Image{}
-	err := k8sClient.Get(ctx, typeNamespacedName, image)
-	if err != nil && errors.IsNotFound(err) {
-		image = &cv1a1.Image{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: namespace,
-			},
-			Spec: cv1a1.ImageSpec{
-				ProviderRef: resourceName,
-				Images: []cv1a1.ImageOffering{
-					{
-						NameLabel: "ubuntu-20.04",
-						Pattern:   "*hvm-ssd*/ubuntu-focal-20.04-amd64-server*",
-					},
-					{
-						NameLabel: "ubuntu-22.04",
-						Pattern:   "*hvm-ssd*/ubuntu-jammy-22.04-amd64-server*",
-					},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, image)).To(Succeed())
-	}
-	return image
-}
-
-func setupConfigMap(ctx context.Context, resourceName, namespace string, provider *cv1a1.ProviderProfile) *corev1.ConfigMap {
-	cm := &corev1.ConfigMap{}
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: resourceName, Namespace: namespace}, cm)
-	if err != nil && errors.IsNotFound(err) {
-		cm = &corev1.ConfigMap{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: namespace,
-				Labels: map[string]string{
-					"skycluster.io/managed-by":        "skycluster",
-					"skycluster.io/provider-profile":  provider.Name,
-					"skycluster.io/provider-platform": provider.Spec.Platform,
-					"skycluster.io/provider-region":   provider.Spec.Region,
-				},
-			},
-			Data: configMapData(),
-		}
-		Expect(k8sClient.Create(ctx, cm)).To(Succeed())
-	}
-	return cm
-}
-
-func setupSecret(ctx context.Context, namespace string, typeNamespacedName types.NamespacedName) *corev1.Secret {
-	By("Creating credential secret")
-	secret := &corev1.Secret{}
-	err := k8sClient.Get(ctx, typeNamespacedName, secret)
-	if err != nil && errors.IsNotFound(err) {
-		secret = &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "secret-aws",
-				Namespace: namespace,
-				Labels: map[string]string{
-					"skycluster.io/managed-by":        "skycluster",
-					"skycluster.io/provider-platform": "aws",
-					"skycluster.io/secret-role":       "credentials",
-				},
-			},
-			Data: map[string][]byte{
-				"aws_access_key_id":     []byte("xyzswerd"),
-				"aws_secret_access_key": []byte("shdrugydh"),
-			},
-			Type: "Opaque",
-		}
-		Expect(k8sClient.Create(ctx, secret)).To(Succeed())
-	}
-	return secret
-}
-
-func setupProviderProfile(ctx context.Context, resourceName, namespace string, typeNamespacedName types.NamespacedName) (*cv1a1.ProviderProfile, bool) {
-	provider := &cv1a1.ProviderProfile{}
-	err := k8sClient.Get(ctx, typeNamespacedName, provider)
-	if err != nil && errors.IsNotFound(err) {
-		provider = &cv1a1.ProviderProfile{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      resourceName,
-				Namespace: namespace,
-			},
-			Spec: cv1a1.ProviderProfileSpec{
-				Platform:    "aws",
-				RegionAlias: "us-east",
-				Region:      "us-east-1",
-				Zones: []cv1a1.ZoneSpec{
-					{Name: "us-east-1a", Enabled: true, DefaultZone: true},
-				},
-			},
-		}
-		Expect(k8sClient.Create(ctx, provider)).To(Succeed())
-		return provider, true
-	}
-	return nil, false
-}
-
-func updateProviderProfileStatus(ctx context.Context, provider *cv1a1.ProviderProfile, resourceName, namespace string) {
-	By("Updating provider profile status field")
-	provider.Status = cv1a1.ProviderProfileStatus{
-		Platform: "aws",
-		Region:   "us-east-1",
-		Zones: []cv1a1.ZoneSpec{
-			{Name: "us-east-1a", Enabled: true, DefaultZone: true, Type: "cloud"},
-		},
-		DependencyManager: depv1a1.DependencyManager{
-			Dependencies: []depv1a1.Dependency{
-				{
-					NameRef:   "aws-us-east-1",
-					Kind:      "ConfigMap",
-					Namespace: namespace,
-				},
-				{
-					NameRef:   resourceName,
-					Kind:      "Image",
-					Namespace: namespace,
-				},
-			},
-		},
-		EgressCostSpecs: []cv1a1.EgressCostSpec{
-			{
-				Type: "internet",
-				Unit: "GB",
-				Tiers: []cv1a1.EgressTier{
-					{FromGB: 0, ToGB: 10000, PricePerGB: "0.09"},
-				},
-			},
-			{
-				Type: "inter-zone",
-				Unit: "GB",
-				Tiers: []cv1a1.EgressTier{
-					{FromGB: 0, ToGB: 10000, PricePerGB: "0.01"},
-				},
-			},
-			{
-				Type: "inter-region",
-				Unit: "GB",
-				Tiers: []cv1a1.EgressTier{
-					{FromGB: 0, ToGB: 10000, PricePerGB: "0.02"},
-				},
-			},
-		},
-		ObservedGeneration: 1,
-	}
-	Expect(k8sClient.Status().Update(ctx, provider)).To(Succeed())
-}
-
 func createImageReconciler(podOutput string) *ImageReconciler {
 	return &ImageReconciler{
 		Client:       k8sClient,
@@ -534,66 +365,6 @@ func createImageReconciler(podOutput string) *ImageReconciler {
 		Recorder:     record.NewFakeRecorder(100),
 		Logger:       logr.Discard(),
 		KubeClient:   fakekube.NewSimpleClientset(),
-		PodLogClient: &FakePodLogger{LogOutput: podOutput},
-	}
-}
-
-func configMapData() map[string]string {
-	return map[string]string{
-		"flavors.yaml": `- zone: us-east-1a
-zoneOfferings:
-- name: g5.12xlarge
-nameLabel: 48vCPU-192GB-4xA10G-22GB
-vcpus: 48
-ram: 192GB
-price: "5.67"
-gpu:
-enabled: true
-manufacturer: NVIDIA
-count: 4
-model: A10G
-memory: 22GB
-spot:
-price: "2.12"
-enabled: true
-- name: g5.16xlarge
-nameLabel: 64vCPU-256GB-1xA10G-22GB
-vcpus: 64
-ram: 256GB
-price: "4.10"
-gpu:
-enabled: true
-manufacturer: NVIDIA
-count: 1
-model: A10G
-memory: 22GB
-spot:
-price: "1.07"
-enabled: true`,
-		"images.yaml": `- nameLabel: ubuntu-20.04
-name: ami-0fb0b230890ccd1e6
-zone: us-east-1a
-- nameLabel: ubuntu-22.04
-name: ami-0e70225fadb23da91
-zone: us-east-1a
-- nameLabel: ubuntu-24.04
-name: ami-07033cb190109bd1d
-zone: us-east-1a
-- nameLabel: ubuntu-20.04
-name: ami-0fb0b230890ccd1e6
-zone: us-east-1b
-- nameLabel: ubuntu-22.04
-name: ami-0e70225fadb23da91
-zone: us-east-1b
-- nameLabel: ubuntu-24.04
-name: ami-07033cb190109bd1d
-zone: us-east-1b`,
-		"managed-k8s.yaml": `- name: EKS
-nameLabel: ManagedKubernetes
-overhead:
-	cost: "0.096"
-	count: 1
-	instanceType: m5.xlarge
-price: "0.10"`,
+		PodLogClient: &utils.FakePodLogger{LogOutput: podOutput},
 	}
 }

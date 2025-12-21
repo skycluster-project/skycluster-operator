@@ -58,12 +58,16 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 
-TEST_PKGS := $(shell go list ./... | grep internal/controller/core)
+# TEST_PKGS := $(shell go list ./... | grep internal/controller/core)
 ENVTEST_ASSETS = $(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LOCALBIN)" -p path)
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest
-	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" go test $(TEST_PKGS) -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" go test -coverprofile=coverage.out \
+		./internal/controller/core/image \
+		./internal/controller/core/instancetype
+#		-coverpkg=./internal/controller/core/image_controller.go
+#	 KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" go test $(TEST_PKGS) -coverprofile cover.out
 
 # .PHONY: test
 
