@@ -40,6 +40,7 @@ import (
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svccv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 	helper "github.com/skycluster-project/skycluster-operator/internal/helper"
 )
 
@@ -165,7 +166,7 @@ func (r *AtlasReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&cv1a1.Atlas{}).
 		Named("core-atlas").
 		WithOptions(controller.Options{
-			RateLimiter: newCustomRateLimiter(),
+			RateLimiter: utils.NewCustomRateLimiter(),
 		}).
 		Complete(r)
 }
@@ -348,7 +349,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 
 		// set name with deterministic random suffix to avoid name collisions
 		name := helper.EnsureK8sName("xp-" + pName + "-" + appId)
-		rand := RandSuffix(name)
+		rand := utils.RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + rand
 		obj.SetName(name)
@@ -457,7 +458,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 			obj.SetAnnotations(objAnnt)
 		}
 
-		jsonBytes, err := generateJsonManifest(obj)
+		jsonBytes, err := utils.GenerateJsonManifest(obj)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
@@ -534,7 +535,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 		xrdObj.SetKind("XInstance")
 
 		name := helper.EnsureK8sName("xvm-" + "-" + appId)
-		rand := RandSuffix(name)
+		rand := utils.RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + rand
 		xrdObj.SetName(name)
@@ -565,7 +566,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 
 		xrdObj.Object["spec"] = spec
 
-		jsonBytes, err := generateJsonManifest(xrdObj)
+		jsonBytes, err := utils.GenerateJsonManifest(xrdObj)
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
@@ -638,7 +639,7 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 		xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 		xrdObj.SetKind("XKube")
 		name := helper.EnsureK8sName("xk-" + pName + "-" + appId)
-		rand := RandSuffix(name)
+		rand := utils.RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 15))]
 		name = name + "-" + rand
 		xrdObj.SetName(name)
@@ -647,7 +648,7 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 
 		xrdObj.Object["spec"] = spec
 
-		jsonBytes, err := generateJsonManifest(xrdObj)
+		jsonBytes, err := utils.GenerateJsonManifest(xrdObj)
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
@@ -812,7 +813,7 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 	xrdObj.SetAPIVersion("skycluster.io/v1alpha1")
 	xrdObj.SetKind("XKubeMesh")
 	name := helper.EnsureK8sName("xkmesh-" + appId)
-	rand := RandSuffix(name)
+	rand := utils.RandSuffix(name)
 	name = name[0:int(math.Min(float64(len(name)), 15))]
 	name = name + "-" + rand
 	xrdObj.SetName(name)
@@ -829,7 +830,7 @@ func (r *AtlasReconciler) generateK8sMeshManifests(appId string, xKubeList []hv1
 
 	xrdObj.Object["spec"] = spec
 
-	jsonBytes, err := generateJsonManifest(xrdObj)
+	jsonBytes, err := utils.GenerateJsonManifest(xrdObj)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error generating JSON manifest.")
 	}

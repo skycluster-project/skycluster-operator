@@ -27,18 +27,22 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/client-go/util/workqueue"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 )
 
 // ILPTaskReconciler reconciles a ILPTask object
@@ -258,6 +262,13 @@ func (r *ILPTaskReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func newCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),
+		&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+}
+
 func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, deployPlan cv1a1.DeployMap) error {
 	obj := &cv1a1.AtlasMeshList{}
 	if err := r.List(context.TODO(), obj, client.InNamespace(task.Namespace), client.MatchingLabels{
@@ -288,7 +299,7 @@ func (r *ILPTaskReconciler) ensureAtlasMesh(task *cv1a1.ILPTask, appId string, d
 		r.Logger.Info("Creating new AtlasMesh for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.AtlasMesh{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      task.Name + "-" + RandSuffix(task.Name),
+				Name:      task.Name + "-" + utils.RandSuffix(task.Name),
 				Labels:    map[string]string{"skycluster.io/app-id": appId},
 				Namespace: task.Namespace,
 			},
@@ -340,7 +351,7 @@ func (r *ILPTaskReconciler) ensureAtlas(task *cv1a1.ILPTask, appId string, execE
 		r.Logger.Info("Creating new Atlas for deployment plan", "ILPTask", task.Name)
 		obj := &cv1a1.Atlas{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      task.Name + "-" + RandSuffix(task.Name),
+				Name:      task.Name + "-" + utils.RandSuffix(task.Name),
 				Labels:    map[string]string{"skycluster.io/app-id": appId},
 				Namespace: task.Namespace,
 			},

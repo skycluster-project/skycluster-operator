@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"math"
 	"reflect"
 	"slices"
@@ -46,7 +47,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 )
 
 // AtlasMeshReconciler reconciles a AtlasMesh object
@@ -400,7 +401,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 				},
 				Data: cmObj.Data,
 			}
-			objMap, err := objToMap(newCm)
+			objMap, err := utils.ObjToMap(newCm)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting ConfigMap to map.")
 			}
@@ -409,7 +410,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 			objMap["apiVersion"] = "v1"
 
 			name := "cm-" + newCm.Name + "-" + pName
-			rand := RandSuffix(name)
+			rand := utils.RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
 
@@ -442,7 +443,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 				},
 				Data: secObj.Data,
 			}
-			objMap, err := objToMap(newSec)
+			objMap, err := utils.ObjToMap(newSec)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting Secret to map.")
 			}
@@ -451,7 +452,7 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 			objMap["apiVersion"] = "v1"
 
 			name := "sec-" + newSec.Name + "-" + pName
-			rand := RandSuffix(name)
+			rand := utils.RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
 
@@ -533,7 +534,7 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 					Labels: labels,
 				},
 			}
-			objMap, err := objToMap(newNs)
+			objMap, err := utils.ObjToMap(newNs)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting Namespace to map.")
 			}
@@ -542,7 +543,7 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			objMap["apiVersion"] = "v1"
 
 			name := "ns-" + newNs.Name + "-" + pName
-			rand := RandSuffix(name)
+			rand := utils.RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
 
@@ -594,7 +595,7 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 		for _, pName := range selectedProvNames {
 			// prepare service object
 			newSvc := deepCopyService(svc, true)
-			objMap, err := objToMap(newSvc)
+			objMap, err := utils.ObjToMap(newSvc)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting service to map.")
 			}
@@ -603,7 +604,7 @@ func (r *AtlasMeshReconciler) generateServiceManifests(ns string, appId string, 
 			objMap["apiVersion"] = "v1"
 
 			name := "svc-" + newSvc.Name + "-" + pName
-			rand := RandSuffix(name)
+			rand := utils.RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
 
@@ -718,7 +719,7 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			)
 
 			// yamlObj, err := generateYAMLManifest(newDeploy)
-			objMap, err := objToMap(newDeploy)
+			objMap, err := utils.ObjToMap(newDeploy)
 			if err != nil {
 				return nil, errors.Wrap(err, "error converting Deployment to map.")
 			}
@@ -727,7 +728,7 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 			objMap["apiVersion"] = "apps/v1"
 
 			name := "dp-" + newDeploy.Name + "-" + deployItem.ProviderRef.Name
-			rand := RandSuffix(name)
+			rand := utils.RandSuffix(name)
 			name = name[0:int(math.Min(float64(len(name)), 20))]
 			name = name + "-" + rand
 
@@ -864,11 +865,11 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 			}
 		}
 
-		// fName := RandSuffix(fromName)
-		// tName := RandSuffix(toName)
+		// fName := utils.RandSuffix(fromName)
+		// tName := utils.RandSuffix(toName)
 		// labelKey := "failover-" + fName + "-" + tName
 		labelKey := "failover/" + fromName + "-" + toName
-		labelKey = ShortenLabelKey(labelKey)
+		labelKey = utils.ShortenLabelKey(labelKey)
 
 		// must be added to both src and dst
 		// for source as source label and for destination as all label
@@ -881,10 +882,10 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 
 		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
 			key:   labelKey,
-			value: ShortenLabelKey(fromName + "-" + toName),
+			value: utils.ShortenLabelKey(fromName + "-" + toName),
 		})
 
-		labels[toName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
+		labels[toName].allLabels[labelKey] = utils.ShortenLabelKey(fromName + "-" + toName)
 		// TODO: this must be added to the backup as well
 		// TODO: backup label must be added to the primary target as well
 
@@ -932,11 +933,11 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 			}
 		}
 
-		// fName := RandSuffix(fromName)
-		// bName := RandSuffix(bkName)
+		// fName := utils.RandSuffix(fromName)
+		// bName := utils.RandSuffix(bkName)
 		// bkKey := "failover-" + fName + "-" + bName // backup
 		bkKey := "failover/" + fromName + "-" + bkName // backup
-		bkKey = ShortenLabelKey(bkKey)
+		bkKey = utils.ShortenLabelKey(bkKey)
 
 		// must add backup label to source (as source labels)
 		if labels[fromName].sourceLabels[toName] == nil {
@@ -944,13 +945,13 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 		}
 		labels[fromName].sourceLabels[toName] = append(labels[fromName].sourceLabels[toName], &orderedLabels{
 			key:   bkKey,
-			value: ShortenLabelKey(fromName+"-"+bkName) + "-backup",
+			value: utils.ShortenLabelKey(fromName+"-"+bkName) + "-backup",
 		})
 		// must add backup label to primary target (as all labels)
-		labels[toName].allLabels[bkKey] = ShortenLabelKey(fromName+"-"+bkName) + "-backup" // add to primary target
+		labels[toName].allLabels[bkKey] = utils.ShortenLabelKey(fromName+"-"+bkName) + "-backup" // add to primary target
 
 		// backup only gets the primary target label and not the backup (hence it has fewer labels)
-		labels[bkName].allLabels[labelKey] = ShortenLabelKey(fromName + "-" + toName)
+		labels[bkName].allLabels[labelKey] = utils.ShortenLabelKey(fromName + "-" + toName)
 	}
 	return labels
 }
@@ -1121,7 +1122,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 	}
 
 	for _, vs := range virtualSvcs {
-		objMap, err := objToMap(vs.VirtualService)
+		objMap, err := utils.ObjToMap(vs.VirtualService)
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting VirtualService to map.")
 		}
@@ -1130,7 +1131,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
 		name := "vs-" + vs.VirtualService.Name // svc.Name + "-" + from.ProviderRef.Name
-		rand := RandSuffix(name)
+		rand := utils.RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 25))]
 		name = name + "-" + rand
 
@@ -1143,7 +1144,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 	}
 
 	for _, dr := range dstRules {
-		objMap, err := objToMap(dr.DstRule)
+		objMap, err := utils.ObjToMap(dr.DstRule)
 		if err != nil {
 			return nil, errors.Wrap(err, "error converting DestinationRule to map.")
 		}
@@ -1152,7 +1153,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		objMap["apiVersion"] = "networking.istio.io/v1beta1"
 
 		name := "dr-" + dr.DstRule.Name // svc.Name + "-" + from.ProviderRef.Name
-		rand := RandSuffix(name)
+		rand := utils.RandSuffix(name)
 		name = name[0:int(math.Min(float64(len(name)), 25))]
 		name = name + "-" + rand
 
@@ -1209,6 +1210,88 @@ func deepCopyService(src corev1.Service, clearAnnotations bool) *corev1.Service 
 	}
 
 	return dest
+}
+
+// generateNewDeplyFromDeploy generates a new deployment from the given deployment
+// with the same selector and template
+func generateNewDeplyFromDeploy(deploy *appsv1.Deployment) appsv1.Deployment {
+	antToRemove := []string{
+		"kubectl.kubernetes.io/last-applied-configuration",
+		"deployment.kubernetes.io/revision",
+	}
+
+	newDeploy := appsv1.Deployment{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: deploy.APIVersion,
+			Kind:       deploy.Kind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        deploy.Name,
+			Namespace:   deploy.Namespace,
+			Labels:      deploy.Labels,
+			Annotations: deploy.Annotations,
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: deploy.Spec.Replicas,
+			Selector: deploy.Spec.Selector,
+			Template: deploy.Spec.Template,
+		},
+	}
+	// remove unwanted annotations
+	if newDeploy.Annotations != nil {
+		for _, ant := range antToRemove {
+			delete(newDeploy.Annotations, ant)
+		}
+	}
+	if newDeploy.Spec.Template.ObjectMeta.Labels == nil {
+		newDeploy.Spec.Template.ObjectMeta.Labels = make(map[string]string)
+	}
+	if newDeploy.Spec.Template.ObjectMeta.Annotations == nil {
+		newDeploy.Spec.Template.ObjectMeta.Annotations = make(map[string]string)
+	}
+	if newDeploy.Spec.Selector == nil {
+		newDeploy.Spec.Selector = &metav1.LabelSelector{}
+	}
+	return newDeploy
+}
+
+// generateNewServiceFromService generates a new service from the given service
+// with the same selector and ports
+func generateNewServiceFromService(svc *corev1.Service) corev1.Service {
+
+	// copy to avoid modifying the original
+	labels := make(map[string]string)
+	if svc.Labels != nil {
+		maps.Copy(labels, svc.Labels)
+	}
+
+	annot := make(map[string]string)
+	if svc.Annotations != nil {
+		maps.Copy(annot, svc.Annotations)
+	}
+
+	selector := make(map[string]string)
+	if svc.Spec.Selector != nil {
+		maps.Copy(selector, svc.Spec.Selector)
+	}
+
+	newSvc := corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: svc.APIVersion,
+			Kind:       svc.Kind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        svc.Name,
+			Namespace:   svc.Namespace,
+			Labels:      labels,
+			Annotations: annot,
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: selector,
+			Ports:    svc.Spec.Ports,
+		},
+	}
+	return newSvc
 }
 
 // SetupWithManager sets up the controller with the Manager.

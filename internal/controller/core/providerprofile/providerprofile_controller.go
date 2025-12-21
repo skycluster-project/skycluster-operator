@@ -41,7 +41,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
-	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 	hint "github.com/skycluster-project/skycluster-operator/internal/helper"
 	pkgenc "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/encoding"
 )

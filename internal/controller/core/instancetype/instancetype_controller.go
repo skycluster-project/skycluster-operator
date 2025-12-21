@@ -55,7 +55,7 @@ type InstanceTypeReconciler struct {
 	Recorder     record.EventRecorder
 	Logger       logr.Logger
 	KubeClient   kubernetes.Interface // cached kube client for logs
-	PodLogClient utils.PodLogger            // cached log client for getting logs efficiently
+	PodLogClient utils.PodLogger      // cached log client for getting logs efficiently
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete

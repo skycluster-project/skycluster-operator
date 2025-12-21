@@ -1,27 +1,83 @@
-package controller
+package utils
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"math"
-	"math/rand/v2"
+	"math/rand"
 	"os"
 	"reflect"
+	"regexp"
 	"sort"
 	"strings"
+	"time"
+	"unicode"
 
+	"encoding/hex"
 	"encoding/json"
 
 	"github.com/pkg/errors"
+	"golang.org/x/time/rate"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/workqueue"
+
+	"hash/fnv"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
+
+func GenerateJsonManifest(obj any) ([]byte, error) {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal object to JSON")
+	}
+	return b, nil
+}
+
+// generateYAMLManifest generates a string YAML manifest from the given object
+func GenerateYAMLManifest(obj any) (string, error) {
+	var inInterface map[string]interface{}
+	inrec, _ := json.Marshal(obj)
+	json.Unmarshal(inrec, &inInterface)
+	objYAML, err := yaml.Marshal(&inInterface)
+	if err != nil {
+		return "", errors.Wrap(err, "Error marshalling obj manifests.")
+	}
+	return string(objYAML), nil
+}
+
+func NewCustomRateLimiter() workqueue.TypedRateLimiter[reconcile.Request] {
+	return workqueue.NewTypedMaxOfRateLimiter(
+		workqueue.NewTypedItemExponentialFailureRateLimiter[reconcile.Request](5*time.Second, 30*time.Second),
+		&workqueue.TypedBucketRateLimiter[reconcile.Request]{Limiter: rate.NewLimiter(rate.Limit(10), 100)},
+	)
+}
+
+// RandSuffix generates a deterministic random suffix based on the input string
+func RandSuffix(s string) string {
+	const letters = "abcdefghijklmnopqrstuvwxyz0123456789"
+	const length = 5
+
+	// Use a hash of the input as the seed
+	h := fnv.New64a()
+	h.Write([]byte(s))
+
+	// use local rand to avoid affecting global seed
+	r := rand.New(rand.NewSource(int64(h.Sum64())))
+
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = letters[r.Intn(len(letters))]
+	}
+	return string(b)
+}
 
 // GetUnstructuredObject returns an unstructured object given its name and namespace
 func GetUnstructuredObject(c client.Client, name, namespace string) (*unstructured.Unstructured, error) {
@@ -580,6 +636,103 @@ func SanitizeName(s string) string {
 		}
 	}
 	return string(out)
+}
+
+func ObjToMap(obj any) (map[string]any, error) {
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// ShortenLabelKey shortens a Kubernetes label key deterministically.
+// If key contains a prefix (prefix/name), the prefix is preserved.
+// The name part is truncated and suffixed with "-<hash>" so the result is <=63 chars
+// and begins/ends with an alphanumeric character.
+func ShortenLabelKey(key string) string {
+	maxNameLen := 45
+	hashLen := 14
+	nameRE := regexp.MustCompile(`^[A-Za-z0-9]([-A-Za-z0-9_.]*[A-Za-z0-9])?$`)
+
+	parts := strings.SplitN(key, "/", 2)
+	var prefix, name string
+	if len(parts) == 2 {
+		prefix = parts[0]
+		name = parts[1]
+	} else {
+		name = parts[0]
+	}
+
+	// If already valid and within length, return as-is.
+	if len(name) <= maxNameLen && nameRE.MatchString(name) {
+		if prefix == "" {
+			return name
+		}
+		return prefix + "/" + name
+	}
+
+	// Compute hash of the full original key (so prefix changes alter the hash).
+	sum := sha256.Sum256([]byte(key))
+	hash := hex.EncodeToString(sum[:])[:hashLen]
+
+	reserve := 1 + hashLen // "-" + hash
+	maxBase := maxNameLen - reserve
+	if maxBase < 1 {
+		maxBase = 1
+	}
+
+	base := name
+	if len(base) > maxBase {
+		base = base[:maxBase]
+	}
+
+	// Trim trailing non-alphanumeric so final result will end with alnum before adding hash
+	for len(base) > 0 && !isAlnum(rune(base[len(base)-1])) {
+		base = base[:len(base)-1]
+	}
+	// If base becomes empty, pick the first alnum from name or fallback to "a"
+	if len(base) == 0 {
+		found := "a"
+		for _, r := range name {
+			if isAlnum(r) {
+				found = string(r)
+				break
+			}
+		}
+		base = found
+	}
+
+	resultName := base + "-" + hash
+
+	// Ensure starts with alphanumeric
+	if !isAlnum(rune(resultName[0])) {
+		resultName = "a" + resultName
+	}
+	// Ensure it does not exceed maxNameLen (trim if necessary)
+	if len(resultName) > maxNameLen {
+		resultName = resultName[:maxNameLen]
+		// If trimming left a non-alnum at the end, fix it
+		for len(resultName) > 0 && !isAlnum(rune(resultName[len(resultName)-1])) {
+			resultName = resultName[:len(resultName)-1]
+		}
+		if resultName == "" {
+			resultName = "a"
+		}
+	}
+
+	if prefix == "" {
+		return resultName
+	}
+	return prefix + "/" + resultName
+}
+
+func isAlnum(r rune) bool {
+	return unicode.IsLetter(r) || unicode.IsDigit(r)
 }
 
 // computeFixedLatency is a stub: replace with lookup using regions/zones mapping you have.

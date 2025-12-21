@@ -65,8 +65,11 @@ ENVTEST_ASSETS = $(shell "$(ENVTEST)" use $(ENVTEST_K8S_VERSION) --bin-dir "$(LO
 test: manifests generate fmt vet setup-envtest
 	KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" go test -coverprofile=coverage.out \
 		./internal/controller/core/image \
-		./internal/controller/core/instancetype
-#		-coverpkg=./internal/controller/core/image_controller.go
+		./internal/controller/core/instancetype \
+		./internal/controller/core/atlas \
+		./internal/controller/core/atlasmesh \
+		./internal/controller/core/ilptask \
+		./internal/controller/core/providerprofile 
 #	 KUBEBUILDER_ASSETS="$(ENVTEST_ASSETS)" go test $(TEST_PKGS) -coverprofile cover.out
 
 # .PHONY: test

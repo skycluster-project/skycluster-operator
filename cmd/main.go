@@ -47,8 +47,12 @@ import (
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	corecontroller "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	atlasctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/atlas"
+	atlasmeshctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/atlasmesh"
+	ilptaskctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/ilptask"
 	imgctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/image"
 	itctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/instancetype"
+	providerprofilectrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/providerprofile"
 	policycontroller "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
 	svccontroller "github.com/skycluster-project/skycluster-operator/internal/controller/svc"
 	webhookcv1a1 "github.com/skycluster-project/skycluster-operator/internal/webhook/core/v1alpha1"
@@ -303,7 +307,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "InstanceType")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ILPTaskReconciler{
+	if err := (&ilptaskctrl.ILPTaskReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
@@ -311,7 +315,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "ILPTask")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.AtlasReconciler{
+	if err := (&atlasctrl.AtlasReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
@@ -319,7 +323,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Atlas")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.AtlasMeshReconciler{
+	if err := (&atlasmeshctrl.AtlasMeshReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
@@ -327,7 +331,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "AtlasMesh")
 		os.Exit(1)
 	}
-	if err := (&corecontroller.ProviderProfileReconciler{
+	if err := (&providerprofilectrl.ProviderProfileReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ProviderProfileController"),

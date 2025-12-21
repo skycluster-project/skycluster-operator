@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
@@ -37,15 +38,15 @@ type computeProfileService struct {
 	deployCost      float64
 }
 
-type flavorPattern struct {
-	cpu       float64
-	cpuAny    bool
-	ram       float64
-	ramAny    bool
-	gpuCount  int    // 0 = not specified
-	gpuModel  string // empty = not specified
-	gpuMem    float64
-	gpuMemAny bool
+type FlavorPattern struct {
+	Cpu       float64
+	CpuAny    bool
+	Ram       float64
+	RamAny    bool
+	GpuCount  int    // 0 = not specified
+	GpuModel  string // empty = not specified
+	GpuMem    float64
+	GpuMemAny bool
 }
 
 type virtualSvcStruct struct {
@@ -108,7 +109,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				}
 
 				if alternativeVS.Kind == "ComputeProfile" {
-					pat, err := parseFlavorFromJSON(alternativeVS.Spec)
+					pat, err := ParseFlavorFromJSON(alternativeVS.Spec)
 					if err != nil {
 						return nil, err
 					}
@@ -285,7 +286,7 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 					// It is simpler since we only need to append requested ComputeProfiles
 					// fetch ComputeProfile spec
 					vmSpec := alternativeVS.Spec
-					pat, err := parseFlavorFromJSON(vmSpec)
+					pat, err := ParseFlavorFromJSON(vmSpec)
 					if err != nil {
 						return nil, err
 					}
@@ -427,7 +428,7 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 				switch alternativeVS.Kind {
 				case "ComputeProfile":
 					// Parse the flavor pattern from the virtual service spec
-					pat, err := parseFlavorFromJSON(alternativeVS.Spec)
+					pat, err := ParseFlavorFromJSON(alternativeVS.Spec)
 					if err != nil {
 						return nil, fmt.Errorf("failed to parse flavor from JSON for component %s: %w", cmpntRef.Name, err)
 					}
@@ -655,50 +656,50 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 	return vServicesList, nil
 }
 
-func parseFlavorFromJSON(flavorJSON *runtime.RawExtension) (flavorPattern, error) {
+func ParseFlavorFromJSON(flavorJSON *runtime.RawExtension) (FlavorPattern, error) {
 	var numberRe = regexp.MustCompile(`[\d.]+`)
 	var fs hv1a1.ComputeFlavor
-	var p flavorPattern
+	var p FlavorPattern
 	if err := json.Unmarshal(flavorJSON.Raw, &fs); err != nil {
 		return p, err
 	}
 
 	// VCPU
 	if strings.TrimSpace(fs.VCPUs) == "" {
-		p.cpuAny = true
+		p.CpuAny = true
 	} else if m := numberRe.FindString(fs.VCPUs); m != "" {
 		if v, err := strconv.ParseFloat(m, 64); err == nil {
-			p.cpu = v
+			p.Cpu = v
 		} else {
-			p.cpuAny = true
+			p.CpuAny = true
 		}
 	} else {
-		p.cpuAny = true
+		p.CpuAny = true
 	}
 
 	// RAM
 	if strings.TrimSpace(fs.RAM) == "" {
-		p.ramAny = true
+		p.RamAny = true
 	} else if m := numberRe.FindString(fs.RAM); m != "" {
 		if v, err := strconv.ParseFloat(m, 64); err == nil {
-			p.ram = v
+			p.Ram = v
 		} else {
-			p.ramAny = true
+			p.RamAny = true
 		}
 	} else {
-		p.ramAny = true
+		p.RamAny = true
 	}
 
 	// GPU model (type)
 	if strings.TrimSpace(fs.GPU.Model) != "" {
-		p.gpuModel = strings.TrimSpace(fs.GPU.Model)
+		p.GpuModel = strings.TrimSpace(fs.GPU.Model)
 	}
 
 	// GPU count
 	if strings.TrimSpace(fs.GPU.Unit) != "" {
 		if m := numberRe.FindString(fs.GPU.Unit); m != "" {
 			if v, err := strconv.Atoi(m); err == nil {
-				p.gpuCount = v
+				p.GpuCount = v
 			}
 		}
 		// if parsing fails, leave gpuCount==0 meaning "not specified"
@@ -706,15 +707,15 @@ func parseFlavorFromJSON(flavorJSON *runtime.RawExtension) (flavorPattern, error
 
 	// GPU memory
 	if strings.TrimSpace(fs.GPU.Memory) == "" {
-		p.gpuMemAny = true
+		p.GpuMemAny = true
 	} else if m := numberRe.FindString(fs.GPU.Memory); m != "" {
 		if v, err := strconv.ParseFloat(m, 64); err == nil {
-			p.gpuMem = v
+			p.GpuMem = v
 		} else {
-			p.gpuMemAny = true
+			p.GpuMemAny = true
 		}
 	} else {
-		p.gpuMemAny = true
+		p.GpuMemAny = true
 	}
 
 	return p, nil
@@ -767,27 +768,27 @@ func parseGPUMemoryString(s string) (float64, bool) {
 	return v, true
 }
 
-func offeringMatches(p flavorPattern, off computeProfileService) bool {
+func offeringMatches(p FlavorPattern, off computeProfileService) bool {
 	availCPU := off.cpu
 	availRAM := off.ram
 
 	// CPU
-	if !p.cpuAny && p.cpu > 0 {
-		if availCPU < p.cpu {
+	if !p.CpuAny && p.Cpu > 0 {
+		if availCPU < p.Cpu {
 			return false
 		}
 		// allow 20% deviation
-		if availCPU > p.cpu+p.cpu*0.2 {
+		if availCPU > p.Cpu+p.Cpu*0.2 {
 			return false
 		}
 	}
 	// RAM
-	if !p.ramAny && p.ram > 0 {
-		if availRAM < p.ram {
+	if !p.RamAny && p.Ram > 0 {
+		if availRAM < p.Ram {
 			return false
 		}
 		// allow 50% deviation
-		if availRAM > p.ram+p.ram*0.5 {
+		if availRAM > p.Ram+p.Ram*0.5 {
 			return false
 		}
 	}
@@ -798,10 +799,10 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 	offGPUModel := strings.TrimSpace(off.gpuModel)
 
 	// GPU model/type check (only if requested)
-	if p.gpuModel != "" {
+	if p.GpuModel != "" {
 		// check off.gpuModel first
 		if offGPUModel != "" {
-			if !strings.EqualFold(offGPUModel, p.gpuModel) {
+			if !strings.EqualFold(offGPUModel, p.GpuModel) {
 				return false
 			}
 		} else {
@@ -811,38 +812,38 @@ func offeringMatches(p flavorPattern, off computeProfileService) bool {
 	}
 
 	// if gpu is not requested, but offering has gpu, return false
-	if p.gpuModel == "" && p.gpuCount == 0 && p.gpuMem == 0 && off.gpuEnabled {
+	if p.GpuModel == "" && p.GpuCount == 0 && p.GpuMem == 0 && off.gpuEnabled {
 		return false
 	}
 
 	// GPU count (if requested)
-	if p.gpuCount > 0 {
+	if p.GpuCount > 0 {
 		if !off.gpuEnabled {
 			return false
 		}
 		// prefer structured count
 		if offGPUCountOk {
-			if offGPUCount < p.gpuCount {
+			if offGPUCount < p.GpuCount {
 				return false
 			}
 		} // else: no count info -> assume may satisfy
 	}
 
 	// GPU memory:
-	if !p.gpuMemAny && p.gpuMem > 0 {
+	if !p.GpuMemAny && p.GpuMem > 0 {
 		if !off.gpuEnabled {
 			return false
 		}
 		// prefer structured memory
 		if offGPUMemoryOk {
-			if offGPUMemory < p.gpuMem {
+			if offGPUMemory < p.GpuMem {
 				return false
 			}
 		} // else: no memory info -> assume may satisfy
 	}
 
 	// ensure GPU enabled if model or count requested
-	if (p.gpuModel != "" || p.gpuCount > 0) && !off.gpuEnabled {
+	if (p.GpuModel != "" || p.GpuCount > 0) && !off.gpuEnabled {
 		return false
 	}
 
@@ -856,4 +857,147 @@ func parseMemory(s string) (float64, error) {
 		return 0, fmt.Errorf("no number found in %q", s)
 	}
 	return strconv.ParseFloat(m[1], 64)
+}
+
+// sortComputeResources sorts the compute resources by cpu and ram
+// It returns -1 if i < j, 1 if i > j, and 0 if i == j
+func sortComputeResources(i, j computeProfileService) int {
+	if i.cpu != j.cpu {
+		if i.cpu < j.cpu {
+			return -1
+		} else {
+			return 1
+		}
+	}
+	if i.ram != j.ram {
+		if i.ram < j.ram {
+			return -1
+		} else {
+			return 1
+		}
+	}
+	return 0
+}
+
+// computeResourcesForFlavors returns a list of computeResource structs
+// based on the flavor names in the input map
+func computeResourcesForFlavors(configData map[string]string) ([]computeProfileService, error) {
+	allFlavorsCpuRam := make([]computeProfileService, 0)
+	for k, _ := range configData {
+		if !strings.Contains(k, "skyvm_flavor") {
+			continue
+		}
+		// a flavor is in the form of "skyvm_flavor_2vCPU-4GB"
+		// we need to extract the cpu and ram from the flavor
+		flavor := strings.Split(k, "_")[2]
+		cpuString := strings.Split(flavor, "-")[0]
+		ramString := strings.Split(flavor, "-")[1]
+		cpu, err1 := strconv.Atoi(strings.Replace(cpuString, "vCPU", "", -1))
+		// The pod's ram resources are presented in GB, so
+		// We can keep the current format as the RAM are in GB
+		ram, err2 := strconv.Atoi(strings.Replace(ramString, "GB", "", -1))
+		if err1 != nil || err2 != nil {
+			return nil, errors.Wrap(err1, "Error converting flavor to int in assigning deployments to nodes.")
+		}
+		allFlavorsCpuRam = append(allFlavorsCpuRam, computeProfileService{name: flavor, cpu: float64(cpu), ram: float64(ram)})
+	}
+	return allFlavorsCpuRam, nil
+}
+
+// findSuitableComputeResource returns the name of the compute resource that satisfies the
+// minimum requirements for the given compute resource. If no compute resource satisfies
+// the requirements, it returns an empty string
+func findSuitableComputeResource(cmResource computeProfileService, allComputeResources []computeProfileService) (*computeProfileService, bool) {
+	for _, cr := range allComputeResources {
+		if cr.cpu >= cmResource.cpu && cr.ram >= cmResource.ram {
+			return &computeProfileService{name: cr.name, cpu: cr.cpu, ram: cr.ram}, true
+		}
+	}
+	return nil, false
+}
+
+// attemptPlaceDeployment returns true if the deployment can be placed on any of given nodes
+// and if it is possible to use any node, it updates the corresponding
+// node with the new used cpu and memory
+func attemptPlaceDeployment(dep computeProfileService, nodes []computeProfileService) (bool, []computeProfileService) {
+	for i, node := range nodes {
+		if (node.cpu-node.usedCPU) >= dep.cpu && (node.ram-node.usedRAM) >= dep.ram {
+			nodes[i].usedCPU += dep.cpu
+			nodes[i].usedRAM += dep.ram
+			return true, nodes
+		}
+	}
+	return false, nodes
+}
+
+func OfferingMatches2(p FlavorPattern, off hv1a1.InstanceOffering) (bool, string) {
+	availCPU := off.VCPUs
+	availRAM, err := strconv.Atoi(strings.ReplaceAll(off.RAM, "GB", ""))
+	if err != nil {
+		return false, "parsing offering RAM"
+	}
+
+	// CPU
+	if !p.CpuAny && p.Cpu > 0 {
+		if availCPU < int(p.Cpu) {
+			return false, "offering CPU less than requested"
+		}
+	}
+	// RAM
+	if !p.RamAny && p.Ram > 0 {
+		if availRAM < int(p.Ram) {
+			return false, "offering RAM less than requested"
+		}
+	}
+
+	// prefer structured fields on offering
+	offGPUCount, offGPUCountOk := parseGPUCountString(off.GPU.Unit)
+	offGPUMemory, offGPUMemoryOk := parseGPUMemoryString(off.GPU.Memory)
+	offGPUModel := strings.TrimSpace(off.GPU.Model)
+
+	// GPU model/type check (only if requested)
+	if p.GpuModel != "" {
+		// check off.gpuModel first
+		if offGPUModel != "" {
+			if !strings.EqualFold(offGPUModel, p.GpuModel) {
+				return false, "offering GPU model does not match requested"
+			}
+		} else {
+			// offering lacks GPU info -> cannot satisfy specific model
+			return false, "offering lacks GPU model information"
+		}
+	}
+
+	// GPU count (if requested)
+	if p.GpuCount > 0 {
+		if !off.GPU.Enabled {
+			return false, "offering GPU not enabled"
+		}
+		// prefer structured count
+		if offGPUCountOk {
+			if offGPUCount < p.GpuCount {
+				return false, "offering GPU count less than requested"
+			}
+		} // else: no count info -> assume may satisfy
+	}
+
+	// GPU memory:
+	if !p.GpuMemAny && p.GpuMem > 0 {
+		if !off.GPU.Enabled {
+			return false, "offering GPU not enabled"
+		}
+		// prefer structured memory
+		if offGPUMemoryOk {
+			if offGPUMemory < p.GpuMem {
+				return false, "offering GPU memory less than requested"
+			}
+		} // else: no memory info -> assume may satisfy
+	}
+
+	// ensure GPU enabled if model or count requested
+	if (p.GpuModel != "" || p.GpuCount > 0) && !off.GPU.Enabled {
+		return false, "offering GPU not enabled"
+	}
+
+	return true, ""
 }

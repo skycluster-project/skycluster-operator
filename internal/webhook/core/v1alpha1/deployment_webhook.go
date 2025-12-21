@@ -19,7 +19,7 @@ package v1alpha1
 import (
 	"context"
 
-	cv1a1 "github.com/skycluster-project/skycluster-operator/internal/controller"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,7 +54,7 @@ func (d *DeploymentCustomDefaulter) Default(ctx context.Context, obj runtime.Obj
 	logger.Info("Deployment Custom Defaulter invoked")
 
 	deployment, ok := obj.(*appsv1.Deployment)
-	exists := cv1a1.HasAllLabelsAndValue(deployment.Labels, map[string]string{
+	exists := utils.HasAllLabelsAndValue(deployment.Labels, map[string]string{
 		"skycluster.io/app-scope": "distributed",
 	})
 	if !ok || !exists {

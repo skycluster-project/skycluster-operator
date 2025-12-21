@@ -15,6 +15,7 @@ import (
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	ilp "github.com/skycluster-project/skycluster-operator/internal/controller/core/ilptask"
 )
 
 func findSecondaryZone(p cv1a1.ProviderProfile, primary string) string {
@@ -218,12 +219,12 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 	// case "XInstance", "XNodeGroup":
 	case "ComputeProfile":
 		// TODO: ideally this should be adopted for default case below
-		pat, err := parseFlavorFromJSON(vs.Spec)
+		pat, err := ilp.ParseFlavorFromJSON(vs.Spec)
 		if err != nil {
 			return -1, errors.Wrap(err, "parsing flavor from JSON")
 		}
 
-		r.Logger.Info("pat spec", "cpu", pat.cpu, "memoryGB", pat.gpuModel)
+		r.Logger.Info("pat spec", "cpu", pat.Cpu, "memoryGB", pat.GpuModel)
 
 		var zoneOfferings []cv1a1.ZoneOfferings
 		if err := yaml.Unmarshal([]byte(virtualSrvcMap["flavors.yaml"]), &zoneOfferings); err == nil {
@@ -232,7 +233,7 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 					continue
 				}
 				for _, of := range zo.Offerings {
-					if ok, _ := offeringMatches2(pat, of); !ok {
+					if ok, _ := ilp.OfferingMatches2(pat, of); !ok {
 						continue
 					}
 					priceFloat, err := strconv.ParseFloat(of.Price, 64)
@@ -249,7 +250,7 @@ func (r *AtlasReconciler) calculateVirtualServiceSetCost(virtualSrvcMap map[stri
 		var bmOfferings map[string]cv1a1.DeviceZoneSpec
 		if err := yaml.Unmarshal([]byte(virtualSrvcMap["worker"]), &bmOfferings); err == nil {
 			for _, deviceSpec := range bmOfferings {
-				if ok, err := offeringMatches2(pat, *deviceSpec.Configs); !ok {
+				if ok, err := ilp.OfferingMatches2(pat, *deviceSpec.Configs); !ok {
 					r.Logger.Info("baremetal offering does not match", "offering", deviceSpec.Configs.NameLabel, "reason", err)
 					continue
 				}

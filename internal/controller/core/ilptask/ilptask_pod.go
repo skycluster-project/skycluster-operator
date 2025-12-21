@@ -19,7 +19,7 @@ import (
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
-	utils "github.com/skycluster-project/skycluster-operator/internal/controller"
+	utils "github.com/skycluster-project/skycluster-operator/internal/controller/utils"
 )
 
 func (r *ILPTaskReconciler) prepareAndBuildOptimizationPod(df pv1a1.DataflowPolicy, dp pv1a1.DeploymentPolicy, task *cv1a1.ILPTask) (string, error) {
@@ -343,6 +343,40 @@ func (r *ILPTaskReconciler) calculateMinComputeResource(ns string, deployName st
 		totalMem += mem
 	}
 	return &computeProfileService{name: deployName, cpu: totalCPU, ram: totalMem}, nil
+}
+
+// getContainerComputeResources returns the cpu and memory resources for a container
+// If the limits are set, it returns the limits, if not, it returns the requests
+func getContainerComputeResources(container corev1.Container) (float64, float64) {
+	// Get the resources
+	resources := container.Resources
+	// Get the limits
+	limits := resources.Limits
+	// Check the limits
+	cpuQtyLimit, cpuOkLimit := limits["cpu"]
+	memQtyLimit, memOkLimit := limits["memory"]
+
+	// Get the requests
+	requests := resources.Requests
+	// Check the requests
+	cpuQtyReq, cpuOkReq := requests["cpu"]
+	memQtyReq, memOkReq := requests["memory"]
+
+	var cpu float64
+	var mem float64
+	if cpuOkLimit {
+		cpu = cpuQtyLimit.AsApproximateFloat64()
+	} else if cpuOkReq {
+		cpu = cpuQtyReq.AsApproximateFloat64()
+	}
+	if memOkLimit {
+		memBytes := memQtyLimit.Value()
+		mem = float64(memBytes) / (1 << 30) // GiB
+	} else if memOkReq {
+		memBytes := memQtyReq.Value()
+		mem = float64(memBytes) / (1 << 30) // GiB
+	}
+	return cpu, mem
 }
 
 // dataMap contains the application and provider data (i.e., tasks.json, providers.json, etc.)

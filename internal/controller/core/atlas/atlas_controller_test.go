@@ -29,7 +29,7 @@ import (
 	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 )
 
-var _ = Describe("ILPTask Controller", func() {
+var _ = Describe("Atlas Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
 
@@ -37,47 +37,44 @@ var _ = Describe("ILPTask Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "skycluster-system",
 		}
-		ilptask := &corev1alpha1.ILPTask{}
+		atlas := &corev1alpha1.Atlas{}
 
 		BeforeEach(func() {
-			By("creating the custom resource for the Kind ILPTask")
-			err := k8sClient.Get(ctx, typeNamespacedName, ilptask)
+			By("creating the custom resource for the Kind Atlas")
+			err := k8sClient.Get(ctx, typeNamespacedName, atlas)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &corev1alpha1.ILPTask{
+				resource := &corev1alpha1.Atlas{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &corev1alpha1.ILPTask{}
+
+			resource := &corev1alpha1.Atlas{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance ILPTask")
+			By("Cleanup the specific resource instance Atlas")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
 		// It("should successfully reconcile the resource", func() {
 		// 	By("Reconciling the created resource")
-		// 	controllerReconciler := &ILPTaskReconciler{
+		// 	reconciler := &AtlasReconciler{
 		// 		Client: k8sClient,
 		// 		Scheme: k8sClient.Scheme(),
 		// 	}
 
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+		// 	_, err := reconciler.Reconcile(ctx, reconcile.Request{
 		// 		NamespacedName: typeNamespacedName,
 		// 	})
 		// 	Expect(err).NotTo(HaveOccurred())
-		// 	// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-		// 	// Example: If you expect a certain status condition after reconciliation, verify it here.
 		// })
 	})
 })
