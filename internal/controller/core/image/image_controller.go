@@ -342,6 +342,9 @@ func (r *ImageReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		}
 		r.KubeClient = kc
 	}
+	if r.PodLogClient == nil {
+		r.PodLogClient = &utils.K8sPodLogger{KubeClient: r.KubeClient}
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&cv1a1.Image{}).
 		Named("core-image").

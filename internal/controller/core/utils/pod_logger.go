@@ -7,16 +7,15 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 ////////////////////////////////////////////////////////////
 // POD LOGGING UTILS
 
 // Define what we actually need from the K8s API
-type PodLogProvider interface {
-	GetLogs(name string, opts *corev1.PodLogOptions) *rest.Request
-}
+// type PodLogProvider interface {
+// 	GetLogs(name string, opts *corev1.PodLogOptions) *rest.Request
+// }
 
 // PodLogger abstracts the K8s log streaming call
 type PodLogger interface {
