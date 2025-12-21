@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -34,7 +33,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -534,25 +532,6 @@ func (r *ImageReconciler) updateProviderProfile(ctx context.Context, pf *cv1a1.P
 	}
 	pf.Annotations["instancetype-ref"] = img.Name
 	return r.Patch(ctx, pf, client.MergeFrom(orig))
-}
-
-// Define what we actually need from the K8s API
-type PodLogProvider interface {
-	GetLogs(name string, opts *corev1.PodLogOptions) *rest.Request
-}
-
-// PodLogger abstracts the K8s log streaming call
-type PodLogger interface {
-	StreamLogs(ctx context.Context, namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error)
-}
-
-// Real implementation for production
-type K8sPodLogger struct {
-	KubeClient kubernetes.Interface
-}
-
-func (k *K8sPodLogger) StreamLogs(ctx context.Context, namespace, name string, opts *corev1.PodLogOptions) (io.ReadCloser, error) {
-	return k.KubeClient.CoreV1().Pods(namespace).GetLogs(name, opts).Stream(ctx)
 }
 
 // getPodStdOut fetches logs for a specific container from the pod (containerName recommended).

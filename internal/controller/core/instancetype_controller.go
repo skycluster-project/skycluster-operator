@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
@@ -51,10 +50,11 @@ import (
 // InstanceTypeReconciler reconciles a InstanceType object
 type InstanceTypeReconciler struct {
 	client.Client
-	Scheme     *runtime.Scheme
-	Recorder   record.EventRecorder
-	Logger     logr.Logger
-	KubeClient kubernetes.Interface // cached kube client for logs
+	Scheme       *runtime.Scheme
+	Recorder     record.EventRecorder
+	Logger       logr.Logger
+	KubeClient   kubernetes.Interface // cached kube client for logs
+	PodLogClient PodLogger            // cached log client for getting logs efficiently
 }
 
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
@@ -441,25 +441,24 @@ func (r *InstanceTypeReconciler) buildRunner(it *cv1a1.InstanceType, pf *cv1a1.P
 // Falls back to unspecified container if the named container fails.
 func (r *InstanceTypeReconciler) getPodStdOut(ctx context.Context, podName, podNS, containerName string) (string, error) {
 	// Try with container name first
-	opts := &corev1.PodLogOptions{Container: containerName}
-	streamReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, opts)
-	stream, err := streamReq.Stream(ctx)
-	if err != nil {
-		// fallback: no container specified
-		fallbackReq := r.KubeClient.CoreV1().Pods(podNS).GetLogs(podName, &corev1.PodLogOptions{})
-		stream2, err2 := fallbackReq.Stream(ctx)
-		if err2 != nil {
-			return "", fmt.Errorf("failed to get logs for pod %s (container=%s): %v; fallback error: %v", podName, containerName, err, err2)
+	fetch := func(cName string) (string, error) {
+		stream, err := r.PodLogClient.StreamLogs(ctx, podNS, podName, &corev1.PodLogOptions{Container: cName})
+		if err != nil {
+			return "", err
 		}
-		stream = stream2
+		defer stream.Close()
+		buf := new(bytes.Buffer)
+		buf.ReadFrom(stream)
+		return buf.String(), nil
 	}
-	defer stream.Close()
 
-	var logs bytes.Buffer
-	if _, err := io.Copy(&logs, stream); err != nil {
-		return "", fmt.Errorf("failed to read logs for pod %s: %w", podName, err)
+	// Primary attempt
+	logs, err := fetch(containerName)
+	if err != nil {
+		return "", fmt.Errorf("failed to get logs for pod %s: %w", podName, err)
 	}
-	return logs.String(), nil
+
+	return logs, nil
 }
 
 func (r *InstanceTypeReconciler) fetchProviderProfileCred(ctx context.Context, pp *cv1a1.ProviderProfile) (map[string]string, error) {
