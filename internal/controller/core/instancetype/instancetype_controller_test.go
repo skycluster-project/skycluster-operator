@@ -491,7 +491,20 @@ func setupProviderProfile(ctx context.Context, k8sClient client.Client, typeName
 	provider := &cv1a1.ProviderProfile{}
 	err := k8sClient.Get(ctx, typeNamespacedName, provider)
 	if err != nil && errors.IsNotFound(err) {
-		provider = utils.SetupProviderProfile(typeNamespacedName.Name, typeNamespacedName.Namespace)
+		provider = &cv1a1.ProviderProfile{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      typeNamespacedName.Name,
+				Namespace: typeNamespacedName.Namespace,
+			},
+			Spec: cv1a1.ProviderProfileSpec{
+				Platform:    "aws",
+				RegionAlias: "us-east",
+				Region:      "us-east-1",
+				Zones: []cv1a1.ZoneSpec{
+					{Name: "us-east-1a", Enabled: true, DefaultZone: true},
+				},
+			},
+		}
 		Expect(k8sClient.Create(ctx, provider)).To(Succeed())
 		return provider, true
 	}

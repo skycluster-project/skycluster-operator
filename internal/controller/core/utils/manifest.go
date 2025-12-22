@@ -192,23 +192,6 @@ func SetupProviderCredSecret(resourceName, namespace string) *corev1.Secret {
 	}
 }
 
-func SetupProviderProfile(resourceName, namespace string) *cv1a1.ProviderProfile {
-	return &cv1a1.ProviderProfile{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceName,
-			Namespace: namespace,
-		},
-		Spec: cv1a1.ProviderProfileSpec{
-			Platform:    "aws",
-			RegionAlias: "us-east",
-			Region:      "us-east-1",
-			Zones: []cv1a1.ZoneSpec{
-				{Name: "us-east-1a", Enabled: true, DefaultZone: true},
-			},
-		},
-	}
-}
-
 func SetProviderProfileStatus(provider *cv1a1.ProviderProfile, resourceName, namespace string) {
 	provider.Status = cv1a1.ProviderProfileStatus{
 		Platform: "aws",
