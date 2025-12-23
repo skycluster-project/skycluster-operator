@@ -1,11 +1,19 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"os"
+	"path/filepath"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/yaml"
+	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	depv1a1 "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/dep"
@@ -238,4 +246,50 @@ func SetProviderProfileStatus(provider *cv1a1.ProviderProfile, resourceName, nam
 		},
 		ObservedGeneration: 1,
 	}
+}
+
+func ApplyYAML(ctx context.Context, c ctrlclient.Client, scheme *runtime.Scheme, path string) error {
+
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+
+		fullPath := filepath.Join(path, file.Name())
+		data, err := os.ReadFile(fullPath)
+		if err != nil {
+			return err
+		}
+
+		_ = yaml.NewYAMLOrJSONDecoder(
+			os.NewFile(0, "/dev/null"),
+			4096,
+		)
+		decoder := yaml.NewYAMLOrJSONDecoder(
+			bytes.NewReader(data),
+			4096,
+		)
+
+		for {
+			obj := &unstructured.Unstructured{}
+			if err := decoder.Decode(obj); err != nil {
+				break
+			}
+
+			obj.SetManagedFields(nil)
+			if err := c.Create(ctx, obj); err != nil {
+				// ignore AlreadyExists
+				if !apierrors.IsAlreadyExists(err) {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }

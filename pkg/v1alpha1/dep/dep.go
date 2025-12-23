@@ -12,6 +12,15 @@ type DependencyManager struct {
 	Dependencies []Dependency `json:"dependencies,omitempty"`
 }
 
+func (dm *DependencyManager) GetDependency(kind, ns string) *Dependency {
+	for _, dep := range dm.Dependencies {
+		if dep.Kind == kind && dep.Namespace == ns {
+			return &dep
+		}
+	}
+	return nil
+}
+
 // HasDependency checks if a dependency with a given kind and name exists.
 // The receiver is a pointer to modify the Dependencies slice.
 func (dm *DependencyManager) HasDependency(name, kind, ns string) bool {
