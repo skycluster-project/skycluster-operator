@@ -26,7 +26,11 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var _ = Describe("DataflowPolicy Controller", func() {
@@ -37,47 +41,67 @@ var _ = Describe("DataflowPolicy Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "skycluster-system",
 		}
-		dataflowpolicy := &policyv1alpha1.DataflowPolicy{}
+		dataflowpolicy := &pv1a1.DataflowPolicy{}
 
 		BeforeEach(func() {
+
+			// By("ensuring the namespace exists")
+			// ns := &corev1.Namespace{
+			// 	ObjectMeta: metav1.ObjectMeta{
+			// 		Name: "skycluster-system",
+			// 	},
+			// }
+			// err := k8sClient.Get(ctx, types.NamespacedName{Name: "skycluster-system"}, ns)
+			// if err != nil && errors.IsNotFound(err) {
+			// 	Expect(k8sClient.Create(ctx, ns)).To(Succeed())
+			// }
+
 			By("creating the custom resource for the Kind DataflowPolicy")
 			err := k8sClient.Get(ctx, typeNamespacedName, dataflowpolicy)
 			if err != nil && errors.IsNotFound(err) {
-				resource := &policyv1alpha1.DataflowPolicy{
+				resource := &pv1a1.DataflowPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: "skycluster-system",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: pv1a1.DataflowPolicySpec{
+						DataDependencies: []pv1a1.DataDapendency{},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+				dataflowpolicy = resource
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &policyv1alpha1.DataflowPolicy{}
+			resource := &pv1a1.DataflowPolicy{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Cleanup the specific resource instance DataflowPolicy")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		// It("should successfully reconcile the resource", func() {
-		// 	By("Reconciling the created resource")
-		// 	controllerReconciler := &DataflowPolicyReconciler{
-		// 		Client: k8sClient,
-		// 		Scheme: k8sClient.Scheme(),
-		// 	}
 
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-		// 	// Example: If you expect a certain status condition after reconciliation, verify it here.
-		// })
+		It("should successfully reconcile the resource and create the ILPTask", func() {
+			By("Reconciling the created resource")
+			reconciler := &DataflowPolicyReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[DataflowPolicy]"),
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the ILPTask is created")
+			ilptask := &cv1a1.ILPTask{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dataflowpolicy.Name, Namespace: dataflowpolicy.Namespace}, ilptask)).To(Succeed())
+			Expect(ilptask.Spec.DataflowPolicyRef.Name).To(Equal(dataflowpolicy.Name))
+			Expect(ilptask.Spec.DataflowPolicyRef.DataflowResourceVersion).To(Equal(dataflowpolicy.GetResourceVersion()))
+		})
 	})
 })

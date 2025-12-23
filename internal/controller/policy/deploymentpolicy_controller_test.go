@@ -26,7 +26,12 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	policyv1alpha1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 var _ = Describe("DeploymentPolicy Controller", func() {
@@ -37,7 +42,7 @@ var _ = Describe("DeploymentPolicy Controller", func() {
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: "skycluster-system",
 		}
 		deploymentpolicy := &policyv1alpha1.DeploymentPolicy{}
 
@@ -48,16 +53,24 @@ var _ = Describe("DeploymentPolicy Controller", func() {
 				resource := &policyv1alpha1.DeploymentPolicy{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      resourceName,
-						Namespace: "default",
+						Namespace: "skycluster-system",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: policyv1alpha1.DeploymentPolicySpec{
+						ExecutionEnvironment: "Kubernetes",
+						DeploymentPolicies: []policyv1alpha1.DeploymentPolicyItem{
+							{
+								// arbitrary component ref
+								ComponentRef: hv1a1.ComponentRef{Name: resourceName},
+							},
+						},
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+				deploymentpolicy = resource
 			}
 		})
 
 		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
 			resource := &policyv1alpha1.DeploymentPolicy{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
@@ -65,19 +78,25 @@ var _ = Describe("DeploymentPolicy Controller", func() {
 			By("Cleanup the specific resource instance DeploymentPolicy")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
 		})
-		// It("should successfully reconcile the resource", func() {
-		// 	By("Reconciling the created resource")
-		// 	controllerReconciler := &DeploymentPolicyReconciler{
-		// 		Client: k8sClient,
-		// 		Scheme: k8sClient.Scheme(),
-		// 	}
 
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-		// 	// Example: If you expect a certain status condition after reconciliation, verify it here.
-		// })
+		It("should successfully reconcile the resource and create the ILPTask", func() {
+			By("Reconciling the created resource")
+			reconciler := &DeploymentPolicyReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[DataflowPolicy]"),
+			}
+
+			_, err := reconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Checking the ILPTask is created")
+			ilptask := &cv1a1.ILPTask{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: deploymentpolicy.Name, Namespace: deploymentpolicy.Namespace}, ilptask)).To(Succeed())
+			Expect(ilptask.Spec.DeploymentPolicyRef.Name).To(Equal(deploymentpolicy.Name))
+			Expect(ilptask.Spec.DeploymentPolicyRef.DeploymentPlanResourceVersion).To(Equal(deploymentpolicy.GetResourceVersion()))
+		})
 	})
 })

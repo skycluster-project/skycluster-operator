@@ -34,7 +34,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -61,7 +62,9 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
-	err = corev1alpha1.AddToScheme(scheme.Scheme)
+	err = cv1a1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = pv1a1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
