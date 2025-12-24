@@ -24,6 +24,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -146,31 +147,28 @@ var _ = BeforeSuite(func() {
 
 	By("reconciling the latency object")
 	latReconciler := getLatencyReconciler()
-	_, err = latReconciler.Reconcile(ctx, reconcile.Request{
-		NamespacedName: types.NamespacedName{Name: latList.Items[0].Name, Namespace: ns},
-	})
-	Expect(err).NotTo(HaveOccurred())
-
-	By("fetching the config map name from the aws provider profile")
-	ppOut := &cv1a1.ProviderProfile{}
-	err = k8sClient.Get(ctx, types.NamespacedName{Name: providerprofileAWS.Name, Namespace: ns}, ppOut)
-	Expect(err).NotTo(HaveOccurred())
-
-	By("fetching the config map name from the aws provider profile status")
-	cmName := ppOut.Status.DependencyManager.GetDependency("ConfigMap", ns)
-	Expect(cmName).NotTo(BeNil())
-	Expect(cmName.NameRef).NotTo(BeEmpty())
+	for _, lat := range latList.Items {
+		_, err = latReconciler.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: lat.Name, Namespace: ns},
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
 
 	// Fetch the config map
-	cm = &corev1.ConfigMap{}
-	err = k8sClient.Get(ctx, types.NamespacedName{Name: cmName.NameRef, Namespace: ns}, cm)
+	cmList := &corev1.ConfigMapList{}
+	err = k8sClient.List(ctx, cmList, client.MatchingLabels(map[string]string{
+		"skycluster.io/config-type": "provider-profile",
+	}))
 	Expect(err).NotTo(HaveOccurred())
+	Expect(cmList.Items).To(HaveLen(2))
 
-	By("updating the config map")
-	cm.Data = configMapData()
-	err = k8sClient.Update(ctx, cm)
-	Expect(err).NotTo(HaveOccurred())
-
+	By("updating the config map(s)")
+	for _, cm := range cmList.Items {
+		zone := lo.Ternary(cm.Labels["skycluster.io/provider-platform"] == "aws", "us-east-1a", "us-east1-a")
+		cm.Data = configMapData(zone)
+		err = k8sClient.Update(ctx, &cm)
+		Expect(err).NotTo(HaveOccurred())
+	}
 })
 
 var _ = AfterSuite(func() {

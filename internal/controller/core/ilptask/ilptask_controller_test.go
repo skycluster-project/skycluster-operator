@@ -198,7 +198,7 @@ var _ = Describe("ILPTask Controller", func() {
 			tasksJson, err := ilptaskReconciler.generateTasksJson(*dpPolicy)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tasksJson).NotTo(BeEmpty())
-			Expect(tasksJson).To(MatchJSON(getOptTaskJson(resourceName, providerprofileAWS.Name)))
+			Expect(tasksJson).To(MatchJSON(getOptTaskJsonVM(resourceName, providerprofileAWS.Name)))
 		})
 
 		It("should correctly generate tasks.json for Kubernetes execution environment", func() {
@@ -224,41 +224,72 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(optTasks)).To(Equal(1))
 			Expect(optTasks[0].Kind).To(Equal("XNodeGroup"))
-			// Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
-			// 	{
-			// 		{
-			// 			Name:       "64vCPU-256GB-1xA10G-22GB",
-			// 			ApiVersion: "skycluster.io/v1alpha1",
-			// 			Kind:       "ComputeProfile",
-			// 			Count:      "1",
-			// 			Price:      4.10,
-			// 		},
-			// 	},
-			// }))
-			// // Expect the permitted locations to be the same as the deployment policy
-			// Expect(optTasks[0].PermittedLocations).To(Equal([]locStruct{
-			// 	{
-			// 		Name:     providerprofileAWS.Name,
-			// 		PType:    "cloud",
-			// 		Region:   "us-east-1",
-			// 		Platform: "aws",
-			// 	},
-			// }))
-			// // and no required locations
-			// Expect(optTasks[0].RequiredLocations).To(Equal([][]locStruct{}))
+			// Expect to include all ComputeProfiles for the XNodeGroup
+			// 2 for aws and 2 for gcp
+			Expect(optTasks[0].RequestedVServices[0]).To(HaveLen(4))
+			// Expect the permitted locations to be the same as the deployment policy,
+			// no permitted locations means all, which is handled by the optimizer
+			Expect(optTasks[0].PermittedLocations).To(Equal([]locStruct{}))
+			// and no required locations
+			Expect(optTasks[0].RequiredLocations).To(Equal([][]locStruct{}))
 
-			// // finally generate the tasks.json and verify it
-			// By("generating tasks.json and verifying it")
-			// tasksJson, err := ilptaskReconciler.generateTasksJson(*dpPolicy)
-			// Expect(err).NotTo(HaveOccurred())
-			// Expect(tasksJson).NotTo(BeEmpty())
-			// Expect(tasksJson).To(MatchJSON(getOptTaskJson(resourceName, providerprofileAWS.Name)))
+			// finally generate the tasks.json and verify it
+			By("generating tasks.json and verifying it")
+			tasksJson, err := ilptaskReconciler.generateTasksJson(*dpPolicy)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tasksJson).NotTo(BeEmpty())
+			Expect(tasksJson).To(MatchJSON(getOptTaskJsonK8s(resourceName)))
 		})
 
 	})
 })
 
-func getOptTaskJson(resourceName, ppName string) string {
+func getOptTaskJsonK8s(resourceName string) string {
+	return fmt.Sprintf(`[
+		{
+			"task": "%s",
+			"apiVersion": "skycluster.io/v1alpha1",
+			"kind": "XNodeGroup",
+			"permittedLocations": [],
+			"requiredLocations": [],
+			"requestedVServices": [
+				[
+					{
+						"name": "48vCPU-192GB-4xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 5.67
+					},
+					{
+						"name": "64vCPU-256GB-1xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 4.10
+					},
+					{
+						"name": "48vCPU-192GB-4xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 5.67
+					},
+					{
+						"name": "64vCPU-256GB-1xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 4.10
+					}
+				]
+			],
+			"maxReplicas": "-1"
+		}
+	]`, resourceName)
+}
+
+func getOptTaskJsonVM(resourceName, ppName string) string {
 	return fmt.Sprintf(`[
 		{
 			"task": "%s",
@@ -477,7 +508,7 @@ func createPoliciesForK8sExecEnv(
 					ComponentRef: hv1a1.ComponentRef{
 						APIVersion: "skycluster.io/v1alpha1",
 						Kind:       "XNodeGroup",
-						Name:       resourceName + "-1",
+						Name:       resourceName,
 						// Namespace:  "", // cluster-scoped
 					},
 					// a single VirtualServiceConstraint whose AnyOf contains ComputeProfile
@@ -560,9 +591,9 @@ func setupOptimizationScripts(ctx context.Context, projPath string, k8sClient cl
 	return err
 }
 
-func configMapData() map[string]string {
+func configMapData(zone string) map[string]string {
 	return map[string]string{
-		"flavors.yaml": `- zone: us-east-1a
+		"flavors.yaml": `- zone: ` + zone + `
   zoneOfferings:
   - name: g5.12xlarge
     nameLabel: 48vCPU-192GB-4xA10G-22GB
@@ -594,22 +625,13 @@ func configMapData() map[string]string {
       enabled: true`,
 		"images.yaml": `- nameLabel: ubuntu-20.04
 name: ami-0fb0b230890ccd1e6
-zone: us-east-1a
+zone: ` + zone + `
 - nameLabel: ubuntu-22.04
 name: ami-0e70225fadb23da91
-zone: us-east-1a
+zone: ` + zone + `
 - nameLabel: ubuntu-24.04
 name: ami-07033cb190109bd1d
-zone: us-east-1a
-- nameLabel: ubuntu-20.04
-name: ami-0fb0b230890ccd1e6
-zone: us-east-1b
-- nameLabel: ubuntu-22.04
-name: ami-0e70225fadb23da91
-zone: us-east-1b
-- nameLabel: ubuntu-24.04
-name: ami-07033cb190109bd1d
-zone: us-east-1b`,
+zone: ` + zone,
 		"managed-k8s.yaml": `- name: EKS
 nameLabel: ManagedKubernetes
 overhead:
