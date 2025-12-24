@@ -17,6 +17,9 @@ limitations under the License.
 package v1alpha1
 
 import (
+	"fmt"
+	"strconv"
+
 	meta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -70,6 +73,19 @@ type ProviderProfileStatus struct {
 	ObservedGeneration        int64            `json:"observedGeneration,omitempty"`
 	depv1a1.DependencyManager `json:",inline"`
 	Conditions                []metav1.Condition `json:"conditions,omitempty"`
+}
+
+func (s *ProviderProfileStatus) GetEgressCostDataRate(tier int, tierType string) (float64, error) {
+	for _, c := range s.EgressCostSpecs {
+		if c.Type == tierType {
+			pricePerGB, err := strconv.ParseFloat(c.Tiers[tier].PricePerGB, 64)
+			if err != nil {
+				return 0.0, err // failed to parse price per GB
+			}
+			return pricePerGB, nil
+		}
+	}
+	return 0.0, fmt.Errorf("no egress cost found for tier type %s and tier %d", tierType, tier)
 }
 
 // +kubebuilder:object:root=true

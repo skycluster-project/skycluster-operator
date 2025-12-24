@@ -20,6 +20,8 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -241,8 +243,156 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(tasksJson).To(MatchJSON(getOptTaskJsonK8s(resourceName)))
 		})
 
+		// TODO: test with flavors with spot offering enabled and disabled
+
+		It("checking the generated providers.json", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnv(resourceName, namespace, providerprofileAWS)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// run reconciler for ilptask and check the status
+			ilptaskReconciler := getILPTaskReconciler()
+			_, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// finally generate the providers.json and verify it
+			// we expect all registered providers to be included
+			By("generating providers.json and verifying it")
+			providersJson, err := ilptaskReconciler.generateProvidersJson()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(providersJson).NotTo(BeEmpty())
+			Expect(providersJson).To(MatchJSON(getProvidersJson(providerprofileAWS, providerprofileGCP)))
+
+			By("generating providers-attr.json and verifying it")
+			providersAttrJson, err := ilptaskReconciler.generateProvidersAttrJson(namespace)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(providersAttrJson).NotTo(BeEmpty())
+			Expect(providersAttrJson).To(MatchJSON(getProvidersAttrJson(namespace, providerprofileAWS, providerprofileGCP)))
+		})
+
 	})
 })
+
+func getProvidersAttrJson(ns string, ppAWS, ppGCP *cv1a1.ProviderProfile) string {
+
+	// get updated provider profiles
+	pp1 := &cv1a1.ProviderProfile{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: ppAWS.Name, Namespace: ns}, pp1)
+	Expect(err).NotTo(HaveOccurred())
+	pp2 := &cv1a1.ProviderProfile{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: ppGCP.Name, Namespace: ns}, pp2)
+	Expect(err).NotTo(HaveOccurred())
+
+	pp1Name := pp1.Spec.Platform + "-" + pp1.Spec.Region + "-" + pp1.Spec.Zones[0].Name
+	pp2Name := pp2.Spec.Platform + "-" + pp2.Spec.Region + "-" + pp2.Spec.Zones[0].Name
+
+	// need to get latency objects
+	latencyReconciler := getLatencyReconciler()
+	latencyList := &cv1a1.LatencyList{}
+	err = latencyReconciler.List(ctx, latencyList, client.InNamespace(ns))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(latencyList.Items).To(HaveLen(1))
+	latency := latencyList.Items[0]
+	// first 95 percentile latency is used if available
+	latencyValue := latency.Status.P95
+
+	// egress costs, first tier of internet egress cost is used
+	egressCostDataRateAWS, err := pp1.Status.GetEgressCostDataRate(0, "internet")
+	Expect(err).NotTo(HaveOccurred())
+	egCostAws := strconv.FormatFloat(egressCostDataRateAWS, 'f', -1, 64)
+	egressCostDataRateGCP, err := pp2.Status.GetEgressCostDataRate(0, "internet")
+	Expect(err).NotTo(HaveOccurred())
+	egCostGCP := strconv.FormatFloat(egressCostDataRateGCP, 'f', -1, 64)
+
+	// Note zone only used for intra-zone egress cost
+	providerAttr := `
+		[{
+			"srcName": "` + pp1Name + `",
+			"dstName": "` + pp1Name + `",
+			"src": {
+				"platform": "aws",
+				"zone": "us-east-1a",
+				"region": "us-east-1"
+			},
+			"dst": {
+				"platform": "aws",
+				"zone": "us-east-1a",
+				"region": "us-east-1"
+			},
+			"latency": 0,
+			"egressCost_dataRate": 0
+		},
+		{
+			"srcName": "` + pp1Name + `",
+			"dstName": "` + pp2Name + `",
+			"src": {
+				"platform": "aws",
+				"region": "us-east-1"
+			},
+			"dst": {
+				"platform": "gcp",
+				"region": "us-east1"
+			},
+			"latency": ` + latencyValue + `,
+			"egressCost_dataRate": ` + egCostAws + `
+		},
+		{
+			"srcName": "` + pp2Name + `",
+			"dstName": "` + pp1Name + `",
+			"src": {
+				"platform": "gcp",
+				"region": "us-east1"
+			},
+			"dst": {
+				"platform": "aws",
+				"region": "us-east-1"
+			},
+			"latency": ` + latencyValue + `,
+			"egressCost_dataRate": ` + egCostGCP + `
+		},
+		{
+			"srcName": "` + pp2Name + `",
+			"dstName": "` + pp2Name + `",
+			"src": {
+				"platform": "gcp",
+				"zone": "us-east1-a",
+				"region": "us-east1"
+			},
+			"dst": {
+				"platform": "gcp",
+				"zone": "us-east1-a",
+				"region": "us-east1"
+			},
+			"latency": 0,
+			"egressCost_dataRate": 0
+		}]`
+	return providerAttr
+}
+
+func getProvidersJson(ppAWS, ppGCP *cv1a1.ProviderProfile) string {
+	pps := []*cv1a1.ProviderProfile{ppAWS, ppGCP}
+	var providers []string
+	for _, pp := range pps {
+		name := pp.Spec.Platform + "-" + pp.Spec.Region + "-" + pp.Spec.Zones[0].Name
+		provider := fmt.Sprintf(`
+			{
+				"upstreamName": "%s",
+				"name": "%s",
+				"platform": "%s",
+				"regionAlias": "%s",
+				"zone": "%s",
+				"pType": "cloud",
+				"region": "%s"
+			}
+		`, pp.Name, name, pp.Spec.Platform, pp.Spec.RegionAlias, pp.Spec.Zones[0].Name, pp.Spec.Region)
+		providers = append(providers, provider)
+	}
+	return fmt.Sprintf(`[%s]`, strings.Join(providers, ","))
+}
 
 func getOptTaskJsonK8s(resourceName string) string {
 	return fmt.Sprintf(`[
