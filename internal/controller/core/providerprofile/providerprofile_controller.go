@@ -154,12 +154,14 @@ func (r *ProviderProfileReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		}
 
 		// ensure latencies
+		r.Logger.Info("Ensuring Latencies for ProviderProfile", "name", req.Name, "ProviderProfile", pf.Name)
 		err = r.ensureLatencies(ctx, pf)
 		if err != nil {
 			r.Logger.Error(err, "unable to ensure Latencies for ProviderProfile")
 			return ctrl.Result{}, err
 		}
 
+		r.Logger.Info("Ensuring EgressCosts for ProviderProfile", "name", req.Name, "ProviderProfile", pf.Name)
 		err = r.ensureEgressCosts(pf)
 		if err != nil {
 			r.Logger.Error(err, "unable to ensure EgressCosts for ProviderProfile")

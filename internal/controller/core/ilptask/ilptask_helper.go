@@ -623,7 +623,14 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 	if ok {
 		var zoneOfferings []cv1a1.ZoneOfferings
 		if err := yaml.Unmarshal([]byte(cmData), &zoneOfferings); err == nil {
+			if len(zoneOfferings) == 0 {
+				r.Logger.Info("No zone offerings found for provider", "provider", p.Name)
+			}
 			for _, zo := range zoneOfferings {
+				if len(zo.Offerings) == 0 {
+					r.Logger.Info("No offerings found for zone", "zone", zo.Zone)
+					continue
+				}
 				for _, of := range zo.Offerings {
 					priceFloat, err := strconv.ParseFloat(strings.Trim(of.Price, "$"), 64)
 					if err != nil {
@@ -650,7 +657,11 @@ func (r *ILPTaskReconciler) getComputeProfileForProvider(p cv1a1.ProviderProfile
 					})
 				}
 			}
+		} else {
+			return nil, fmt.Errorf("failed to unmarshal flavors.yaml for provider %s: %w", p.Name, err)
 		}
+	} else {
+		return nil, fmt.Errorf("no flavors.yaml found for provider %s", p.Name)
 	}
 
 	return vServicesList, nil

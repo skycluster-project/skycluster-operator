@@ -27,12 +27,14 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
@@ -48,6 +50,10 @@ var (
 	testEnv   *envtest.Environment
 	cfg       *rest.Config
 	k8sClient client.Client
+
+	providerprofileAWS *cv1a1.ProviderProfile
+	providerprofileGCP *cv1a1.ProviderProfile
+	cm                 *corev1.ConfigMap
 )
 
 func TestControllers(t *testing.T) {
@@ -59,6 +65,7 @@ func TestControllers(t *testing.T) {
 var _ = BeforeSuite(func() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 
+	ns := "skycluster-system"
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
@@ -92,11 +99,78 @@ var _ = BeforeSuite(func() {
 	By("creating skycluster-system namespace")
 	namespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "skycluster-system",
+			Name: ns,
 		},
 	}
 	err = k8sClient.Create(ctx, namespace)
 	Expect(err).NotTo(HaveOccurred())
+
+	By("setting up the optimization scripts")
+	err = setupOptimizationScripts(ctx, "../../../../", k8sClient)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("creating the provider profile (aws)")
+	providerprofileAWS = createProviderProfileAWS(types.NamespacedName{
+		Name:      "aws-us-east-1a",
+		Namespace: "skycluster-system",
+	})
+	err = k8sClient.Create(ctx, providerprofileAWS)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("creating the provider profile (gcp)")
+	providerprofileGCP = createProviderProfileGCP(types.NamespacedName{
+		Name:      "gcp-us-east1-a",
+		Namespace: "skycluster-system",
+	})
+	err = k8sClient.Create(ctx, providerprofileGCP)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("reconciling the provider profile (aws)")
+	ppReconciler := getProviderProfileReconciler()
+	_, err = ppReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: providerprofileAWS.Name, Namespace: providerprofileAWS.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("reconciling the provider profile (gcp)")
+	_, err = ppReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: providerprofileGCP.Name, Namespace: providerprofileGCP.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("fetching the latency objects")
+	latList := &cv1a1.LatencyList{}
+	err = k8sClient.List(ctx, latList, client.MatchingLabels(map[string]string{}))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(latList.Items).To(HaveLen(1))
+
+	By("reconciling the latency object")
+	latReconciler := getLatencyReconciler()
+	_, err = latReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: latList.Items[0].Name, Namespace: ns},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("fetching the config map name from the aws provider profile")
+	ppOut := &cv1a1.ProviderProfile{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: providerprofileAWS.Name, Namespace: ns}, ppOut)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("fetching the config map name from the aws provider profile status")
+	cmName := ppOut.Status.DependencyManager.GetDependency("ConfigMap", ns)
+	Expect(cmName).NotTo(BeNil())
+	Expect(cmName.NameRef).NotTo(BeEmpty())
+
+	// Fetch the config map
+	cm = &corev1.ConfigMap{}
+	err = k8sClient.Get(ctx, types.NamespacedName{Name: cmName.NameRef, Namespace: ns}, cm)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("updating the config map")
+	cm.Data = configMapData()
+	err = k8sClient.Update(ctx, cm)
+	Expect(err).NotTo(HaveOccurred())
+
 })
 
 var _ = AfterSuite(func() {

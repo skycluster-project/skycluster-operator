@@ -18,12 +18,14 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,6 +38,7 @@ import (
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	cv1a1ctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	cv1a1ppctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/providerprofile"
 	coreutils "github.com/skycluster-project/skycluster-operator/internal/controller/core/utils"
 	pv1a1ctrl "github.com/skycluster-project/skycluster-operator/internal/controller/policy"
@@ -49,15 +52,10 @@ var _ = Describe("ILPTask Controller", func() {
 		const namespace = "skycluster-system"
 
 		ctx := context.Background()
-		typeNamespacedName := types.NamespacedName{
-			Name:      resourceName,
-			Namespace: "skycluster-system",
-		}
+
 		var ilptask *cv1a1.ILPTask
 		var dfPolicy *pv1a1.DataflowPolicy
 		var dpPolicy *pv1a1.DeploymentPolicy
-		var providerprofile *cv1a1.ProviderProfile
-		var cm *corev1.ConfigMap
 
 		BeforeEach(func() {
 		})
@@ -69,88 +67,34 @@ var _ = Describe("ILPTask Controller", func() {
 			By("Cleanup the specific resource instance DeploymentPolicy")
 			Expect(k8sClient.Delete(ctx, dpPolicy)).To(Succeed())
 
-			// By("Cleanup the specific resource instance ProviderProfile")
-			// Expect(k8sClient.Delete(ctx, providerprofile)).To(Succeed())
+			By("Cleanup the specific resource instance ILPTask")
+			Expect(k8sClient.Delete(ctx, ilptask)).To(Succeed())
 
-			// By("Cleanup the specific resource instance ConfigMap")
-			// Expect(k8sClient.Delete(ctx, cm)).To(Succeed())
+			By("Ensure the ilptask object is deleted")
+			Eventually(func() bool {
+				ilptask := &cv1a1.ILPTask{}
+				err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, ilptask)
+				return errors.IsNotFound(err)
+			}, time.Second*5, time.Millisecond*100).Should(BeTrue(), "ILPTask should be deleted before next test starts")
 		})
 
 		It("should successfully generate the deployment plan for VirtualMachine execution environment", func() {
-
-			if err := setupOptimizationScripts(ctx, "../../../../", k8sClient); err != nil {
-				panic(err)
-			}
-
-			providerprofile = createProviderProfileAWS(typeNamespacedName)
-			if err := k8sClient.Create(ctx, providerprofile); err != nil {
-				panic(err)
-			}
-
-			// need to trigger the reconciler
-			ppReconciler := getProviderProfileReconciler()
-			if _, err := ppReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: providerprofile.Name, Namespace: namespace},
-			}); err != nil {
-				panic(err)
-			}
-
-			// fetch the config map
-			ppOut := &cv1a1.ProviderProfile{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{Name: providerprofile.Name, Namespace: namespace}, ppOut); err != nil {
-				panic(err)
-			}
-
-			cmName := ppOut.Status.DependencyManager.GetDependency("ConfigMap", namespace)
-			if cmName == nil || cmName.NameRef == "" {
-				panic("config map not found")
-			}
-
-			// Fetch the config map
-			cm = &corev1.ConfigMap{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{Name: cmName.NameRef, Namespace: namespace}, cm); err != nil {
-				panic(err)
-			}
-			// update the config map
-			cm.Data = configMapData()
-			if err := k8sClient.Update(ctx, cm); err != nil {
-				panic(err)
-			}
-
 			By("generating deployment policy and dataflow policy")
-			dpPolicy, dfPolicy = createPoliciesForVMExecEnv(resourceName, namespace, providerprofile)
+			dpPolicy, dfPolicy = createPoliciesForVMExecEnv(resourceName, namespace, providerprofileAWS)
 			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
 			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
-
-			// run reconcilers for dataflowpolicy and deploymentpolicy
-			// expect the ilptask object to be created
-			dfReconciler := getDataflowPolicyReconciler()
-			_, err := dfReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: dfPolicy.Name, Namespace: namespace},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			dpReconciler := getDeploymentPolicyReconciler()
-			_, err = dpReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			By("checking the ilptask object is created")
-			ilptask = &cv1a1.ILPTask{}
-			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dfPolicy.Name, Namespace: namespace}, ilptask)).To(Succeed())
-			Expect(ilptask.Spec.DeploymentPolicyRef.Name).To(Equal(dpPolicy.Name))
-			Expect(ilptask.Spec.DataflowPolicyRef.Name).To(Equal(dfPolicy.Name))
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
 
 			// run reconciler for ilptask and check the status
 			ilptaskReconciler := getILPTaskReconciler()
 			res, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: ilptask.Name, Namespace: namespace},
+				NamespacedName: types.NamespacedName{Name: ilptask.Name, Namespace: ilptask.Namespace},
 			})
 			Expect(err).NotTo(HaveOccurred())
+			Expect(res.RequeueAfter).To(Equal(3 * time.Second))
 
 			ilpOut := &cv1a1.ILPTask{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: ilptask.Name, Namespace: namespace}, ilpOut)
+			err = k8sClient.Get(ctx, types.NamespacedName{Name: ilptask.Name, Namespace: ilptask.Namespace}, ilpOut)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("checking the ilptask pod is created")
@@ -165,19 +109,191 @@ var _ = Describe("ILPTask Controller", func() {
 
 			By("checking the requeue after 3 seconds")
 			Expect(res.RequeueAfter).To(Equal(3 * time.Second))
-
-			// cleanup
-			// By("Cleanup the specific resource instance ILPTask")
-			// Expect(k8sClient.Delete(ctx, ilptask)).To(Succeed())
 		})
 
-		// reconcile
-		// If result is already set and referenced resources didn't change -> skip
+		It("should correctly generate tasks.json for VirtualMachine execution environment", func() {
 
-		// Otherwise create or ensure optimization pod
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForVMExecEnv(resourceName, namespace, providerprofileAWS)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// run reconciler for ilptask and check the status
+			ilptaskReconciler := getILPTaskReconciler()
+			_, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("fetching the candidate providers for aws us-east-1")
+			candidates, err := ilptaskReconciler.getCandidateProviders([]cv1a1.ProviderProfileSpec{
+				{
+					Platform:    "aws",
+					Region:      "us-east-1",
+					RegionAlias: "us-east",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(candidates)).To(Equal(1))
+
+			By("fetching the compute profiles for the candidate provider")
+			// two ComputeProfile are available for aws us-east-1
+			cmProfiles, err := ilptaskReconciler.getComputeProfileForProvider(candidates[0])
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(cmProfiles)).To(Equal(2))
+			Expect(cmProfiles[0].name).To(Equal("48vCPU-192GB-4xA10G-22GB"))
+
+			By("fetching the compute profiles for the provider reference")
+			cmProfiles, err = ilptaskReconciler.getAllComputeProfiles([]hv1a1.ProviderRefSpec{
+				{
+					Name:     providerprofileAWS.Name,
+					Type:     "cloud",
+					Region:   "us-east-1",
+					Platform: "aws",
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(cmProfiles)).To(Equal(2))
+
+			By("fetching the compute profiles from the deployment policy")
+			profiles, err := ilptaskReconciler.getAllComputeProfiles(dpPolicy.Spec.DeploymentPolicies[0].LocationConstraint.Permitted)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(profiles)).To(Equal(2))
+
+			// iterate over the deployment policies and find the virtual services
+			// only component with kind XInstance is supported
+			// and the virtual service constraint must be only ComputeProfile
+			// Except one ComputeProfile according to the deployment policy
+			By("finding the virtual services for the deployment policy")
+			optTasks, err := ilptaskReconciler.findVMVirtualServices(dpPolicy.Spec.DeploymentPolicies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(optTasks)).To(Equal(1))
+			Expect(optTasks[0].Kind).To(Equal("XInstance"))
+			Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+				{
+					{
+						Name:       "64vCPU-256GB-1xA10G-22GB",
+						ApiVersion: "skycluster.io/v1alpha1",
+						Kind:       "ComputeProfile",
+						Count:      "1",
+						Price:      4.10,
+					},
+				},
+			}))
+			// Expect the permitted locations to be the same as the deployment policy
+			Expect(optTasks[0].PermittedLocations).To(Equal([]locStruct{
+				{
+					Name:     providerprofileAWS.Name,
+					PType:    "cloud",
+					Region:   "us-east-1",
+					Platform: "aws",
+				},
+			}))
+			// and no required locations
+			Expect(optTasks[0].RequiredLocations).To(Equal([][]locStruct{}))
+
+			// finally generate the tasks.json and verify it
+			By("generating tasks.json and verifying it")
+			tasksJson, err := ilptaskReconciler.generateTasksJson(*dpPolicy)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tasksJson).NotTo(BeEmpty())
+			Expect(tasksJson).To(MatchJSON(getOptTaskJson(resourceName, providerprofileAWS.Name)))
+		})
+
+		It("should correctly generate tasks.json for Kubernetes execution environment", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnv(resourceName, namespace, providerprofileAWS)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// run reconciler for ilptask and check the status
+			ilptaskReconciler := getILPTaskReconciler()
+			_, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// iterate over the deployment policies and find the virtual services
+			// only component with kind XInstance is supported
+			// and the virtual service constraint must be only ComputeProfile
+			// Except one ComputeProfile according to the deployment policy
+			By("finding the virtual services for the deployment policy")
+			optTasks, err := ilptaskReconciler.findK8SVirtualServices(namespace, dpPolicy.Spec.DeploymentPolicies)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(len(optTasks)).To(Equal(1))
+			Expect(optTasks[0].Kind).To(Equal("XNodeGroup"))
+			// Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+			// 	{
+			// 		{
+			// 			Name:       "64vCPU-256GB-1xA10G-22GB",
+			// 			ApiVersion: "skycluster.io/v1alpha1",
+			// 			Kind:       "ComputeProfile",
+			// 			Count:      "1",
+			// 			Price:      4.10,
+			// 		},
+			// 	},
+			// }))
+			// // Expect the permitted locations to be the same as the deployment policy
+			// Expect(optTasks[0].PermittedLocations).To(Equal([]locStruct{
+			// 	{
+			// 		Name:     providerprofileAWS.Name,
+			// 		PType:    "cloud",
+			// 		Region:   "us-east-1",
+			// 		Platform: "aws",
+			// 	},
+			// }))
+			// // and no required locations
+			// Expect(optTasks[0].RequiredLocations).To(Equal([][]locStruct{}))
+
+			// // finally generate the tasks.json and verify it
+			// By("generating tasks.json and verifying it")
+			// tasksJson, err := ilptaskReconciler.generateTasksJson(*dpPolicy)
+			// Expect(err).NotTo(HaveOccurred())
+			// Expect(tasksJson).NotTo(BeEmpty())
+			// Expect(tasksJson).To(MatchJSON(getOptTaskJson(resourceName, providerprofileAWS.Name)))
+		})
 
 	})
 })
+
+func getOptTaskJson(resourceName, ppName string) string {
+	return fmt.Sprintf(`[
+		{
+			"task": "%s",
+			"apiVersion": "skycluster.io/v1alpha1",
+			"kind": "XInstance",
+			"permittedLocations": [{
+				"name": "%s",
+				"pType": "cloud",
+				"region": "us-east-1",
+				"platform": "aws"
+			}],
+			"requiredLocations": [],
+			"requestedVServices": [
+				[
+					{
+						"name": "64vCPU-256GB-1xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 4.10
+					}
+				]
+			],
+			"maxReplicas": "-1"
+		}
+	]`, resourceName, ppName)
+}
+
+func getComputeProfileName() string {
+	return "64vCPU-256GB-1xA10G-22GB"
+}
+
+func getComputeProfilePrice() float64 {
+	return 4.10
+}
 
 func getProviderProfileReconciler() *cv1a1ppctrl.ProviderProfileReconciler {
 	return &cv1a1ppctrl.ProviderProfileReconciler{
@@ -209,6 +325,38 @@ func getILPTaskReconciler() *ILPTaskReconciler {
 		Scheme: k8sClient.Scheme(),
 		Logger: zap.New(pkglog.CustomLogger()).WithName("[ILPTask]"),
 	}
+}
+
+func getLatencyReconciler() *cv1a1ctrl.LatencyReconciler {
+	return &cv1a1ctrl.LatencyReconciler{
+		Client: k8sClient,
+		Scheme: k8sClient.Scheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+	}
+}
+
+func prepareILPTask(dpPolicy *pv1a1.DeploymentPolicy, dfPolicy *pv1a1.DataflowPolicy) *cv1a1.ILPTask {
+	// run reconcilers for dataflowpolicy and deploymentpolicy
+	// expect the ilptask object to be created
+	dfReconciler := getDataflowPolicyReconciler()
+	_, err := dfReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: dfPolicy.Name, Namespace: dfPolicy.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	dpReconciler := getDeploymentPolicyReconciler()
+	_, err = dpReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: dpPolicy.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("checking the ilptask object is created")
+	ilptask := &cv1a1.ILPTask{}
+	Expect(k8sClient.Get(ctx, types.NamespacedName{Name: dfPolicy.Name, Namespace: dpPolicy.Namespace}, ilptask)).To(Succeed())
+	Expect(ilptask.Spec.DeploymentPolicyRef.Name).To(Equal(dpPolicy.Name))
+	Expect(ilptask.Spec.DataflowPolicyRef.Name).To(Equal(dfPolicy.Name))
+
+	return ilptask
 }
 
 // creates a dataflow policy and a deployment policy for a VirtualMachine execution environment
@@ -261,7 +409,7 @@ func createPoliciesForVMExecEnv(
 									VirtualService: hv1a1.VirtualService{
 										Kind: "ComputeProfile",
 										Spec: &runtime.RawExtension{Raw: []byte(
-											`{"cpu": "4", "ram": "16GB", "gpu": {"model": "L4", "unit": "1", "memory": "16GB"}}`,
+											`{"cpu": "64", "ram": "256GB", "gpu": {"model": "A10G", "unit": "1"}}`,
 										)},
 									},
 									Count: 1,
@@ -288,6 +436,85 @@ func createPoliciesForVMExecEnv(
 	return dpPolicy, dfPolicy
 }
 
+func createPoliciesForK8sExecEnv(
+	resourceName,
+	namespace string,
+	providerProfile *cv1a1.ProviderProfile) (*pv1a1.DeploymentPolicy, *pv1a1.DataflowPolicy) {
+
+	dfPolicy := &pv1a1.DataflowPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: pv1a1.DataflowPolicySpec{
+			DataDependencies: []pv1a1.DataDapendency{},
+		},
+	}
+
+	// create a deployment policy with a single component: XInstance
+	// reflecting a single virtual machine
+	dpPolicy := &pv1a1.DeploymentPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		// For Kubernetes execution environment, the deployment policy can contain multiple components
+		// each component is either a XNodeGroup or a Deployment
+		// XNodeGroup represents a cluster specification for a multi-cluster Kubernetes deployment
+		// Deployment represents a single Kubernetes deployment which resides in a single cluster
+		Spec: pv1a1.DeploymentPolicySpec{
+			ExecutionEnvironment: "Kubernetes",
+			DeploymentPolicies: []pv1a1.DeploymentPolicyItem{
+				{
+					ComponentRef: hv1a1.ComponentRef{
+						APIVersion: "skycluster.io/v1alpha1",
+						Kind:       "XNodeGroup",
+						Name:       resourceName + "-1",
+						// Namespace:  "", // cluster-scoped
+					},
+					// a single VirtualServiceConstraint whose AnyOf contains ComputeProfile
+					VirtualServiceConstraint: []pv1a1.VirtualServiceConstraint{
+						{
+							AnyOf: []pv1a1.VirtualServiceSelector{
+								{
+									// first alternative ComputeProfile for the XNodeGroup
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "A10G", "unit": "1"}}`,
+										)},
+									},
+									// Count: 2, // no need to specify for XNodeGroup
+								},
+								{
+									// a second alternative ComputeProfile for the XNodeGroup
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "L4", "unit": "1"}}`,
+										)},
+									},
+								},
+							},
+						},
+					},
+					// LocationConstraint: permissive (no specific provider filters) to allow optimizer to choose
+					LocationConstraint: hv1a1.LocationConstraint{},
+				},
+			},
+		},
+	}
+	return dpPolicy, dfPolicy
+}
+
 // returns the provider profile and a boolean indicating if it was created
 func createProviderProfileAWS(typeNamespacedName types.NamespacedName) *cv1a1.ProviderProfile {
 	return &cv1a1.ProviderProfile{
@@ -306,6 +533,23 @@ func createProviderProfileAWS(typeNamespacedName types.NamespacedName) *cv1a1.Pr
 	}
 }
 
+func createProviderProfileGCP(typeNamespacedName types.NamespacedName) *cv1a1.ProviderProfile {
+	return &cv1a1.ProviderProfile{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      typeNamespacedName.Name,
+			Namespace: typeNamespacedName.Namespace,
+		},
+		Spec: cv1a1.ProviderProfileSpec{
+			Platform:    "gcp",
+			RegionAlias: "us-east",
+			Region:      "us-east1",
+			Zones: []cv1a1.ZoneSpec{
+				{Name: "us-east1-a", Enabled: true, DefaultZone: true, Type: "cloud"},
+			},
+		},
+	}
+}
+
 func setupOptimizationScripts(ctx context.Context, projPath string, k8sClient client.Client) error {
 	err := coreutils.ApplyYAML(
 		ctx,
@@ -319,35 +563,35 @@ func setupOptimizationScripts(ctx context.Context, projPath string, k8sClient cl
 func configMapData() map[string]string {
 	return map[string]string{
 		"flavors.yaml": `- zone: us-east-1a
-zoneOfferings:
-- name: g5.12xlarge
-nameLabel: 48vCPU-192GB-4xA10G-22GB
-vcpus: 48
-ram: 192GB
-price: "5.67"
-gpu:
-enabled: true
-manufacturer: NVIDIA
-count: 4
-model: A10G
-memory: 22GB
-spot:
-price: "2.12"
-enabled: true
-- name: g5.16xlarge
-nameLabel: 64vCPU-256GB-1xA10G-22GB
-vcpus: 64
-ram: 256GB
-price: "4.10"
-gpu:
-enabled: true
-manufacturer: NVIDIA
-count: 1
-model: A10G
-memory: 22GB
-spot:
-price: "1.07"
-enabled: true`,
+  zoneOfferings:
+  - name: g5.12xlarge
+    nameLabel: 48vCPU-192GB-4xA10G-22GB
+    vcpus: 48
+    ram: 192GB
+    price: "5.67"
+    gpu:
+      enabled: true
+      manufacturer: NVIDIA
+      count: 4
+      model: A10G
+      memory: 22GB
+    spot:
+      price: "2.12"
+      enabled: true
+  - name: g5.16xlarge
+    nameLabel: 64vCPU-256GB-1xA10G-22GB
+    vcpus: 64
+    ram: 256GB
+    price: "4.10"
+    gpu:
+      enabled: true
+      manufacturer: NVIDIA
+      count: 1
+      model: A10G
+      memory: 22GB
+    spot:
+      price: "1.07"
+      enabled: true`,
 		"images.yaml": `- nameLabel: ubuntu-20.04
 name: ami-0fb0b230890ccd1e6
 zone: us-east-1a

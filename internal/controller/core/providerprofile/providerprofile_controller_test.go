@@ -18,7 +18,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -154,9 +153,6 @@ var _ = Describe("ProviderProfile Controller", func() {
 			Expect(provList.Items).To(HaveLen(2))
 
 			err = reconciler.ensureLatencies(ctx, providerGCP)
-			if err != nil {
-				fmt.Println("error ensuring latencies", err)
-			}
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying the Latency objects were created")
