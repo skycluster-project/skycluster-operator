@@ -96,7 +96,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 			}
 
 			altVSList := make([]virtualSvcStruct, 0)
-			additionalVSList := make([]virtualSvcStruct, 0)
+			// selectedVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 
 				// add any requested virtual service as is
@@ -109,6 +109,10 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				}
 
 				if alternativeVS.Kind == "ComputeProfile" {
+					if alternativeVS.Spec == nil {
+						continue
+					}
+
 					pat, err := ParseFlavorFromJSON(alternativeVS.Spec)
 					if err != nil {
 						return nil, err
@@ -160,34 +164,39 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 							deployable[off.name] = off
 						}
 					}
+					// filter the altVSList to only include the ComputeProfiles that are suitable for the deployment
 					altVSListFiltered := make([]virtualSvcStruct, 0)
 					for _, alt := range altVSList {
 						if _, ok := deployable[alt.Name]; ok {
 							altVSListFiltered = append(altVSListFiltered, alt)
 						}
 					}
+
 					if len(altVSList) > 0 && len(altVSListFiltered) == 0 {
 						return nil, fmt.Errorf("no suitable ComputeProfile alternatives found for component %s", cmpnt.ComponentRef.Name)
-					} else {
+					}
+					// if there are suitable ComputeProfile alternatives found for deployment,
+					// use them (it satisfies the user specified ComputeProfile alternatives as well)
+					if len(altVSListFiltered) > 0 {
 						altVSList = altVSListFiltered
 					}
 
-					// if no suitable ComputeProfile alternatives found,
-					// use all the deployable ComputeProfiles
-					// otherwise, use the suitable ComputeProfile alternatives
-					if len(altVSList) == 0 {
-						for _, off := range deployable {
-							additionalVSList = append(additionalVSList, virtualSvcStruct{
-								ApiVersion: alternativeVS.APIVersion,
-								Kind:       "ComputeProfile",
-								Name:       off.name, // name is mapped to nameLabel
-								Count:      "1",
-								Price:      off.deployCost,
-							})
-						}
-					} else {
-						additionalVSList = append(additionalVSList, altVSList...)
-					}
+					// // if altVSList is empty, it means either no user-specified ComputeProfile alternatives
+					// // so we fallback to use all the deployable ComputeProfiles
+					// if len(altVSList) == 0 {
+					// 	for _, off := range deployable {
+					// 		selectedVSList = append(selectedVSList, virtualSvcStruct{
+					// 			ApiVersion: alternativeVS.APIVersion,
+					// 			Kind:       "ComputeProfile",
+					// 			Name:       off.name, // name is mapped to nameLabel
+					// 			Count:      "1",
+					// 			Price:      off.deployCost,
+					// 		})
+					// 	}
+					// } else {
+					// 	// otherwise we use them, (satifying user-specified ComputeProfiles and deployments)
+					// 	selectedVSList = append(selectedVSList, altVSList...)
+					// }
 
 				case "XNodeGroup", "XKube":
 					// If the component is an XNodeGroup or XKube, it represents a set of Compute profile
@@ -198,31 +207,33 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 
 					// Since the ComputeProfile is already handled above, we do not need to do anything here.
 					r.Logger.Info("XNodeGroup/XKube component detected, handled via ComputeProfile alternatives", "component", cmpnt.ComponentRef.Name)
+					// selectedVSList = append(selectedVSList, altVSList...)
 
 				default:
 					return nil, fmt.Errorf("unsupported virtual service kind %s for Kubernetes execution environment", alternativeVS.Kind)
 				}
 
 				// remove duplicates; for an alternative VS it does not make sense to have duplicates
-				additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
+				altVSList = lo.UniqBy(altVSList, func(v virtualSvcStruct) string {
 					return v.Name
 				})
 				// the list can be huge, so sort and limit to top 10 cheapest
-				sort.Slice(additionalVSList, func(i, j int) bool {
-					return additionalVSList[i].Price < additionalVSList[j].Price
+				sort.Slice(altVSList, func(i, j int) bool {
+					return altVSList[i].Price < altVSList[j].Price
 				})
-				if len(additionalVSList) > 10 {
-					additionalVSList = additionalVSList[:10]
+				if len(altVSList) > 10 {
+					altVSList = altVSList[:10]
 				}
-			}
+			} // end of for each alternative virtual service
 
-			if len(altVSList) > 0 {
-				vsList = append(vsList, altVSList)
-			}
-			if len(additionalVSList) > 0 {
-				vsList = append(vsList, additionalVSList)
-			}
-		}
+			vsList = append(vsList, altVSList)
+
+			// if len(altVSList) > 0 {
+			// }
+			// if len(selectedVSList) > 0 {
+			// 	vsList = append(vsList, selectedVSList)
+			// }
+		} // end of for each virtual service constraint in the deployment policy item
 
 		perLocList := make([]locStruct, 0)
 		for _, perLoc := range cmpnt.LocationConstraint.Permitted {
@@ -422,6 +433,13 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 				cmpntRef.Name, cmpntRef.Kind, cmpntRef.APIVersion)
 		}
 
+		if !slices.Contains([]string{"Deployment", "XNodeGroup", "XInstance"}, matchingDPItem.ComponentRef.Kind) {
+			return nil, fmt.Errorf("unsupported component kind %s for services for deploy plan", matchingDPItem.ComponentRef.Kind)
+		}
+
+		// We now work with the matching deployment policy item
+		// since we only support ComputeProfile for now for each component
+		// we find the cheapest ComputeProfile for the component
 		// Process VirtualServiceConstraint to find services that must be deployed
 		var requiredServices []virtualSvcStruct
 		for _, vsc := range matchingDPItem.VirtualServiceConstraint {
@@ -429,14 +447,16 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 				continue
 			}
 
-			// For each alternative virtual service
+			// altVSList is the list of all ComputeProfile alternatives specified by the user
+			altVSList := make([]virtualSvcStruct, 0)
+			// selectedVSList is the list of ComputeProfile combining those specified by the user
+			// and the ones that are suitable for the Deployment (if the component is a Deployment)
+			selectedVSList := make([]virtualSvcStruct, 0)
+			// For each alternative virtual service, we only support ComputeProfile for now
 			for _, alternativeVS := range vsc.AnyOf {
-				supportedVSKinds := []string{"ComputeProfile"}
-				if !slices.Contains(supportedVSKinds, alternativeVS.Kind) {
-					return nil, fmt.Errorf("unsupported virtual service kind %s for component %s", alternativeVS.Kind, cmpntRef.Name)
-				}
 
 				switch alternativeVS.Kind {
+				// only support ComputeProfile for now
 				case "ComputeProfile":
 					// Parse the flavor pattern from the virtual service spec
 					pat, err := ParseFlavorFromJSON(alternativeVS.Spec)
@@ -455,87 +475,111 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(ns string, deployPlan cv1a
 
 					// Find matching profiles
 					for _, off := range profiles {
-						// if deploy cost is 0 , it means we could not find its price, so we skip it
-						if off.deployCost == 0 {
+						if off.deployCost == 0 || !offeringMatches(pat, off) {
 							continue
 						}
-						if !offeringMatches(pat, off) {
-							continue
-						}
-
-						// Add this offering as a ComputeProfile service that must be deployed
-						apiVersion := alternativeVS.APIVersion
-						if apiVersion == "" {
-							apiVersion = "skycluster.io/v1alpha1"
-						}
+						// Add this offering as a ComputeProfile alternative
 						newVS := virtualSvcStruct{
-							ApiVersion: apiVersion,
+							ApiVersion: alternativeVS.APIVersion,
 							Kind:       "ComputeProfile",
-							Name:       off.name,
-							Count:      strconv.Itoa(alternativeVS.Count),
+							Name:       off.name, // name is mapped to nameLabel
 							Price:      off.deployCost,
+							Count:      strconv.Itoa(alternativeVS.Count),
 						}
-						requiredServices = append(requiredServices, newVS)
+						altVSList = append(altVSList, newVS)
 					}
 
-					// For Kubernetes execution environment, also handle Deployment-specific requirements
-					if dp.Spec.ExecutionEnvironment == "Kubernetes" && matchingDPItem.ComponentRef.Kind == "Deployment" {
-						// Calculate minimum compute resource required for this component
+					// // add all the ComputeProfile alternatives to the selectedVSList
+					// selectedVSList = append(selectedVSList, altVSList...)
+
+					// ComputeProfile is supported for Deployment and XNodeGroup and XInstance
+					// When the reference is Deployment, we need to validate the minimum compute resource required
+					// Similar logic is applied in findK8SVirtualServices for Kubernetes execution environment
+					if matchingDPItem.ComponentRef.Kind == "Deployment" {
+						// Validate against deployment requirements
+						// calculate the minimum compute resource required for this component (i.e. deployment)
 						minCR, err := r.calculateMinComputeResource(ns, matchingDPItem.ComponentRef.Name)
 						if err != nil {
-							return nil, fmt.Errorf("failed to calculate min compute resource for component %s: %w", cmpntRef.Name, err)
+							return nil, fmt.Errorf("failed to calculate min compute resource for component %s: %w", matchingDPItem.ComponentRef.Name, err)
 						}
-						if minCR != nil {
-							// Find additional profiles that meet the minimum requirements
-							for _, off := range profiles {
-								if off.cpu < minCR.cpu || off.ram < minCR.ram {
-									continue
-								}
+						if minCR == nil {
+							return nil, fmt.Errorf("nil min compute resource for component %s", matchingDPItem.ComponentRef.Name)
+						}
 
-								// Check if this profile is already in the list
-								alreadyAdded := false
-								for _, existing := range requiredServices {
-									if existing.Name == off.name {
-										alreadyAdded = true
-										break
-									}
-								}
-								if !alreadyAdded {
-									apiVersion := alternativeVS.APIVersion
-									if apiVersion == "" {
-										apiVersion = "skycluster.io/v1alpha1"
-									}
-									requiredServices = append(requiredServices, virtualSvcStruct{
-										ApiVersion: apiVersion,
-										Kind:       "ComputeProfile",
-										Name:       off.name,
-										Count:      "1",
-										Price:      off.deployCost,
-									})
-								}
+						// Try to fetch flavors for the provider identified by alternativeVS.Name (fallback to component name)
+						profiles, err := r.getAllComputeProfiles(matchingDPItem.LocationConstraint.Permitted)
+						if err != nil {
+							return nil, err
+						}
+
+						// Build deployment-compatible set
+						deployable := make(map[string]computeProfileService)
+						for _, off := range profiles {
+							if off.cpu >= minCR.cpu && off.ram >= minCR.ram {
+								deployable[off.name] = off
 							}
 						}
-					}
+						// filter the altVSList to only include the ComputeProfiles that are suitable for the deployment
+						altVSListFiltered := make([]virtualSvcStruct, 0)
+						for _, alt := range altVSList {
+							if _, ok := deployable[alt.Name]; ok {
+								altVSListFiltered = append(altVSListFiltered, alt)
+							}
+						}
 
+						// if there are users specified ComputeProfile alternatives but
+						// no suitable ComputeProfile found for deployment, return an error
+						if len(altVSList) > 0 && len(altVSListFiltered) == 0 {
+							return nil, fmt.Errorf("no suitable ComputeProfile alternatives found for deployment component %s", matchingDPItem.ComponentRef.Name)
+						}
+
+						if len(altVSListFiltered) > 0 {
+							// if there are suitable ComputeProfile alternatives found for deployment,
+							// use them instead of the all user specified ComputeProfile alternatives
+							// (it satisfies the user specified ComputeProfile alternatives as well)
+							altVSList = altVSListFiltered
+						}
+
+						// if still no suitable ComputeProfiles found considering
+						// the users specified ComputeProfile alternatives and the deployment requirements,
+						// we fallback to use all the deployable ComputeProfiles,
+						// otherwise, use the suitable ComputeProfile alternatives
+						if len(altVSList) == 0 {
+							for _, off := range deployable {
+								selectedVSList = append(selectedVSList, virtualSvcStruct{
+									ApiVersion: alternativeVS.APIVersion,
+									Kind:       "ComputeProfile",
+									Name:       off.name, // name is mapped to nameLabel
+									Count:      "1",
+									Price:      off.deployCost,
+								})
+							}
+						} else {
+							selectedVSList = append(selectedVSList, altVSList...)
+						}
+					}
 				default:
 					return nil, fmt.Errorf("unsupported virtual service kind %s for component %s", alternativeVS.Kind, cmpntRef.Name)
 				}
+				// remove duplicates; for an alternative VS it does not make sense to have duplicates
+				selectedVSList = lo.UniqBy(selectedVSList, func(v virtualSvcStruct) string {
+					return v.Name
+				})
+				// the list can be huge, so sort and limit to top 10 cheapest
+				sort.Slice(selectedVSList, func(i, j int) bool {
+					return selectedVSList[i].Price < selectedVSList[j].Price
+				})
+				if len(selectedVSList) > 10 {
+					selectedVSList = selectedVSList[:10]
+				}
+			} // end of for each alternative virtual service
+
+			// Store services for this component
+			if len(requiredServices) > 0 {
+				servicesMap[cmpntRef.Name] = requiredServices
 			}
-		}
-
-		// Remove duplicates and sort by price
-		requiredServices = lo.UniqBy(requiredServices, func(v virtualSvcStruct) string {
-			return v.Name
-		})
-		sort.Slice(requiredServices, func(i, j int) bool {
-			return requiredServices[i].Price < requiredServices[j].Price
-		})
-
-		// Store services for this component
-		if len(requiredServices) > 0 {
-			servicesMap[cmpntRef.Name] = requiredServices
-		}
-	}
+		} // end of for each virtual service constraint in the deployment policy item
+	} // end of for each component in the deployPlan
 
 	return servicesMap, nil
 }
