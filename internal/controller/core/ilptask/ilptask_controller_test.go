@@ -28,12 +28,15 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -143,8 +146,7 @@ var _ = Describe("ILPTask Controller", func() {
 			// two ComputeProfile are available for aws us-east-1
 			cmProfiles, err := ilptaskReconciler.getComputeProfileForProvider(candidates[0])
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(cmProfiles)).To(Equal(2))
-			Expect(cmProfiles[0].name).To(Equal("48vCPU-192GB-4xA10G-22GB"))
+			Expect(len(cmProfiles)).To(Equal(4))
 
 			By("fetching the compute profiles for the provider reference")
 			cmProfiles, err = ilptaskReconciler.getAllComputeProfiles([]hv1a1.ProviderRefSpec{
@@ -156,12 +158,8 @@ var _ = Describe("ILPTask Controller", func() {
 				},
 			})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(len(cmProfiles)).To(Equal(2))
-
-			By("fetching the compute profiles from the deployment policy")
-			profiles, err := ilptaskReconciler.getAllComputeProfiles(dpPolicy.Spec.DeploymentPolicies[0].LocationConstraint.Permitted)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(profiles)).To(Equal(2))
+			// four compute profiles are defined for aws us-east-1
+			Expect(len(cmProfiles)).To(Equal(4))
 
 			// iterate over the deployment policies and find the virtual services
 			// only component with kind XInstance is supported
@@ -245,7 +243,7 @@ var _ = Describe("ILPTask Controller", func() {
 
 		// TODO: test with flavors with spot offering enabled and disabled
 
-		It("checking the generated providers.json", func() {
+		It("checking the generated providers.json for Kubernetes execution environment", func() {
 			By("generating deployment policy and dataflow policy")
 			dpPolicy, dfPolicy = createPoliciesForK8sExecEnv(resourceName, namespace, providerprofileAWS)
 			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
@@ -274,8 +272,128 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(providersAttrJson).To(MatchJSON(getProvidersAttrJson(namespace, providerprofileAWS, providerprofileGCP)))
 		})
 
+		It("should correctly generate tasks.json for Kubernetes execution environment with Deployment components", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnvWithDeployment(resourceName, namespace, providerprofileAWS)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			By("creating a sample deployment")
+			deployment := createSampleDeployment(resourceName, "sample-deployment", namespace)
+			Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// run reconciler for ilptask and check the status
+			ilptaskReconciler := getILPTaskReconciler()
+			_, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// iterate over the deployment policies and find the virtual services
+			// only component with kind XInstance is supported
+			// and the virtual service constraint must be only ComputeProfile
+			// Except one ComputeProfile according to the deployment policy
+			By("finding the virtual services for the deployment policy")
+			optTasks, err := ilptaskReconciler.findK8SVirtualServices(namespace, dpPolicy.Spec.DeploymentPolicies)
+			Expect(err).NotTo(HaveOccurred())
+
+			// expecting RequestedVServices with length 2, because dp policy specifies
+			// one explicit ComputeProfile (gpu model L4) and one implicit ComputeProfile (from deployment)
+			Expect(optTasks[0].RequestedVServices).To(HaveLen(2))
+			// expect containing one compute profile with gpu model L4
+			Expect(optTasks[0].RequestedVServices[0]).To(ContainElement(virtualSvcStruct{
+				Name:       "12vCPU-49GB-1xL4-24GB",
+				ApiVersion: "skycluster.io/v1alpha1",
+				Kind:       "ComputeProfile",
+				Count:      "1",
+				Price:      0.4893,
+			}))
+			// and expect containing ComputeProfile(s) that satisfy the deployment requirements
+			// most 10 cheapest ComputeProfiles
+			Expect(optTasks[0].RequestedVServices).To(Equal(
+				[][]virtualSvcStruct{
+          // one ComputeProfile with gpu model L4 resulted from explicit constraint
+					{
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+					},
+          // one or more ComputeProfile that satisfy the deployment requirements
+					{
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+					},
+				},
+			))
+			
+      Expect(optTasks[0].Kind).To(Equal("Deployment"))
+		})
+
 	})
 })
+
+func createSampleDeployment(appId, deployName, namespace string) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    appId,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "sample-deployment",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "sample-deployment",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "sample-container",
+							Image: "sample-image",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
 
 func getProvidersAttrJson(ns string, ppAWS, ppGCP *cv1a1.ProviderProfile) string {
 
@@ -310,66 +428,66 @@ func getProvidersAttrJson(ns string, ppAWS, ppGCP *cv1a1.ProviderProfile) string
 
 	// Note zone only used for intra-zone egress cost
 	providerAttr := `
-		[{
-			"srcName": "` + pp1Name + `",
-			"dstName": "` + pp1Name + `",
-			"src": {
-				"platform": "aws",
-				"zone": "us-east-1a",
-				"region": "us-east-1"
-			},
-			"dst": {
-				"platform": "aws",
-				"zone": "us-east-1a",
-				"region": "us-east-1"
-			},
-			"latency": 0,
-			"egressCost_dataRate": 0
-		},
-		{
-			"srcName": "` + pp1Name + `",
-			"dstName": "` + pp2Name + `",
-			"src": {
-				"platform": "aws",
-				"region": "us-east-1"
-			},
-			"dst": {
-				"platform": "gcp",
-				"region": "us-east1"
-			},
-			"latency": ` + latencyValue + `,
-			"egressCost_dataRate": ` + egCostAws + `
-		},
-		{
-			"srcName": "` + pp2Name + `",
-			"dstName": "` + pp1Name + `",
-			"src": {
-				"platform": "gcp",
-				"region": "us-east1"
-			},
-			"dst": {
-				"platform": "aws",
-				"region": "us-east-1"
-			},
-			"latency": ` + latencyValue + `,
-			"egressCost_dataRate": ` + egCostGCP + `
-		},
-		{
-			"srcName": "` + pp2Name + `",
-			"dstName": "` + pp2Name + `",
-			"src": {
-				"platform": "gcp",
-				"zone": "us-east1-a",
-				"region": "us-east1"
-			},
-			"dst": {
-				"platform": "gcp",
-				"zone": "us-east1-a",
-				"region": "us-east1"
-			},
-			"latency": 0,
-			"egressCost_dataRate": 0
-		}]`
+    [{
+      "srcName": "` + pp1Name + `",
+      "dstName": "` + pp1Name + `",
+      "src": {
+        "platform": "aws",
+        "zone": "us-east-1a",
+        "region": "us-east-1"
+      },
+      "dst": {
+        "platform": "aws",
+        "zone": "us-east-1a",
+        "region": "us-east-1"
+      },
+      "latency": 0,
+      "egressCost_dataRate": 0
+    },
+    {
+      "srcName": "` + pp1Name + `",
+      "dstName": "` + pp2Name + `",
+      "src": {
+        "platform": "aws",
+        "region": "us-east-1"
+      },
+      "dst": {
+        "platform": "gcp",
+        "region": "us-east1"
+      },
+      "latency": ` + latencyValue + `,
+      "egressCost_dataRate": ` + egCostAws + `
+    },
+    {
+      "srcName": "` + pp2Name + `",
+      "dstName": "` + pp1Name + `",
+      "src": {
+        "platform": "gcp",
+        "region": "us-east1"
+      },
+      "dst": {
+        "platform": "aws",
+        "region": "us-east-1"
+      },
+      "latency": ` + latencyValue + `,
+      "egressCost_dataRate": ` + egCostGCP + `
+    },
+    {
+      "srcName": "` + pp2Name + `",
+      "dstName": "` + pp2Name + `",
+      "src": {
+        "platform": "gcp",
+        "zone": "us-east1-a",
+        "region": "us-east1"
+      },
+      "dst": {
+        "platform": "gcp",
+        "zone": "us-east1-a",
+        "region": "us-east1"
+      },
+      "latency": 0,
+      "egressCost_dataRate": 0
+    }]`
 	return providerAttr
 }
 
@@ -379,16 +497,16 @@ func getProvidersJson(ppAWS, ppGCP *cv1a1.ProviderProfile) string {
 	for _, pp := range pps {
 		name := pp.Spec.Platform + "-" + pp.Spec.Region + "-" + pp.Spec.Zones[0].Name
 		provider := fmt.Sprintf(`
-			{
-				"upstreamName": "%s",
-				"name": "%s",
-				"platform": "%s",
-				"regionAlias": "%s",
-				"zone": "%s",
-				"pType": "cloud",
-				"region": "%s"
-			}
-		`, pp.Name, name, pp.Spec.Platform, pp.Spec.RegionAlias, pp.Spec.Zones[0].Name, pp.Spec.Region)
+      {
+        "upstreamName": "%s",
+        "name": "%s",
+        "platform": "%s",
+        "regionAlias": "%s",
+        "zone": "%s",
+        "pType": "cloud",
+        "region": "%s"
+      }
+    `, pp.Name, name, pp.Spec.Platform, pp.Spec.RegionAlias, pp.Spec.Zones[0].Name, pp.Spec.Region)
 		providers = append(providers, provider)
 	}
 	return fmt.Sprintf(`[%s]`, strings.Join(providers, ","))
@@ -396,76 +514,76 @@ func getProvidersJson(ppAWS, ppGCP *cv1a1.ProviderProfile) string {
 
 func getOptTaskJsonK8s(resourceName string) string {
 	return fmt.Sprintf(`[
-		{
-			"task": "%s",
-			"apiVersion": "skycluster.io/v1alpha1",
-			"kind": "XNodeGroup",
-			"permittedLocations": [],
-			"requiredLocations": [],
-			"requestedVServices": [
-				[
-					{
-						"name": "48vCPU-192GB-4xA10G-22GB",
-						"apiVersion": "skycluster.io/v1alpha1",
-						"kind": "ComputeProfile",
-						"count": "1",
-						"price": 5.67
-					},
-					{
-						"name": "64vCPU-256GB-1xA10G-22GB",
-						"apiVersion": "skycluster.io/v1alpha1",
-						"kind": "ComputeProfile",
-						"count": "1",
-						"price": 4.10
-					},
-					{
-						"name": "48vCPU-192GB-4xA10G-22GB",
-						"apiVersion": "skycluster.io/v1alpha1",
-						"kind": "ComputeProfile",
-						"count": "1",
-						"price": 5.67
-					},
-					{
-						"name": "64vCPU-256GB-1xA10G-22GB",
-						"apiVersion": "skycluster.io/v1alpha1",
-						"kind": "ComputeProfile",
-						"count": "1",
-						"price": 4.10
-					}
-				]
-			],
-			"maxReplicas": "-1"
-		}
-	]`, resourceName)
+    {
+      "task": "%s",
+      "apiVersion": "skycluster.io/v1alpha1",
+      "kind": "XNodeGroup",
+      "permittedLocations": [],
+      "requiredLocations": [],
+      "requestedVServices": [
+        [
+          {
+            "name": "48vCPU-192GB-4xA10G-22GB",
+            "apiVersion": "skycluster.io/v1alpha1",
+            "kind": "ComputeProfile",
+            "count": "1",
+            "price": 5.67
+          },
+          {
+            "name": "48vCPU-192GB-4xA10G-22GB",
+            "apiVersion": "skycluster.io/v1alpha1",
+            "kind": "ComputeProfile",
+            "count": "1",
+            "price": 5.67
+          },
+          {
+            "name": "12vCPU-49GB-1xL4-24GB",
+            "apiVersion": "skycluster.io/v1alpha1",
+            "kind": "ComputeProfile",
+            "count": "1",
+            "price": 0.4893
+          },
+          {
+            "name": "12vCPU-49GB-1xL4-24GB",
+            "apiVersion": "skycluster.io/v1alpha1",
+            "kind": "ComputeProfile",
+            "count": "1",
+            "price": 0.4893
+          }
+        ]
+      ],
+      "maxReplicas": "-1"
+    }
+  ]`, resourceName)
 }
 
 func getOptTaskJsonVM(resourceName, ppName string) string {
 	return fmt.Sprintf(`[
-		{
-			"task": "%s",
-			"apiVersion": "skycluster.io/v1alpha1",
-			"kind": "XInstance",
-			"permittedLocations": [{
-				"name": "%s",
-				"pType": "cloud",
-				"region": "us-east-1",
-				"platform": "aws"
-			}],
-			"requiredLocations": [],
-			"requestedVServices": [
-				[
-					{
-						"name": "64vCPU-256GB-1xA10G-22GB",
-						"apiVersion": "skycluster.io/v1alpha1",
-						"kind": "ComputeProfile",
-						"count": "1",
-						"price": 4.10
-					}
-				]
-			],
-			"maxReplicas": "-1"
-		}
-	]`, resourceName, ppName)
+    {
+      "task": "%s",
+      "apiVersion": "skycluster.io/v1alpha1",
+      "kind": "XInstance",
+      "permittedLocations": [{
+        "name": "%s",
+        "pType": "cloud",
+        "region": "us-east-1",
+        "platform": "aws"
+      }],
+      "requiredLocations": [],
+      "requestedVServices": [
+        [
+          {
+            "name": "64vCPU-256GB-1xA10G-22GB",
+            "apiVersion": "skycluster.io/v1alpha1",
+            "kind": "ComputeProfile",
+            "count": "1",
+            "price": 4.10
+          }
+        ]
+      ],
+      "maxReplicas": "-1"
+    }
+  ]`, resourceName, ppName)
 }
 
 func getComputeProfileName() string {
@@ -590,7 +708,7 @@ func createPoliciesForVMExecEnv(
 									VirtualService: hv1a1.VirtualService{
 										Kind: "ComputeProfile",
 										Spec: &runtime.RawExtension{Raw: []byte(
-											`{"cpu": "64", "ram": "256GB", "gpu": {"model": "A10G", "unit": "1"}}`,
+											`{"vcpus": "64", "ram": "256GB", "gpu": {"model": "A10G", "unit": "1"}}`,
 										)},
 									},
 									Count: 1,
@@ -606,10 +724,82 @@ func createPoliciesForVMExecEnv(
 								Type:     providerProfile.Spec.Zones[0].Type,
 								Platform: providerProfile.Spec.Platform,
 								Region:   providerProfile.Spec.Region,
-								Zone:     providerProfile.Spec.Zones[0].Name,
 							},
 						}, []hv1a1.ProviderRefSpec{}),
 					},
+				},
+			},
+		},
+	}
+	return dpPolicy, dfPolicy
+}
+
+func createPoliciesForK8sExecEnvWithDeployment(
+	resourceName,
+	namespace string,
+	providerProfile *cv1a1.ProviderProfile) (*pv1a1.DeploymentPolicy, *pv1a1.DataflowPolicy) {
+
+	dfPolicy := &pv1a1.DataflowPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: pv1a1.DataflowPolicySpec{
+			DataDependencies: []pv1a1.DataDapendency{},
+		},
+	}
+
+	// create a deployment policy with a single component: XInstance
+	// reflecting a single virtual machine
+	dpPolicy := &pv1a1.DeploymentPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		// For Kubernetes execution environment, the deployment policy can contain multiple components
+		// each component is either a XNodeGroup or a Deployment
+		// XNodeGroup represents a cluster specification for a multi-cluster Kubernetes deployment
+		// Deployment represents a single Kubernetes deployment which resides in a single cluster
+		// We test with both Deployment and XNodeGroup components here
+		// For Deployment component, a corresponding Deployment object must exist in the cluster
+		Spec: pv1a1.DeploymentPolicySpec{
+			ExecutionEnvironment: "Kubernetes",
+			DeploymentPolicies: []pv1a1.DeploymentPolicyItem{
+				{
+					ComponentRef: hv1a1.ComponentRef{
+						APIVersion: "skycluster.io/v1alpha1",
+						Kind:       "Deployment",
+						Name:       "sample-deployment",
+						Namespace:  "default",
+					},
+					// The Deployment component comes with cpu and ram requirements
+					// We can specify additional requirements by defining a ComputeProfile
+					VirtualServiceConstraint: []pv1a1.VirtualServiceConstraint{
+						{
+							AnyOf: []pv1a1.VirtualServiceSelector{
+								{
+									// additional requirements: a node with L4 GPU
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "L4"}}`,
+										)},
+									},
+									// Count: 2, // no need to specify for Deployment
+								},
+							},
+						},
+					},
+					// LocationConstraint: permissive (no specific provider filters) to allow optimizer to choose
+					LocationConstraint: hv1a1.LocationConstraint{},
 				},
 			},
 		},
@@ -670,7 +860,7 @@ func createPoliciesForK8sExecEnv(
 									VirtualService: hv1a1.VirtualService{
 										Kind: "ComputeProfile",
 										Spec: &runtime.RawExtension{Raw: []byte(
-											`{"gpu": {"model": "A10G", "unit": "1"}}`,
+											`{"vcpus": "48", "gpu": {"model": "A10G"}}`,
 										)},
 									},
 									// Count: 2, // no need to specify for XNodeGroup
@@ -680,7 +870,7 @@ func createPoliciesForK8sExecEnv(
 									VirtualService: hv1a1.VirtualService{
 										Kind: "ComputeProfile",
 										Spec: &runtime.RawExtension{Raw: []byte(
-											`{"gpu": {"model": "L4", "unit": "1"}}`,
+											`{"gpu": {"model": "L4"}}`,
 										)},
 									},
 								},
@@ -745,6 +935,16 @@ func configMapData(zone string) map[string]string {
 	return map[string]string{
 		"flavors.yaml": `- zone: ` + zone + `
   zoneOfferings:
+  - name: m3.xlarge
+    nameLabel: 2vCPU-4GB
+    vcpus: 2
+    ram: 4GB
+    price: "0.05"
+    gpu:
+      enabled: false
+    spot:
+      price: "0.02"
+      enabled: true
   - name: g5.12xlarge
     nameLabel: 48vCPU-192GB-4xA10G-22GB
     vcpus: 48
@@ -772,6 +972,20 @@ func configMapData(zone string) map[string]string {
       memory: 22GB
     spot:
       price: "1.07"
+      enabled: true
+  - name: g2-standard-12   
+    nameLabel: 12vCPU-49GB-1xL4-24GB
+    vcpus: 12
+    ram: 49GB
+    price: "$0.4893"
+    gpu:
+      enabled: true
+      manufacturer: NVIDIA
+      count: 1
+      model: L4
+      memory: 24GB
+    spot:
+      price: "$0.1365"
       enabled: true`,
 		"images.yaml": `- nameLabel: ubuntu-20.04
 name: ami-0fb0b230890ccd1e6
@@ -785,9 +999,9 @@ zone: ` + zone,
 		"managed-k8s.yaml": `- name: EKS
 nameLabel: ManagedKubernetes
 overhead:
-	cost: "0.096"
-	count: 1
-	instanceType: m5.xlarge
+  cost: "0.096"
+  count: 1
+  instanceType: m5.xlarge
 price: "0.10"`,
 	}
 }

@@ -120,10 +120,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 					}
 
 					for _, off := range profiles {
-						if off.deployCost == 0 {
-							continue
-						}
-						if !offeringMatches(pat, off) {
+						if off.deployCost == 0 || !offeringMatches(pat, off) {
 							continue
 						}
 						// Add this offering as a ComputeProfile alternative
@@ -139,11 +136,9 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				}
 
 				switch cmpnt.ComponentRef.Kind {
+				// Validate against deployment requirements
 				case "Deployment":
-					// If the component is a Deployment, we make sure there are compute profile
-					// alternatives for deployments.
-
-					// Compute the minimum compute resource required for this component (i.e. deployment)
+					// calculate the minimum compute resource required for this component (i.e. deployment)
 					minCR, err := r.calculateMinComputeResource(ns, cmpnt.ComponentRef.Name)
 					if err != nil {
 						return nil, fmt.Errorf("failed to calculate min compute resource for component %s: %w", cmpnt.ComponentRef.Name, err)
@@ -158,23 +153,40 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 						return nil, err
 					}
 
-					// collect all suitable offerings
+					// Build deployment-compatible set
+					deployable := make(map[string]computeProfileService)
 					for _, off := range profiles {
-						if off.cpu < minCR.cpu {
-							continue
+						if off.cpu >= minCR.cpu && off.ram >= minCR.ram {
+							deployable[off.name] = off
 						}
-						if off.ram < minCR.ram {
-							continue
-						} // GiB
+					}
+					altVSListFiltered := make([]virtualSvcStruct, 0)
+					for _, alt := range altVSList {
+						if _, ok := deployable[alt.Name]; ok {
+							altVSListFiltered = append(altVSListFiltered, alt)
+						}
+					}
+					if len(altVSList) > 0 && len(altVSListFiltered) == 0 {
+						return nil, fmt.Errorf("no suitable ComputeProfile alternatives found for component %s", cmpnt.ComponentRef.Name)
+					} else {
+						altVSList = altVSListFiltered
+					}
 
-						// Add this offering as a ComputeProfile alternative
-						additionalVSList = append(additionalVSList, virtualSvcStruct{
-							ApiVersion: alternativeVS.APIVersion,
-							Kind:       "ComputeProfile",
-							Name:       off.name, // name is mapped to nameLabel
-							Count:      "1",
-							Price:      off.deployCost,
-						})
+					// if no suitable ComputeProfile alternatives found,
+					// use all the deployable ComputeProfiles
+					// otherwise, use the suitable ComputeProfile alternatives
+					if len(altVSList) == 0 {
+						for _, off := range deployable {
+							additionalVSList = append(additionalVSList, virtualSvcStruct{
+								ApiVersion: alternativeVS.APIVersion,
+								Kind:       "ComputeProfile",
+								Name:       off.name, // name is mapped to nameLabel
+								Count:      "1",
+								Price:      off.deployCost,
+							})
+						}
+					} else {
+						additionalVSList = append(additionalVSList, altVSList...)
 					}
 
 				case "XNodeGroup", "XKube":
@@ -276,11 +288,6 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 
 			additionalVSList := make([]virtualSvcStruct, 0)
 			for _, alternativeVS := range vsc.AnyOf {
-				supportedVSKinds := []string{"ComputeProfile"}
-				if !slices.Contains(supportedVSKinds, alternativeVS.Kind) {
-					return nil, fmt.Errorf("unsupported virtual service kind %s for Virtual Machine execution environment", alternativeVS.Kind)
-				}
-
 				switch alternativeVS.Kind {
 				case "ComputeProfile":
 					// It is simpler since we only need to append requested ComputeProfiles
@@ -290,16 +297,20 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 					if err != nil {
 						return nil, err
 					}
+					r.Logger.Info("pat", "pat", pat)
 
 					profiles, err := r.getAllComputeProfiles(cmpnt.LocationConstraint.Permitted)
 					if err != nil {
 						return nil, err
 					}
+					r.Logger.Info("profiles", "profiles", profiles)
 
 					for _, off := range profiles {
 						if !offeringMatches(pat, off) {
 							continue
 						}
+						r.Logger.Info("off", "off", off)
+
 						// Add this offering as a ComputeProfile alternative
 						additionalVSList = append(additionalVSList, virtualSvcStruct{
 							ApiVersion: "skycluster.io/v1alpha1",
@@ -788,8 +799,8 @@ func offeringMatches(p FlavorPattern, off computeProfileService) bool {
 		if availCPU < p.Cpu {
 			return false
 		}
-		// allow 20% deviation
-		if availCPU > p.Cpu+p.Cpu*0.2 {
+		// only allow up to5% deviation
+		if availCPU > p.Cpu*1.05 {
 			return false
 		}
 	}
@@ -798,8 +809,8 @@ func offeringMatches(p FlavorPattern, off computeProfileService) bool {
 		if availRAM < p.Ram {
 			return false
 		}
-		// allow 50% deviation
-		if availRAM > p.Ram+p.Ram*0.5 {
+		// only allow up to 25% deviation
+		if availRAM > p.Ram*1.25 {
 			return false
 		}
 	}
