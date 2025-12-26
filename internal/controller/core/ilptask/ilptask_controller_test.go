@@ -5,7 +5,7 @@ Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
-    http://www.apache.org/licenses/LICENSE-2.0
+		http://www.apache.org/licenses/LICENSE-2.0
 
 Unless required by applicable law or agreed to in writing, software
 distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,6 +33,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -484,25 +485,26 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
 			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
 
-			// create 3 sample deployments
+			By("creating 3 sample deployments")
 			for i := range 3 {
 				deploy := createSampleDeployment(resourceName, "deployment"+strconv.Itoa(i+1), namespace)
 				Expect(k8sClient.Create(ctx, deploy)).To(Succeed())
 			}
 
+			By("preparing ilptask")
 			ilptask = prepareILPTask(dpPolicy, dfPolicy)
 			// set pod name in ilptask status
 			ilptask.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: "opt-pod"}
 			Expect(k8sClient.Status().Update(ctx, ilptask)).To(Succeed())
 
-			// create opt pod
+			By("creating opt pod")
 			optPod := createOptPod("opt-pod", namespace)
 			Expect(k8sClient.Create(ctx, optPod)).To(Succeed())
 			// set pod status to succeeded
 			optPod.Status.Phase = corev1.PodSucceeded
 			Expect(k8sClient.Status().Update(ctx, optPod)).To(Succeed())
 
-			// create configmap with deploy plan (as optimization result)
+			By("creating configmap with deploy plan (as optimization result)")
 			configMap := configMapForOptimizationResult(
 				"deploy-plan-config", namespace, providerprofileAWS, providerprofileGCP,
 			)
@@ -512,6 +514,7 @@ var _ = Describe("ILPTask Controller", func() {
 			err := json.Unmarshal([]byte(configMap.Data["deploy-plan.json"]), &deployPlan)
 			Expect(err).NotTo(HaveOccurred())
 
+			By("finding the required services for the deploy plan")
 			ilptaskReconciler := getILPTaskReconciler()
 			requiredServices, err := ilptaskReconciler.findServicesForDeployPlan(namespace, deployPlan, *dpPolicy)
 			Expect(err).NotTo(HaveOccurred())
@@ -556,14 +559,45 @@ var _ = Describe("ILPTask Controller", func() {
 							Count:      "1",
 							Price:      0.05,
 						},
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+						{
+							Name:       "64vCPU-256GB-1xA10G-22GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      4.1,
+						},
+						{
+							Name:       "48vCPU-192GB-4xA10G-22GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      5.67,
+						},
 					},
 				},
 			}))
-			// 	// // run reconciler for ilptask and check the status
-			// 	// _, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
-			// 	// 	NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
-			// 	// })
-			// 	// Expect(err).NotTo(HaveOccurred())
+
+			By("running reconciler for ilptask and checking the status")
+			res, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res).To(Equal(ctrl.Result{}))
+
+			// fetch ilptask and check the status
+			ilptask := &cv1a1.ILPTask{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: dpPolicy.Name}, ilptask)).To(Succeed())
+			Expect(ilptask.Status.Optimization.Status).To(Equal("Succeeded"))
+			Expect(ilptask.Status.Optimization.DeployMap.Component[0].Manifest).ToNot(BeNil())
+			Expect(ilptask.Status.Optimization.DeployMap.Component[1].Manifest).ToNot(BeNil())
+			Expect(ilptask.Status.Optimization.DeployMap.Component[2].Manifest).ToNot(BeNil())
 		})
 
 	})
@@ -580,84 +614,84 @@ func configMapForOptimizationResult(name, namespace string, pp1, pp2 *cv1a1.Prov
 		},
 		Data: map[string]string{
 			"deploy-plan.json": `{
-        "cost": "0.9602",
-        "deployCost": "0.9602",
-        "transferCost": "0",
-        "components": [
-          {
-            "name": "deployment1",
-            "namespace": "default",
-            "componentRef": {
-              "apiVersion": "apps/v1",
-              "kind": "Deployment",
-              "name": "deployment1",
-              "namespace": "default"
-            },
-            "providerRef": {
-              "name": "` + pp1Name + `",
-              "platform": "` + pp1.Spec.Platform + `",
-              "type": "` + pp1.Spec.Zones[0].Type + `",
-              "region": "` + pp1.Spec.Region + `"
-            }
-          },
-          {
-            "name": "deployment2",
-            "namespace": "default",
-            "componentRef": {
-              "apiVersion": "apps/v1",
-              "kind": "Deployment",
-              "name": "deployment2",
-              "namespace": "default"
-            },
-            "providerRef": {
-              "name": "` + pp2Name + `",
-              "platform": "` + pp2.Spec.Platform + `",
-              "type": "` + pp2.Spec.Zones[0].Type + `",
-              "region": "` + pp2.Spec.Region + `"
-            }
-          },
-          {
-            "name": "deployment3",
-            "namespace": "default",
-            "componentRef": {
-              "apiVersion": "apps/v1",
-              "kind": "Deployment",
-              "name": "deployment3",
-              "namespace": "default"
-            },
-            "providerRef": {
-              "name": "` + pp1Name + `",
-              "platform": "` + pp1.Spec.Platform + `",
-              "type": "` + pp1.Spec.Zones[0].Type + `",
-              "region": "` + pp1.Spec.Region + `"
-            }
-          }
-        ],
-        "edges": [
-          {
-            "from": {
-              "name": "deployment1",
-              "namespace": "default"
-            },
-            "to": {
-              "name": "deployment2",
-              "namespace": "default"
-            },
-            "latency": "50ms"
-          },
-          {
-            "from": {
-              "name": "deployment2",
-              "namespace": "default"
-            },
-            "to": {
-              "name": "deployment3",
-              "namespace": "default"
-            },
-            "latency": "50ms"
-          }
-        ]
-      }`,
+				"cost": "0.9602",
+				"deployCost": "0.9602",
+				"transferCost": "0",
+				"components": [
+					{
+						"name": "deployment1",
+						"namespace": "default",
+						"componentRef": {
+							"apiVersion": "apps/v1",
+							"kind": "Deployment",
+							"name": "deployment1",
+							"namespace": "default"
+						},
+						"providerRef": {
+							"name": "` + pp1Name + `",
+							"platform": "` + pp1.Spec.Platform + `",
+							"type": "` + pp1.Spec.Zones[0].Type + `",
+							"region": "` + pp1.Spec.Region + `"
+						}
+					},
+					{
+						"name": "deployment2",
+						"namespace": "default",
+						"componentRef": {
+							"apiVersion": "apps/v1",
+							"kind": "Deployment",
+							"name": "deployment2",
+							"namespace": "default"
+						},
+						"providerRef": {
+							"name": "` + pp2Name + `",
+							"platform": "` + pp2.Spec.Platform + `",
+							"type": "` + pp2.Spec.Zones[0].Type + `",
+							"region": "` + pp2.Spec.Region + `"
+						}
+					},
+					{
+						"name": "deployment3",
+						"namespace": "default",
+						"componentRef": {
+							"apiVersion": "apps/v1",
+							"kind": "Deployment",
+							"name": "deployment3",
+							"namespace": "default"
+						},
+						"providerRef": {
+							"name": "` + pp1Name + `",
+							"platform": "` + pp1.Spec.Platform + `",
+							"type": "` + pp1.Spec.Zones[0].Type + `",
+							"region": "` + pp1.Spec.Region + `"
+						}
+					}
+				],
+				"edges": [
+					{
+						"from": {
+							"name": "deployment1",
+							"namespace": "default"
+						},
+						"to": {
+							"name": "deployment2",
+							"namespace": "default"
+						},
+						"latency": "50ms"
+					},
+					{
+						"from": {
+							"name": "deployment2",
+							"namespace": "default"
+						},
+						"to": {
+							"name": "deployment3",
+							"namespace": "default"
+						},
+						"latency": "50ms"
+					}
+				]
+			}`,
 		},
 	}
 }
@@ -757,66 +791,66 @@ func getProvidersAttrJson(ns string, ppAWS, ppGCP *cv1a1.ProviderProfile) string
 
 	// Note zone only used for intra-zone egress cost
 	providerAttr := `
-    [{
-      "srcName": "` + pp1Name + `",
-      "dstName": "` + pp1Name + `",
-      "src": {
-        "platform": "aws",
-        "zone": "us-east-1a",
-        "region": "us-east-1"
-      },
-      "dst": {
-        "platform": "aws",
-        "zone": "us-east-1a",
-        "region": "us-east-1"
-      },
-      "latency": 0,
-      "egressCost_dataRate": 0
-    },
-    {
-      "srcName": "` + pp1Name + `",
-      "dstName": "` + pp2Name + `",
-      "src": {
-        "platform": "aws",
-        "region": "us-east-1"
-      },
-      "dst": {
-        "platform": "gcp",
-        "region": "us-east1"
-      },
-      "latency": ` + latencyValue + `,
-      "egressCost_dataRate": ` + egCostAws + `
-    },
-    {
-      "srcName": "` + pp2Name + `",
-      "dstName": "` + pp1Name + `",
-      "src": {
-        "platform": "gcp",
-        "region": "us-east1"
-      },
-      "dst": {
-        "platform": "aws",
-        "region": "us-east-1"
-      },
-      "latency": ` + latencyValue + `,
-      "egressCost_dataRate": ` + egCostGCP + `
-    },
-    {
-      "srcName": "` + pp2Name + `",
-      "dstName": "` + pp2Name + `",
-      "src": {
-        "platform": "gcp",
-        "zone": "us-east1-a",
-        "region": "us-east1"
-      },
-      "dst": {
-        "platform": "gcp",
-        "zone": "us-east1-a",
-        "region": "us-east1"
-      },
-      "latency": 0,
-      "egressCost_dataRate": 0
-    }]`
+		[{
+			"srcName": "` + pp1Name + `",
+			"dstName": "` + pp1Name + `",
+			"src": {
+				"platform": "aws",
+				"zone": "us-east-1a",
+				"region": "us-east-1"
+			},
+			"dst": {
+				"platform": "aws",
+				"zone": "us-east-1a",
+				"region": "us-east-1"
+			},
+			"latency": 0,
+			"egressCost_dataRate": 0
+		},
+		{
+			"srcName": "` + pp1Name + `",
+			"dstName": "` + pp2Name + `",
+			"src": {
+				"platform": "aws",
+				"region": "us-east-1"
+			},
+			"dst": {
+				"platform": "gcp",
+				"region": "us-east1"
+			},
+			"latency": ` + latencyValue + `,
+			"egressCost_dataRate": ` + egCostAws + `
+		},
+		{
+			"srcName": "` + pp2Name + `",
+			"dstName": "` + pp1Name + `",
+			"src": {
+				"platform": "gcp",
+				"region": "us-east1"
+			},
+			"dst": {
+				"platform": "aws",
+				"region": "us-east-1"
+			},
+			"latency": ` + latencyValue + `,
+			"egressCost_dataRate": ` + egCostGCP + `
+		},
+		{
+			"srcName": "` + pp2Name + `",
+			"dstName": "` + pp2Name + `",
+			"src": {
+				"platform": "gcp",
+				"zone": "us-east1-a",
+				"region": "us-east1"
+			},
+			"dst": {
+				"platform": "gcp",
+				"zone": "us-east1-a",
+				"region": "us-east1"
+			},
+			"latency": 0,
+			"egressCost_dataRate": 0
+		}]`
 	return providerAttr
 }
 
@@ -826,16 +860,16 @@ func getProvidersJson(ppAWS, ppGCP *cv1a1.ProviderProfile) string {
 	for _, pp := range pps {
 		name := pp.Spec.Platform + "-" + pp.Spec.Region + "-" + pp.Spec.Zones[0].Name
 		provider := fmt.Sprintf(`
-      {
-        "upstreamName": "%s",
-        "name": "%s",
-        "platform": "%s",
-        "regionAlias": "%s",
-        "zone": "%s",
-        "pType": "cloud",
-        "region": "%s"
-      }
-    `, pp.Name, name, pp.Spec.Platform, pp.Spec.RegionAlias, pp.Spec.Zones[0].Name, pp.Spec.Region)
+			{
+				"upstreamName": "%s",
+				"name": "%s",
+				"platform": "%s",
+				"regionAlias": "%s",
+				"zone": "%s",
+				"pType": "cloud",
+				"region": "%s"
+			}
+		`, pp.Name, name, pp.Spec.Platform, pp.Spec.RegionAlias, pp.Spec.Zones[0].Name, pp.Spec.Region)
 		providers = append(providers, provider)
 	}
 	return fmt.Sprintf(`[%s]`, strings.Join(providers, ","))
@@ -843,62 +877,62 @@ func getProvidersJson(ppAWS, ppGCP *cv1a1.ProviderProfile) string {
 
 func getOptTaskJsonK8s(resourceName string) string {
 	return fmt.Sprintf(`[
-    {
-      "task": "%s",
-      "apiVersion": "skycluster.io/v1alpha1",
-      "kind": "XNodeGroup",
-      "permittedLocations": [],
-      "requiredLocations": [],
-      "requestedVServices": [
-        [
-          {
-            "name": "12vCPU-49GB-1xL4-24GB",
-            "apiVersion": "skycluster.io/v1alpha1",
-            "kind": "ComputeProfile",
-            "count": "1",
-            "price": 0.4893
-          },
-          {
-            "name": "48vCPU-192GB-4xA10G-22GB",
-            "apiVersion": "skycluster.io/v1alpha1",
-            "kind": "ComputeProfile",
-            "count": "1",
-            "price": 5.67
-          }
-        ]
-      ],
-      "maxReplicas": "-1"
-    }
-  ]`, resourceName)
+		{
+			"task": "%s",
+			"apiVersion": "skycluster.io/v1alpha1",
+			"kind": "XNodeGroup",
+			"permittedLocations": [],
+			"requiredLocations": [],
+			"requestedVServices": [
+				[
+					{
+						"name": "12vCPU-49GB-1xL4-24GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 0.4893
+					},
+					{
+						"name": "48vCPU-192GB-4xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 5.67
+					}
+				]
+			],
+			"maxReplicas": "-1"
+		}
+	]`, resourceName)
 }
 
 func getOptTaskJsonVM(resourceName, ppName string) string {
 	return fmt.Sprintf(`[
-    {
-      "task": "%s",
-      "apiVersion": "skycluster.io/v1alpha1",
-      "kind": "XInstance",
-      "permittedLocations": [{
-        "name": "%s",
-        "pType": "cloud",
-        "region": "us-east-1",
-        "platform": "aws"
-      }],
-      "requiredLocations": [],
-      "requestedVServices": [
-        [
-          {
-            "name": "64vCPU-256GB-1xA10G-22GB",
-            "apiVersion": "skycluster.io/v1alpha1",
-            "kind": "ComputeProfile",
-            "count": "1",
-            "price": 4.10
-          }
-        ]
-      ],
-      "maxReplicas": "-1"
-    }
-  ]`, resourceName, ppName)
+		{
+			"task": "%s",
+			"apiVersion": "skycluster.io/v1alpha1",
+			"kind": "XInstance",
+			"permittedLocations": [{
+				"name": "%s",
+				"pType": "cloud",
+				"region": "us-east-1",
+				"platform": "aws"
+			}],
+			"requiredLocations": [],
+			"requestedVServices": [
+				[
+					{
+						"name": "64vCPU-256GB-1xA10G-22GB",
+						"apiVersion": "skycluster.io/v1alpha1",
+						"kind": "ComputeProfile",
+						"count": "1",
+						"price": 4.10
+					}
+				]
+			],
+			"maxReplicas": "-1"
+		}
+	]`, resourceName, ppName)
 }
 
 func getProviderProfileReconciler() *cv1a1ppctrl.ProviderProfileReconciler {

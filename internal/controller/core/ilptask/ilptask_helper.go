@@ -209,15 +209,18 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 		sort.Slice(deployableList, func(i, j int) bool {
 			return deployableList[i].deployCost < deployableList[j].deployCost
 		})
-		if len(deployableList) > 0 {
-			vsList = append(vsList, []virtualSvcStruct{{
+		minLength := min(len(deployableList), 5)
+		tmpList := make([]virtualSvcStruct, 0)
+		for _, item := range deployableList[:minLength] {
+			tmpList = append(tmpList, virtualSvcStruct{
 				ApiVersion: "skycluster.io/v1alpha1",
 				Kind:       "ComputeProfile",
-				Name:       deployableList[0].name,
-				Price:      deployableList[0].deployCost,
+				Name:       item.name,
+				Price:      item.deployCost,
 				Count:      "1",
-			}})
+			})
 		}
+		vsList = append(vsList, tmpList)
 		if len(vsList) == 0 {
 			// at this state, we have no virtual services found.
 			return nil, fmt.Errorf("no suitable ComputeProfile alternatives found for component %s", dpPolicyItem.ComponentRef.Name)
