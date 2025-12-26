@@ -18,6 +18,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -477,62 +478,98 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(providersAttrJson).To(MatchJSON(getProvidersAttrJson(namespace, providerprofileAWS, providerprofileGCP)))
 		})
 
-		// It("should correctly fetch the result of optimization from the optimization pod", func() {
-		// 	By("generating deployment policy and dataflow policy")
-		// 	dpPolicy, dfPolicy = createPoliciesForK8sExecEnvWithMultipleDeployment(resourceName, namespace)
-		// 	Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
-		// 	Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+		It("should correctly fetch the result of optimization from the optimization pod", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnvWithMultipleDeployment(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
 
-		// 	// create 3 sample deployments
-		// 	for i := range 3 {
-		// 		deploy := createSampleDeployment(resourceName, "deployment"+strconv.Itoa(i+1), namespace)
-		// 		Expect(k8sClient.Create(ctx, deploy)).To(Succeed())
-		// 	}
+			// create 3 sample deployments
+			for i := range 3 {
+				deploy := createSampleDeployment(resourceName, "deployment"+strconv.Itoa(i+1), namespace)
+				Expect(k8sClient.Create(ctx, deploy)).To(Succeed())
+			}
 
-		// 	ilptask = prepareILPTask(dpPolicy, dfPolicy)
-		// 	// set pod name in ilptask status
-		// 	ilptask.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: "opt-pod"}
-		// 	Expect(k8sClient.Status().Update(ctx, ilptask)).To(Succeed())
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// set pod name in ilptask status
+			ilptask.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: "opt-pod"}
+			Expect(k8sClient.Status().Update(ctx, ilptask)).To(Succeed())
 
-		// 	// create opt pod
-		// 	optPod := createOptPod("opt-pod", namespace)
-		// 	Expect(k8sClient.Create(ctx, optPod)).To(Succeed())
-		// 	// set pod status to succeeded
-		// 	optPod.Status.Phase = corev1.PodSucceeded
-		// 	Expect(k8sClient.Status().Update(ctx, optPod)).To(Succeed())
+			// create opt pod
+			optPod := createOptPod("opt-pod", namespace)
+			Expect(k8sClient.Create(ctx, optPod)).To(Succeed())
+			// set pod status to succeeded
+			optPod.Status.Phase = corev1.PodSucceeded
+			Expect(k8sClient.Status().Update(ctx, optPod)).To(Succeed())
 
-		// 	// create configmap with deploy plan (as optimization result)
-		// 	configMap := createConfigMapForOptimizationResult(
-		// 		"deploy-plan-config", namespace, providerprofileAWS, providerprofileGCP,
-		// 	)
-		// 	Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+			// create configmap with deploy plan (as optimization result)
+			configMap := configMapForOptimizationResult(
+				"deploy-plan-config", namespace, providerprofileAWS, providerprofileGCP,
+			)
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
 
-		// 	deployPlan := cv1a1.DeployMap{}
-		// 	err := json.Unmarshal([]byte(configMap.Data["deploy-plan.json"]), &deployPlan)
-		// 	Expect(err).NotTo(HaveOccurred())
+			deployPlan := cv1a1.DeployMap{}
+			err := json.Unmarshal([]byte(configMap.Data["deploy-plan.json"]), &deployPlan)
+			Expect(err).NotTo(HaveOccurred())
 
-		// 	ilptaskReconciler := getILPTaskReconciler()
-		// 	requiredServices, err := ilptaskReconciler.findServicesForDeployPlan(namespace, deployPlan, *dpPolicy)
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	// Expect(requiredServices).To(HaveLen(3))
-		// 	Expect(requiredServices).To(Equal(map[string][]virtualSvcStruct{
-		// 		"deployment1": {
-		// 			{
-		// 				Name: "12vCPU-49GB-1xL4-24GB",
-		// 			},
-		// 		},
-		// 	}))
-		// 	// // run reconciler for ilptask and check the status
-		// 	// _, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
-		// 	// 	NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
-		// 	// })
-		// 	// Expect(err).NotTo(HaveOccurred())
-		// })
+			ilptaskReconciler := getILPTaskReconciler()
+			requiredServices, err := ilptaskReconciler.findServicesForDeployPlan(namespace, deployPlan, *dpPolicy)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requiredServices).To(Equal(map[string][][]virtualSvcStruct{
+				"deployment1": {
+					{
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+					},
+				},
+				"deployment2": {
+					{
+						{
+							Name:       "64vCPU-256GB-1xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      4.1,
+						},
+						{
+							Name:       "48vCPU-192GB-4xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      5.67,
+						},
+					},
+				},
+				"deployment3": {
+					{
+						{
+							Name:       "2vCPU-4GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.05,
+						},
+					},
+				},
+			}))
+			// 	// // run reconciler for ilptask and check the status
+			// 	// _, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+			// 	// 	NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			// 	// })
+			// 	// Expect(err).NotTo(HaveOccurred())
+		})
 
 	})
 })
 
-func createConfigMapForOptimizationResult(name, namespace string, pp1, pp2 *cv1a1.ProviderProfile) *corev1.ConfigMap {
+func configMapForOptimizationResult(name, namespace string, pp1, pp2 *cv1a1.ProviderProfile) *corev1.ConfigMap {
 	pp1Name := pp1.Spec.Platform + "-" + pp1.Spec.Region + "-" + pp1.Spec.Zones[0].Name
 	pp2Name := pp2.Spec.Platform + "-" + pp2.Spec.Region + "-" + pp2.Spec.Zones[0].Name
 
@@ -1102,6 +1139,21 @@ func createPoliciesForK8sExecEnvWithMultipleDeployment(
 						Kind:       "Deployment",
 						Name:       "deployment" + strconv.Itoa(2),
 						Namespace:  "default",
+					},
+					VirtualServiceConstraint: []pv1a1.VirtualServiceConstraint{
+						{
+							AnyOf: []pv1a1.VirtualServiceSelector{
+								{
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "A10G"}}`,
+										)},
+									},
+									// Count: 1,
+								},
+							},
+						},
 					},
 				},
 				{
