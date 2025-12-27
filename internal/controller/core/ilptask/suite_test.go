@@ -54,7 +54,6 @@ var (
 
 	providerprofileAWS *cv1a1.ProviderProfile
 	providerprofileGCP *cv1a1.ProviderProfile
-	cm                 *corev1.ConfigMap
 )
 
 func TestControllers(t *testing.T) {

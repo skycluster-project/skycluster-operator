@@ -651,7 +651,6 @@ var _ = Describe("ILPTask Controller", func() {
 	})
 })
 
-
 func configMapForOptimizationResult(name, namespace string, pp1, pp2 *cv1a1.ProviderProfile) *corev1.ConfigMap {
 	pp1Name := pp1.Spec.Platform + "-" + pp1.Spec.Region + "-" + pp1.Spec.Zones[0].Name
 	pp2Name := pp2.Spec.Platform + "-" + pp2.Spec.Region + "-" + pp2.Spec.Zones[0].Name

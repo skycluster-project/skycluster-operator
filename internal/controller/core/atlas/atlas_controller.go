@@ -356,11 +356,11 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 
 		znPrimary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.DefaultZone })
 		if !ok {
-			return nil, nil, errors.New("No primary zone found")
+			return nil, nil, errors.New("No primary zone found, provider: " + pName)
 		}
 		znSecondary, ok := lo.Find(providerProfiles[pName].Spec.Zones, func(z cv1a1.ZoneSpec) bool { return z.Name != znPrimary.Name })
 		if !ok && !slices.Contains([]string{"baremetal", "openstack"}, p.Platform) {
-			return nil, nil, errors.New("No secondary zone found")
+			return nil, nil, errors.New("No secondary zone found, provider: " + pName)
 		}
 
 		// prepare static values and subnets

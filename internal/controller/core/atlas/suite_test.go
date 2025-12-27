@@ -24,17 +24,23 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1ctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core"
+	cv1a1ppctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/providerprofile"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -47,6 +53,9 @@ var (
 	testEnv   *envtest.Environment
 	cfg       *rest.Config
 	k8sClient client.Client
+
+	providerprofileAWS *cv1a1.ProviderProfile
+	providerprofileGCP *cv1a1.ProviderProfile
 )
 
 func TestControllers(t *testing.T) {
@@ -61,7 +70,7 @@ var _ = BeforeSuite(func() {
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	var err error
-	err = corev1alpha1.AddToScheme(scheme.Scheme)
+	err = cv1a1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme
@@ -94,6 +103,79 @@ var _ = BeforeSuite(func() {
 	}
 	err = k8sClient.Create(ctx, namespace)
 	Expect(err).NotTo(HaveOccurred())
+
+	By("creating the provider profile (aws)")
+	providerprofileAWS = createProviderProfileAWS(types.NamespacedName{
+		Name:      "aws-us-east-1a",
+		Namespace: "skycluster-system",
+	})
+	err = k8sClient.Create(ctx, providerprofileAWS)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("creating the provider profile (gcp)")
+	providerprofileGCP = createProviderProfileGCP(types.NamespacedName{
+		Name:      "gcp-us-east1-a",
+		Namespace: "skycluster-system",
+	})
+	err = k8sClient.Create(ctx, providerprofileGCP)
+	Expect(err).NotTo(HaveOccurred())
+
+	By("reconciling the provider profile (aws)")
+	ppReconciler := getProviderProfileReconciler()
+	_, err = ppReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: providerprofileAWS.Name, Namespace: providerprofileAWS.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("reconciling the provider profile (gcp)")
+	_, err = ppReconciler.Reconcile(ctx, reconcile.Request{
+		NamespacedName: types.NamespacedName{Name: providerprofileGCP.Name, Namespace: providerprofileGCP.Namespace},
+	})
+	Expect(err).NotTo(HaveOccurred())
+
+	By("fetching the latency objects")
+	latList := &cv1a1.LatencyList{}
+	err = k8sClient.List(ctx, latList, client.MatchingLabels(map[string]string{}))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(latList.Items).To(HaveLen(1))
+
+	By("reconciling the latency object")
+	latReconciler := getLatencyReconciler()
+	for _, lat := range latList.Items {
+		_, err = latReconciler.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: lat.Name, Namespace: lat.Namespace},
+		})
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	// Fetch the config map
+	cmList := &corev1.ConfigMapList{}
+	err = k8sClient.List(ctx, cmList, client.MatchingLabels(map[string]string{
+		"skycluster.io/config-type": "provider-profile",
+	}))
+	Expect(err).NotTo(HaveOccurred())
+	Expect(cmList.Items).To(HaveLen(2))
+
+	By("updating the config map(s)")
+	for _, cm := range cmList.Items {
+		zone := lo.Ternary(cm.Labels["skycluster.io/provider-platform"] == "aws", "us-east-1a", "us-east1-a")
+		cm.Data = configMapData(zone)
+		err = k8sClient.Update(ctx, &cm)
+		Expect(err).NotTo(HaveOccurred())
+	}
+
+	By("creating the provider e2e config map")
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "provider-e2e-config",
+			Namespace: "skycluster-system",
+			Labels: map[string]string{
+				"skycluster.io/config-type": "provider-metadata-e2e",
+			},
+		},
+		Data: configMapDataProviderE2E(),
+	}
+	Expect(k8sClient.Create(ctx, cm)).NotTo(HaveOccurred())
 })
 
 var _ = AfterSuite(func() {
@@ -124,4 +206,20 @@ func getFirstFoundEnvTestBinaryDir() string {
 		}
 	}
 	return ""
+}
+
+func getLatencyReconciler() *cv1a1ctrl.LatencyReconciler {
+	return &cv1a1ctrl.LatencyReconciler{
+		Client: k8sClient,
+		Scheme: k8sClient.Scheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[Latency]"),
+	}
+}
+
+func getProviderProfileReconciler() *cv1a1ppctrl.ProviderProfileReconciler {
+	return &cv1a1ppctrl.ProviderProfileReconciler{
+		Client: k8sClient,
+		Scheme: k8sClient.Scheme(),
+		Logger: zap.New(pkglog.CustomLogger()).WithName("[ProviderProfile]"),
+	}
 }
