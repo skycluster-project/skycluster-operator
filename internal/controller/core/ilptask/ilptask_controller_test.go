@@ -598,10 +598,59 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(ilptask.Status.Optimization.DeployMap.Component[0].Manifest).ToNot(BeNil())
 			Expect(ilptask.Status.Optimization.DeployMap.Component[1].Manifest).ToNot(BeNil())
 			Expect(ilptask.Status.Optimization.DeployMap.Component[2].Manifest).ToNot(BeNil())
+
+			By("checking the atlas and atlasmesh are created")
+			atlasList := &cv1a1.AtlasList{}
+			Expect(k8sClient.List(ctx, atlasList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": resourceName,
+			})).To(Succeed())
+			Expect(len(atlasList.Items)).To(Equal(1))
+			atlasMeshList := &cv1a1.AtlasMeshList{}
+			Expect(k8sClient.List(ctx, atlasMeshList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": resourceName,
+			})).To(Succeed())
+			Expect(len(atlasMeshList.Items)).To(Equal(1))
+
+			// clean objects
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, optPod)).To(Succeed())
+		})
+
+		It("should correctly handle pod not found", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnvWithMultipleDeployment(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			By("creating 3 sample deployments")
+			for i := range 3 {
+				deploy := createSampleDeployment(resourceName, "deployment"+strconv.Itoa(i+1), namespace)
+				Expect(k8sClient.Create(ctx, deploy)).To(Succeed())
+			}
+
+			By("preparing ilptask")
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// set pod name in ilptask status
+			ilptask.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: "opt-pod"}
+			Expect(k8sClient.Status().Update(ctx, ilptask)).To(Succeed())
+
+			By("running reconciler for ilptask and checking the status")
+			ilptaskReconciler := getILPTaskReconciler()
+			_, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).ToNot(BeNil())
+			Expect(err.Error()).To(ContainSubstring("failed to get optimization pod"))
+
+			// fetch ilptask and check the status
+			ilptask := &cv1a1.ILPTask{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: dpPolicy.Name}, ilptask)).To(Succeed())
+			Expect(ilptask.Status.Optimization.PodRef).To(Equal(corev1.LocalObjectReference{}))
 		})
 
 	})
 })
+
 
 func configMapForOptimizationResult(name, namespace string, pp1, pp2 *cv1a1.ProviderProfile) *corev1.ConfigMap {
 	pp1Name := pp1.Spec.Platform + "-" + pp1.Spec.Region + "-" + pp1.Spec.Zones[0].Name

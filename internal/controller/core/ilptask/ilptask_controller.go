@@ -231,7 +231,6 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				return ctrl.Result{RequeueAfter: 3 * time.Second}, nil // requeue in 3s
 			}
 		} else { // error fetching pod
-			r.Logger.Error(err, "failed to get optimization pod", "podName", podName)
 			// remove pod name
 			task.Status.Optimization.PodRef = corev1.LocalObjectReference{}
 			// Retry updating status on conflict
@@ -246,9 +245,9 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			if updateErr != nil {
 				r.Logger.Error(updateErr, "failed to update ILPTask status after pod completion")
 			}
+			return ctrl.Result{}, fmt.Errorf("failed to get optimization pod: %w", err)
 		}
 	}
-	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
