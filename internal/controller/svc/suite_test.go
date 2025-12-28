@@ -32,6 +32,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
+	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
 	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	// +kubebuilder:scaffold:imports
 )
@@ -61,7 +62,8 @@ var _ = BeforeSuite(func() {
 	var err error
 	err = svcv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-
+	err = pv1a1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 	// +kubebuilder:scaffold:scheme
 
 	By("bootstrapping test environment")
