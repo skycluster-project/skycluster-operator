@@ -448,6 +448,182 @@ var _ = Describe("ILPTask Controller", func() {
 
 		})
 
+		It("should correctly generate tasks.json for Kubernetes execution environment with Deployment components and alternative VS constraints", func() {
+			By("generating deployment policy and dataflow policy")
+			dpPolicy, dfPolicy = createPoliciesForK8sExecEnvWithMultipleAlternativeServices(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, dpPolicy)).To(Succeed())
+			Expect(k8sClient.Create(ctx, dfPolicy)).To(Succeed())
+
+			By("creating 3 sample deployments")
+			for i := range 3 {
+				deploy := createSampleDeployment(resourceName, "deployment"+strconv.Itoa(i+1), namespace)
+				Expect(k8sClient.Create(ctx, deploy)).To(Succeed())
+			}
+
+			By("preparing ilptask")
+			ilptask = prepareILPTask(dpPolicy, dfPolicy)
+			// set pod name in ilptask status
+			ilptask.Status.Optimization.PodRef = corev1.LocalObjectReference{Name: "opt-pod"}
+			Expect(k8sClient.Status().Update(ctx, ilptask)).To(Succeed())
+
+			By("creating opt pod")
+			optPod := createOptPod("opt-pod", namespace)
+			Expect(k8sClient.Create(ctx, optPod)).To(Succeed())
+			// set pod status to succeeded
+			optPod.Status.Phase = corev1.PodSucceeded
+			Expect(k8sClient.Status().Update(ctx, optPod)).To(Succeed())
+
+			By("creating configmap with deploy plan (as optimization result)")
+			configMap := configMapForOptimizationResult(
+				"deploy-plan-config", namespace, providerprofileAWS, providerprofileGCP,
+			)
+			Expect(k8sClient.Create(ctx, configMap)).To(Succeed())
+
+			deployPlan := cv1a1.DeployMap{}
+			err := json.Unmarshal([]byte(configMap.Data["deploy-plan.json"]), &deployPlan)
+			Expect(err).NotTo(HaveOccurred())
+
+			By("finding the required services for the deploy plan")
+			ilptaskReconciler := getILPTaskReconciler()
+			requiredServices, err := ilptaskReconciler.findServicesForDeployPlan(namespace, deployPlan, *dpPolicy)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requiredServices).To(Equal(map[string][][]hv1a1.VirtualServiceSelector{
+				"deployment1": {
+					{
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+					},
+					{
+						{
+							Name:       "64vCPU-256GB-1xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      4.1,
+						},
+						{
+							Name:       "48vCPU-192GB-4xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      5.67,
+						},
+					},
+				},
+				"deployment2": {
+					{
+						{
+							Name:       "2vCPU-4GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.05,
+						},
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+						{
+							Name:       "64vCPU-256GB-1xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      4.1,
+						},
+						{
+							Name:       "48vCPU-192GB-4xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      5.67,
+						},
+					},
+				},
+				"deployment3": {
+					{
+						{
+							Name:       "2vCPU-4GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.05,
+						},
+						{
+							Name:       "12vCPU-49GB-1xL4-24GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      0.4893,
+						},
+						{
+							Name:       "64vCPU-256GB-1xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      4.1,
+						},
+						{
+							Name:       "48vCPU-192GB-4xA10G-22GB",
+							Spec:       nil,
+							ApiVersion: "skycluster.io/v1alpha1",
+							Kind:       "ComputeProfile",
+							Count:      "1",
+							Price:      5.67,
+						},
+					},
+				},
+			}))
+
+			By("running reconciler for ilptask and checking the status")
+			res, err := ilptaskReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: dpPolicy.Name, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(res).To(Equal(ctrl.Result{}))
+
+			// fetch ilptask and check the status
+			ilptask := &cv1a1.ILPTask{}
+			Expect(k8sClient.Get(ctx, client.ObjectKey{Namespace: namespace, Name: dpPolicy.Name}, ilptask)).To(Succeed())
+			Expect(ilptask.Status.Optimization.Status).To(Equal("Succeeded"))
+			Expect(ilptask.Status.Optimization.DeployMap.Component[0].Manifest).ToNot(BeNil())
+			Expect(ilptask.Status.Optimization.DeployMap.Component[1].Manifest).ToNot(BeNil())
+			Expect(ilptask.Status.Optimization.DeployMap.Component[2].Manifest).ToNot(BeNil())
+
+			By("checking the atlas and atlasmesh are created")
+			atlasList := &cv1a1.AtlasList{}
+			Expect(k8sClient.List(ctx, atlasList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": resourceName,
+			})).To(Succeed())
+			Expect(len(atlasList.Items)).To(Equal(1))
+			atlasMeshList := &cv1a1.AtlasMeshList{}
+			Expect(k8sClient.List(ctx, atlasMeshList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": resourceName,
+			})).To(Succeed())
+			Expect(len(atlasMeshList.Items)).To(Equal(1))
+
+			// clean objects
+			Expect(k8sClient.Delete(ctx, configMap)).To(Succeed())
+			Expect(k8sClient.Delete(ctx, optPod)).To(Succeed())
+
+		})
+
 		// TODO: test with flavors with spot offering enabled and disabled
 
 		It("checking the generated providers.json for Kubernetes execution environment", func() {
@@ -1236,6 +1412,133 @@ func createPoliciesForK8sExecEnvWithMultipleDeployment(
 								},
 							},
 						},
+					},
+				},
+				{
+					ComponentRef: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(3),
+						Namespace:  "default",
+					},
+				},
+			},
+		},
+	}
+	return dpPolicy, dfPolicy
+}
+
+func createPoliciesForK8sExecEnvWithMultipleAlternativeServices(
+	resourceName,
+	namespace string) (*pv1a1.DeploymentPolicy, *pv1a1.DataflowPolicy) {
+
+	dfPolicy := &pv1a1.DataflowPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: pv1a1.DataflowPolicySpec{
+			DataDependencies: []pv1a1.DataDapendency{
+				{
+					From: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(1),
+						Namespace:  "default",
+					},
+					To: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(2),
+						Namespace:  "default",
+					},
+					Latency:           "100ms",
+					TotalDataTransfer: "100MB",
+				},
+				{
+					From: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(2),
+						Namespace:  "default",
+					},
+					To: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(3),
+						Namespace:  "default",
+					},
+					Latency:           "100ms",
+					TotalDataTransfer: "100MB",
+				},
+			},
+		},
+	}
+
+	// create a deployment policy with a multiple components
+	dpPolicy := &pv1a1.DeploymentPolicy{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    resourceName,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: pv1a1.DeploymentPolicySpec{
+			ExecutionEnvironment: "Kubernetes",
+			DeploymentPolicies: []pv1a1.DeploymentPolicyItem{
+				{
+					ComponentRef: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(1),
+						Namespace:  "default",
+					},
+					// The Deployment component comes with cpu and ram requirements
+					// We can specify additional requirements by defining a ComputeProfile
+					VirtualServiceConstraint: []pv1a1.VirtualServiceConstraint{
+						{
+							AnyOf: []pv1a1.VirtualServiceSelector{
+								{
+									// additional requirements: a node with L4 GPU
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "L4"}}`,
+										)},
+									},
+									// Count: 2, // no need to specify for Deployment
+								},
+							},
+						},
+						{
+							AnyOf: []pv1a1.VirtualServiceSelector{
+								{
+									VirtualService: hv1a1.VirtualService{
+										Kind: "ComputeProfile",
+										Spec: &runtime.RawExtension{Raw: []byte(
+											`{"gpu": {"model": "A10G"}}`,
+										)},
+									},
+									// Count: 1,
+								},
+							},
+						},
+					},
+					// LocationConstraint: permissive (no specific provider filters) to allow optimizer to choose
+					LocationConstraint: hv1a1.LocationConstraint{},
+				},
+				{
+					ComponentRef: hv1a1.ComponentRef{
+						APIVersion: "apps/v1",
+						Kind:       "Deployment",
+						Name:       "deployment" + strconv.Itoa(2),
+						Namespace:  "default",
 					},
 				},
 				{
