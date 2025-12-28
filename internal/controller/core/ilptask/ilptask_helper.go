@@ -49,15 +49,6 @@ type FlavorPattern struct {
 	GpuMemAny bool
 }
 
-type virtualSvcStruct struct {
-	Name       string                `json:"name,omitempty"`
-	Spec       *runtime.RawExtension `json:"spec,omitempty"`
-	ApiVersion string                `json:"apiVersion,omitempty"`
-	Kind       string                `json:"kind,omitempty"`
-	Count      string                `json:"count,omitempty"`
-	Price      float64               `json:"price,omitempty"`
-}
-
 type locStruct struct {
 	Name        string `json:"name,omitempty"`
 	PType       string `json:"pType,omitempty"`
@@ -67,19 +58,19 @@ type locStruct struct {
 }
 
 type optTaskStruct struct {
-	Task               string               `json:"task"`
-	ApiVersion         string               `json:"apiVersion"`
-	Kind               string               `json:"kind"`
-	PermittedLocations []locStruct          `json:"permittedLocations"`
-	RequiredLocations  [][]locStruct        `json:"requiredLocations"`
-	RequestedVServices [][]virtualSvcStruct `json:"requestedVServices"`
-	MaxReplicas        string               `json:"maxReplicas"`
+	Task               string                           `json:"task"`
+	ApiVersion         string                           `json:"apiVersion"`
+	Kind               string                           `json:"kind"`
+	PermittedLocations []locStruct                      `json:"permittedLocations"`
+	RequiredLocations  [][]locStruct                    `json:"requiredLocations"`
+	RequestedVServices [][]hv1a1.VirtualServiceSelector `json:"requestedVServices"`
+	MaxReplicas        string                           `json:"maxReplicas"`
 }
 
 func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 	ns string,
 	dpPolicyItem pv1a1.DeploymentPolicyItem,
-	providerProfille hv1a1.ProviderRefSpec) ([][]virtualSvcStruct, error) {
+	providerProfille hv1a1.ProviderRefSpec) ([][]hv1a1.VirtualServiceSelector, error) {
 
 	supportedKinds := []string{"Deployment", "XNodeGroup"}
 	if !slices.Contains(supportedKinds, dpPolicyItem.ComponentRef.Kind) {
@@ -94,14 +85,14 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 		Zone:        providerProfille.Zone,
 	}
 
-	vsList := make([][]virtualSvcStruct, 0)
+	vsList := make([][]hv1a1.VirtualServiceSelector, 0)
 	for _, vsc := range dpPolicyItem.VirtualServiceConstraint {
 
 		if len(vsc.AnyOf) == 0 {
 			return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", dpPolicyItem.ComponentRef.Name, vsc)
 		}
 
-		altVSList := make([]virtualSvcStruct, 0)
+		altVSList := make([]hv1a1.VirtualServiceSelector, 0)
 		for _, alternativeVS := range vsc.AnyOf {
 
 			supportedVSKinds := []string{"ComputeProfile"}
@@ -129,7 +120,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 						continue
 					}
 					// Add this offering as a ComputeProfile alternative
-					newVS := virtualSvcStruct{
+					newVS := hv1a1.VirtualServiceSelector{
 						ApiVersion: "skycluster.io/v1alpha1",
 						Kind:       "ComputeProfile",
 						Name:       off.name, // name is mapped to nameLabel
@@ -148,7 +139,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 					return nil, err
 				}
 				// filter the altVSList to only include the ComputeProfiles that are suitable for the deployment
-				altVSListFiltered := make([]virtualSvcStruct, 0)
+				altVSListFiltered := make([]hv1a1.VirtualServiceSelector, 0)
 				for _, alt := range altVSList {
 					if _, ok := deployable[alt.Name]; ok {
 						altVSListFiltered = append(altVSListFiltered, alt)
@@ -180,7 +171,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 			}
 
 			// remove duplicates; for an alternative VS it does not make sense to have duplicates
-			altVSList = lo.UniqBy(altVSList, func(v virtualSvcStruct) string {
+			altVSList = lo.UniqBy(altVSList, func(v hv1a1.VirtualServiceSelector) string {
 				return v.Name
 			})
 			// the list can be huge, so sort and limit to top 10 cheapest
@@ -210,9 +201,9 @@ func (r *ILPTaskReconciler) findK8SVirtualServiceForProvider(
 			return deployableList[i].deployCost < deployableList[j].deployCost
 		})
 		minLength := min(len(deployableList), 5)
-		tmpList := make([]virtualSvcStruct, 0)
+		tmpList := make([]hv1a1.VirtualServiceSelector, 0)
 		for _, item := range deployableList[:minLength] {
-			tmpList = append(tmpList, virtualSvcStruct{
+			tmpList = append(tmpList, hv1a1.VirtualServiceSelector{
 				ApiVersion: "skycluster.io/v1alpha1",
 				Kind:       "ComputeProfile",
 				Name:       item.name,
@@ -241,15 +232,15 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 			return nil, fmt.Errorf("unsupported component kind %s for Kubernetes execution environment", cmpnt.ComponentRef.Kind)
 		}
 
-		vsList := make([][]virtualSvcStruct, 0)
+		vsList := make([][]hv1a1.VirtualServiceSelector, 0)
 		for _, vsc := range cmpnt.VirtualServiceConstraint {
 
 			if len(vsc.AnyOf) == 0 {
 				return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, vsc)
 			}
 
-			altVSList := make([]virtualSvcStruct, 0)
-			// selectedVSList := make([]virtualSvcStruct, 0)
+			altVSList := make([]hv1a1.VirtualServiceSelector, 0)
+			// selectedVSList := make([]hv1a1.VirtualServiceSelector, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 
 				// add any requested virtual service as is
@@ -281,7 +272,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 							continue
 						}
 						// Add this offering as a ComputeProfile alternative
-						newVS := virtualSvcStruct{
+						newVS := hv1a1.VirtualServiceSelector{
 							ApiVersion: "skycluster.io/v1alpha1",
 							Kind:       "ComputeProfile",
 							Name:       off.name, // name is mapped to nameLabel
@@ -300,7 +291,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 						return nil, err
 					}
 					// filter the altVSList to only include the ComputeProfiles that are suitable for the deployment
-					altVSListFiltered := make([]virtualSvcStruct, 0)
+					altVSListFiltered := make([]hv1a1.VirtualServiceSelector, 0)
 					for _, alt := range altVSList {
 						if _, ok := deployable[alt.Name]; ok {
 							altVSListFiltered = append(altVSListFiltered, alt)
@@ -332,7 +323,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				}
 
 				// remove duplicates; for an alternative VS it does not make sense to have duplicates
-				altVSList = lo.UniqBy(altVSList, func(v virtualSvcStruct) string {
+				altVSList = lo.UniqBy(altVSList, func(v hv1a1.VirtualServiceSelector) string {
 					return v.Name
 				})
 				// the list can be huge, so sort and limit to top 10 cheapest
@@ -362,7 +353,7 @@ func (r *ILPTaskReconciler) findK8SVirtualServices(ns string, dpPolicies []pv1a1
 				return deployableList[i].deployCost < deployableList[j].deployCost
 			})
 			if len(deployableList) > 0 {
-				vsList = append(vsList, []virtualSvcStruct{{
+				vsList = append(vsList, []hv1a1.VirtualServiceSelector{{
 					ApiVersion: "skycluster.io/v1alpha1",
 					Kind:       "ComputeProfile",
 					Name:       deployableList[0].name,
@@ -459,14 +450,14 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 			return nil, fmt.Errorf("unsupported component kind %s for Virtual Machine execution environment", cmpnt.ComponentRef.Kind)
 		}
 
-		vsList := make([][]virtualSvcStruct, 0)
+		vsList := make([][]hv1a1.VirtualServiceSelector, 0)
 		for _, vsc := range cmpnt.VirtualServiceConstraint {
 
 			if len(vsc.AnyOf) == 0 {
 				return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", cmpnt.ComponentRef.Name, vsc)
 			}
 
-			additionalVSList := make([]virtualSvcStruct, 0)
+			additionalVSList := make([]hv1a1.VirtualServiceSelector, 0)
 			for _, alternativeVS := range vsc.AnyOf {
 				switch alternativeVS.Kind {
 				case "ComputeProfile":
@@ -489,7 +480,7 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 						}
 
 						// Add this offering as a ComputeProfile alternative
-						additionalVSList = append(additionalVSList, virtualSvcStruct{
+						additionalVSList = append(additionalVSList, hv1a1.VirtualServiceSelector{
 							ApiVersion: "skycluster.io/v1alpha1",
 							Kind:       "ComputeProfile",
 							Name:       off.name, // name is mapped to nameLabel
@@ -503,7 +494,7 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 				}
 
 				// remove duplicates; for an alternative VS it does not make sense to have duplicates
-				additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
+				additionalVSList = lo.UniqBy(additionalVSList, func(v hv1a1.VirtualServiceSelector) string {
 					return v.Name
 				})
 				// the list can be huge, so sort and limit to top 10 cheapest
@@ -567,7 +558,7 @@ func (r *ILPTaskReconciler) findVMVirtualServices(dpPolicies []pv1a1.DeploymentP
 func (r *ILPTaskReconciler) findVMVirtualServicesForProvider(
 	ns string,
 	dpPolicyItem pv1a1.DeploymentPolicyItem,
-	providerProfille hv1a1.ProviderRefSpec) ([][]virtualSvcStruct, error) {
+	providerProfille hv1a1.ProviderRefSpec) ([][]hv1a1.VirtualServiceSelector, error) {
 
 	providerSpec := hv1a1.ProviderRefSpec{
 		Name:        providerProfille.Name,
@@ -577,14 +568,14 @@ func (r *ILPTaskReconciler) findVMVirtualServicesForProvider(
 		Zone:        providerProfille.Zone,
 	}
 
-	vsList := make([][]virtualSvcStruct, 0)
+	vsList := make([][]hv1a1.VirtualServiceSelector, 0)
 	for _, vsc := range dpPolicyItem.VirtualServiceConstraint {
 
 		if len(vsc.AnyOf) == 0 {
 			return nil, fmt.Errorf("no virtual service alternatives found for component %s, %v", dpPolicyItem.ComponentRef.Name, vsc)
 		}
 
-		additionalVSList := make([]virtualSvcStruct, 0)
+		additionalVSList := make([]hv1a1.VirtualServiceSelector, 0)
 		for _, alternativeVS := range vsc.AnyOf {
 			switch alternativeVS.Kind {
 			case "ComputeProfile":
@@ -611,7 +602,7 @@ func (r *ILPTaskReconciler) findVMVirtualServicesForProvider(
 					r.Logger.Info("off", "off", off)
 
 					// Add this offering as a ComputeProfile alternative
-					additionalVSList = append(additionalVSList, virtualSvcStruct{
+					additionalVSList = append(additionalVSList, hv1a1.VirtualServiceSelector{
 						ApiVersion: "skycluster.io/v1alpha1",
 						Kind:       "ComputeProfile",
 						Name:       off.name, // name is mapped to nameLabel
@@ -625,7 +616,7 @@ func (r *ILPTaskReconciler) findVMVirtualServicesForProvider(
 			}
 
 			// remove duplicates; for an alternative VS it does not make sense to have duplicates
-			additionalVSList = lo.UniqBy(additionalVSList, func(v virtualSvcStruct) string {
+			additionalVSList = lo.UniqBy(additionalVSList, func(v hv1a1.VirtualServiceSelector) string {
 				return v.Name
 			})
 			// the list can be huge, so sort and limit to top 10 cheapest
@@ -652,9 +643,9 @@ func (r *ILPTaskReconciler) findVMVirtualServicesForProvider(
 func (r *ILPTaskReconciler) findServicesForDeployPlan(
 	ns string,
 	deployPlan cv1a1.DeployMap,
-	dp pv1a1.DeploymentPolicy) (map[string][][]virtualSvcStruct, error) {
+	dp pv1a1.DeploymentPolicy) (map[string][][]hv1a1.VirtualServiceSelector, error) {
 	// Map from component name to list of virtual services that must be deployed
-	servicesMap := make(map[string][][]virtualSvcStruct)
+	servicesMap := make(map[string][][]hv1a1.VirtualServiceSelector)
 
 	// For each component in the deployPlan
 	for _, skySvc := range deployPlan.Component {
@@ -683,7 +674,7 @@ func (r *ILPTaskReconciler) findServicesForDeployPlan(
 				cmpntRef.Name, cmpntRef.Kind, cmpntRef.APIVersion)
 		}
 
-		var svcs [][]virtualSvcStruct
+		var svcs [][]hv1a1.VirtualServiceSelector
 		var err error
 		switch dp.Spec.ExecutionEnvironment {
 		case "Kubernetes":

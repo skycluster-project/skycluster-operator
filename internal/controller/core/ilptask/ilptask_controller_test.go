@@ -180,7 +180,7 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(optTasks)).To(Equal(1))
 			Expect(optTasks[0].Kind).To(Equal("XInstance"))
-			Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+			Expect(optTasks[0].RequestedVServices).To(Equal([][]hv1a1.VirtualServiceSelector{
 				{
 					{
 						Name:       "64vCPU-256GB-1xA10G-22GB",
@@ -236,7 +236,7 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(optTasks[0].Kind).To(Equal("XNodeGroup"))
 			// Expect to include all ComputeProfiles for the XNodeGroup
 			// 2 for aws and 2 for gcp
-			Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+			Expect(optTasks[0].RequestedVServices).To(Equal([][]hv1a1.VirtualServiceSelector{
 				{
 					{
 						Name:       "12vCPU-49GB-1xL4-24GB",
@@ -294,7 +294,7 @@ var _ = Describe("ILPTask Controller", func() {
 			// Expect to include all ComputeProfiles for the XNodeGroup
 			// 2 for aws and 2 for gcp
 			// Expect(optTasks[0].RequestedVServices[0]).To(HaveLen(4))
-			Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+			Expect(optTasks[0].RequestedVServices).To(Equal([][]hv1a1.VirtualServiceSelector{
 				{
 					{
 						Name:       "48vCPU-192GB-4xA10G-22GB",
@@ -354,7 +354,7 @@ var _ = Describe("ILPTask Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// expect containing one compute profile with gpu model L4
-			Expect(optTasks[0].RequestedVServices).To(Equal([][]virtualSvcStruct{
+			Expect(optTasks[0].RequestedVServices).To(Equal([][]hv1a1.VirtualServiceSelector{
 				{
 					{
 						Name:       "12vCPU-49GB-1xL4-24GB",
@@ -403,7 +403,7 @@ var _ = Describe("ILPTask Controller", func() {
 					Kind:               "XNodeGroup",
 					PermittedLocations: []locStruct{},
 					RequiredLocations:  [][]locStruct{},
-					RequestedVServices: [][]virtualSvcStruct{
+					RequestedVServices: [][]hv1a1.VirtualServiceSelector{
 						{
 							{
 								Name:       "48vCPU-192GB-4xA10G-22GB",
@@ -431,7 +431,7 @@ var _ = Describe("ILPTask Controller", func() {
 					Kind:               "Deployment",
 					PermittedLocations: []locStruct{},
 					RequiredLocations:  [][]locStruct{},
-					RequestedVServices: [][]virtualSvcStruct{
+					RequestedVServices: [][]hv1a1.VirtualServiceSelector{
 						{
 							{
 								Name:       "12vCPU-49GB-1xL4-24GB",
@@ -518,7 +518,7 @@ var _ = Describe("ILPTask Controller", func() {
 			ilptaskReconciler := getILPTaskReconciler()
 			requiredServices, err := ilptaskReconciler.findServicesForDeployPlan(namespace, deployPlan, *dpPolicy)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(requiredServices).To(Equal(map[string][][]virtualSvcStruct{
+			Expect(requiredServices).To(Equal(map[string][][]hv1a1.VirtualServiceSelector{
 				"deployment1": {
 					{
 						{

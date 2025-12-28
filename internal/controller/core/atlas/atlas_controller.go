@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"slices"
 	"sort"
-	"strings"
+	"strconv"
 
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
@@ -193,8 +193,8 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 		return nil, nil, errors.Wrap(err, "fetching deployment policy")
 	}
 
-	// // ######### Handle execution environment: Kubernetes
-	if atlas.Spec.ExecutionEnvironment == "Kubernetes" {
+	switch atlas.Spec.ExecutionEnvironment {
+	case "Kubernetes":
 		k8sManifests, err := r.generateK8SManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating Kubernetes manifests.")
@@ -202,10 +202,8 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 		if len(k8sManifests) > 0 {
 			manifests = append(manifests, lo.Values(k8sManifests)...)
 		}
-	}
 
-	// ######### Handle execution environment: VirtualMachine
-	if atlas.Spec.ExecutionEnvironment == "VirtualMachine" {
+	case "VirtualMachine":
 		r.Logger.Info("Generating VirtualMachine manifests.")
 		vmManifests, err := r.generateVMManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
 		if err != nil {
@@ -215,6 +213,8 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 			manifests = append(manifests, vmManifests...)
 			r.Logger.Info("Generated VirtualMachine manifests.", "count", len(vmManifests))
 		}
+	default:
+		return nil, nil, errors.New("unsupported execution environment: " + atlas.Spec.ExecutionEnvironment)
 	}
 
 	// // virtual services required per provider
@@ -609,14 +609,18 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 	manifests := map[string]hv1a1.SkyService{}
 	for _, skySvc := range deployMap.Component {
 
-		if !strings.Contains(skySvc.ComponentRef.Kind, "XNodeGroup") {
-			continue
-		}
-
-		// for each node group, we create a XKube object
+		// for each component, we create a XKube object per distinct provider
 		// this is a Kubernetes cluster in selected provider(s)
-
 		pName := skySvc.ProviderRef.Name
+		if _, ok := manifests[pName]; ok {
+			// TODO: handle new XNodeGroup request
+			// raw, err := appendXNodeGroupManifest(manifests[pName].Manifest, skySvc.Manifest)
+			// if err != nil {return nil, errors.Wrap(err, "Error appending XNodeGroup manifest.")}
+			// svc := manifests[pName]
+			// svc.Manifest = raw
+			// manifests[pName] = svc
+			continue // skip if XKube object already exists for this provider
+		}
 		pp := provProfiles[pName]
 		idx := provToIdx[pp.Spec.Platform][pName]
 
@@ -644,7 +648,10 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 		name = name + "-" + rand
 		xrdObj.SetName(name)
 
-		spec := r.buildK8SSpec(appId, skySvc.Manifest, k8sMetadata, pp, idx, znPrimary, znSecondaryPtr)
+		spec, err := r.buildK8SSpec(appId, skySvc.Manifest, k8sMetadata, pp, idx, znPrimary, znSecondaryPtr)
+		if err != nil {
+			return nil, errors.Wrap(err, "Error building XKube spec.")
+		}
 
 		xrdObj.Object["spec"] = spec
 
@@ -652,32 +659,22 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 		if err != nil {
 			return nil, errors.Wrap(err, "Error generating JSON manifest.")
 		}
-		// multiple XNodeGroup objects can be used for the same XKube object
-		if _, ok := manifests[pName]; !ok {
-			manifests[pName] = hv1a1.SkyService{
-				ComponentRef: hv1a1.ComponentRef{
-					APIVersion: xrdObj.GetAPIVersion(),
-					Kind:       xrdObj.GetKind(),
-					Namespace:  xrdObj.GetNamespace(),
-					Name:       xrdObj.GetName(),
-				},
-				Manifest: &runtime.RawExtension{Raw: jsonBytes},
-				ProviderRef: hv1a1.ProviderRefSpec{
-					Name:        pName,
-					Type:        znPrimary.Type,
-					Platform:    pp.Spec.Platform,
-					Region:      pp.Spec.Region,
-					RegionAlias: pp.Spec.RegionAlias,
-					Zone:        znPrimary.Name,
-				},
-			}
-		} else {
-			// raw, err := appendXNodeGroupManifest(manifests[pName].Manifest, skySvc.Manifest)
-			// if err != nil {return nil, errors.Wrap(err, "Error appending XNodeGroup manifest.")}
-			// svc := manifests[pName]
-			// svc.Manifest = raw
-			// manifests[pName] = svc
-			r.Logger.Info("WARNING: XNodeGroup manifest already exists for provider", "provider", pName)
+		manifests[pName] = hv1a1.SkyService{
+			ComponentRef: hv1a1.ComponentRef{
+				APIVersion: xrdObj.GetAPIVersion(),
+				Kind:       xrdObj.GetKind(),
+				Namespace:  xrdObj.GetNamespace(),
+				Name:       xrdObj.GetName(),
+			},
+			Manifest: &runtime.RawExtension{Raw: jsonBytes},
+			ProviderRef: hv1a1.ProviderRefSpec{
+				Name:        pName,
+				Type:        znPrimary.Type,
+				Platform:    pp.Spec.Platform,
+				Region:      pp.Spec.Region,
+				RegionAlias: pp.Spec.RegionAlias,
+				Zone:        znPrimary.Name,
+			},
 		}
 	}
 
@@ -685,10 +682,16 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 }
 
 // buildK8SSpec builds the spec map for XKube manifests
-func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtension, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) map[string]any {
+func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtension, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) (map[string]any, error) {
 	var k8sSpec map[string]any
 	if err := json.Unmarshal(manifest.Raw, &k8sSpec); err != nil {
-		return nil
+		return nil, errors.Wrap(err, "Error unmarshalling XKube spec.")
+	}
+
+	svcsMap := map[string][]hv1a1.VirtualServiceSelector{}
+	err := json.Unmarshal(manifest.Raw, &svcsMap)
+	if err != nil {
+		return nil, errors.Wrap(err, "Error unmarshalling virtual services.")
 	}
 
 	spec := map[string]any{
@@ -711,59 +714,37 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 		}(),
 		"nodeGroups": func() []map[string]any {
 			fields := make([]map[string]any, 0)
-			if pp.Spec.Platform == "aws" {
-				// default node group
-				f := make(map[string]any)
-				f["instanceTypes"] = []string{
-					"2vCPU-4GB",
-					"4vCPU-8GB",
-					"8vCPU-32GB",
+			its := make([]string, 0)
+			count := 1
+			for _, svc := range svcsMap["services"] {
+				if svc.Kind != "ComputeProfile" {
+					continue
 				}
-				f["nodeCount"] = 3
-				f["publicAccess"] = true
-				f["autoScaling"] = map[string]any{
-					"enabled": false,
-					"minSize": 1,
-					"maxSize": 3,
+				its = append(its, svc.Name)
+				if svc.Count != "" {
+					thisCount, err := strconv.Atoi(svc.Count)
+					if err != nil {
+						continue // skip if count is not a number
+					}
+					if thisCount > count {
+						count = thisCount
+					}
 				}
-				fields = append(fields, f)
-
-				// workers
-				// for _, vs := range uniqueProfiles {
-				// 	f := make(map[string]any)
-				// 	f["instanceTypes"] = []string{vs.Name}
-				// 	f["publicAccess"] = false
-				// 	fields = append(fields, f)
-				// }
 			}
-			if pp.Spec.Platform == "gcp" {
-				// workers only
-				// manually limit this to prevent charging too much
-				f := make(map[string]any)
-				f["nodeCount"] = 3
-				f["instanceType"] = "2vCPU-4GB"
-				f["publicAccess"] = false
-				f["autoScaling"] = map[string]any{
-					"enabled": true,
-					"minSize": 1,
-					"maxSize": 8,
-				}
-				fields = append(fields, f)
-				// for _, vs := range uniqueProfiles {
-				// 	f := make(map[string]any)
-				// 	f["nodeCount"] = 2
-				// 	f["instanceType"] = vs.Name
-				// 	f["publicAccess"] = false
-				// 	f["autoScaling"] = map[string]any{
-				// 		"enabled": true,
-				// 		"minSize": 1,
-				// 		"maxSize": 3,
-				// 	}
-				// 	fields = append(fields, f)
-				// }
-			}
+			f := make(map[string]any)
+			f["instanceTypes"] = its
+			f["nodeCount"] = count
+			f["publicAccess"] = false
+			// set auto scalling to true by default
+			f["autoScaling"] = map[string]any{
+				"enabled": true,
+				"minSize": 1,
+				"maxSize": 10,
+			} // max size is 10 nodes to prevent charging too much
+			fields = append(fields, f)
 			return fields
 		}(),
+
 		"principal": func() map[string]any {
 			fields := make(map[string]any)
 			if pp.Spec.Platform == "aws" {
@@ -791,7 +772,7 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 			return fields
 		}(),
 	}
-	return spec
+	return spec, nil
 }
 
 // only one mesh per application
