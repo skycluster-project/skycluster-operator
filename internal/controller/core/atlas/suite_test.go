@@ -39,6 +39,7 @@ import (
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	svcv1alpha1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
 	cv1a1ctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core"
 	cv1a1ppctrl "github.com/skycluster-project/skycluster-operator/internal/controller/core/providerprofile"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
@@ -74,6 +75,8 @@ var _ = BeforeSuite(func() {
 	err = cv1a1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 	err = pv1a1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = svcv1alpha1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	// +kubebuilder:scaffold:scheme

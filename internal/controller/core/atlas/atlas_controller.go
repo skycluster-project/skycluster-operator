@@ -205,7 +205,7 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 
 	case "VirtualMachine":
 		r.Logger.Info("Generating VirtualMachine manifests.")
-		vmManifests, err := r.generateVMManifests(appId, provToMetadataIdx, deployMap, *dpPolicy)
+		vmManifests, err := r.generateVMManifests(appId, deployMap)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating VirtualMachine manifests.")
 		}
@@ -216,92 +216,6 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 	default:
 		return nil, nil, errors.New("unsupported execution environment: " + atlas.Spec.ExecutionEnvironment)
 	}
-
-	// // virtual services required per provider
-	// // currently only ComputeProfile kind is supported
-	// requiredVirtSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
-	// for _, skySrvc := range deployMap.Component {
-	// 	pName := skySrvc.ProviderRef.Name
-	// 	pKind := skySrvc.ProviderRef.Type
-
-	// 	supportedKinds := []string{"XInstance", "Deployment", "XNodeGroup"}
-	// 	if !slices.Contains(supportedKinds, pKind) {
-	// 		return nil, nil, errors.New("unsupported provider type for virtual service fetching: " + pKind)
-	// 	}
-
-	// 	if _, ok := requiredVirtSvcs[pName]; !ok {
-	// 		requiredVirtSvcs[pName] = make([]pv1a1.VirtualServiceSelector, 0)
-	// 	}
-
-	// 	// find required cheapest virtual service for this component per each alternative set
-	// 	// (requested ComputeProfile)
-	// 	computeProfiles, err := r.findReqComputeProfile(ns, skySrvc, *dpPolicy)
-	// 	if err != nil {return nil, nil, errors.Wrap(err, "fetching required virtual services")}
-	// 	requiredVirtSvcs[pName] = append(requiredVirtSvcs[pName], computeProfiles...)
-	// }
-
-	// r.Logger.Info("Required virtual services per provider.", "providers", requiredVirtSvcs)
-
-	// // If execution environment is Kubernetes, we need to create Kubernetes manifests
-	// // We also need to include a set of ComputeProfiles as node groups for the cluster
-	// // computeProfilesSvcs := make(map[string][]pv1a1.VirtualServiceSelector)
-	// switch dpPolicy.Spec.ExecutionEnvironment {
-	// case "Kubernetes" :
-	// 	// when the execution environment is Kubernetes, we assume that all involved providers
-	// 	// will be used to create a (managed) Kubernetes cluster. Therefore, a combination of
-	// 	// providers with Kubernetes clusters and without Kubernetes clusters is not supported.
-	// 	// The reason is that we aim for running application, an we either support running it
-	// 	// on a Kubernetes cluster (managed by us), or within VMs, not both at the same time.
-	// 	// User is able to manually provision VMs along with managed Kubernetes if needed.
-	// 	// We filter all ComputeProfile (flavors) and use them to create worker pools in the cluster
-
-	// 	// for each provider, generate Kubernetes manifests,
-	// 	//   with node groups consolidated from all required virtual services for that provider
-	// 	kubernetesManifests, err := r.generateMgmdK8sManifests(appId, requiredVirtSvcs, provToMetadataIdx)
-	// 	if err != nil {
-	// 		return nil, nil, errors.Wrap(err, "Error generating managed Kubernetes manifests.")
-	// 	}
-	// 	manifests = append(manifests, lo.Values(kubernetesManifests)...)
-
-	// case "VirtualMachine" :
-	// 	// for VirtualMachine execution environment, we need to create XInstance virtual services
-	// 	// for each provider. In this case, it is expected to have component Kind of XInstance
-	// 	// and the virtual services specify the ComputeProfiles.
-	// 	// for _, skySrvc := range deployMap.Component {
-	// 		// pName := skySrvc.ProviderRef.Name
-	// 		// pKind := skySrvc.ProviderRef.Type
-
-	// 		// if pKind != "XInstance" {
-	// 		// 	r.Logger.Info("Skipping non-XInstance component for VirtualMachine execution environment.", "component", skySrvc.ComponentRef.Name, "kind", pKind)
-	// 		// 	continue
-	// 		// }
-	// 	// }
-	// 		// requiredVirtSvcs[pName] = lo.UniqBy(requiredVirtSvcs[pName], func(v pv1a1.VirtualServiceSelector) string {
-
-	// default:
-	// 	return nil, nil, errors.New("unsupported execution environment: " + dpPolicy.Spec.ExecutionEnvironment)
-	// }
-
-	// Handle ManagedKubernetes virtual services
-	// managedK8sSvcs contains ComputeProfile (flavors) for the cluster
-	// r.Logger.Info("Generating SkyK8SCluster manifests.")
-	// if len(managedK8sSvcs) > 0 {
-	// 	managedK8sManifests, err := r.generateMgmdK8sManifests(appId, managedK8sSvcs, provToMetadataIdx)
-	// 	if err != nil {
-	// 		return nil, nil, errors.Wrap(err, "Error generating SkyK8SCluster.")
-	// 	}
-	// 	for _, obj := range managedK8sManifests {
-	// 		manifests = append(manifests, obj)
-	// 	}
-	// 	r.Logger.Info("Generated SkyK8SCluster manifests.", "count", len(managedK8sManifests))
-	// 	// Kubernetes Mesh
-	// 	// r.Logger.Info("Generating XKubeMesh manifests.")
-	// 	skyMesh, err := r.generateK8sMeshManifests(appId, lo.Values(managedK8sManifests))
-	// 	if err != nil {
-	// 		return nil, nil, errors.Wrap(err, "Error generating XKubeMesh.")
-	// 	}
-	// 	manifests = append(manifests, *skyMesh)
-	// }
 
 	return manifests, nil, nil
 }
@@ -483,51 +397,36 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 	return manifests, indexedSortedProviders, nil
 }
 
-// Generates VM manifests based on deployment map and deployment policy
-// It fetches uses deployment policy object to determine requested instance types
-// and find equivalent virtual services (ComputeProfile) for the specified provider
-func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string]map[string]int, deployMap cv1a1.DeployMap, dpPolicy pv1a1.DeploymentPolicy) ([]hv1a1.SkyService, error) {
+// Generates VM manifests based on deployment map
+func (r *AtlasReconciler) generateVMManifests(appId string, deployMap cv1a1.DeployMap) ([]hv1a1.SkyService, error) {
 
 	manifests := make([]hv1a1.SkyService, 0)
-	for _, cmpnt := range deployMap.Component {
-		if cmpnt.ComponentRef.Kind != "XInstance" {
+	for _, skyService := range deployMap.Component {
+		if skyService.ComponentRef.Kind != "XInstance" {
 			continue
 		}
 
-		// fetch refereced deployment policy item
+		// fetch refereced XInstance object
 		xi := &svccv1a1.XInstance{}
-		if err := r.Get(context.Background(), client.ObjectKey{
-			Namespace: dpPolicy.Namespace, Name: cmpnt.ComponentRef.Name}, xi); err != nil {
-			return nil, errors.Wrap(err, "Error fetching XInstance for component: "+cmpnt.ComponentRef.Name)
+		if err := r.Get(context.Background(), client.ObjectKey{Namespace: skyService.ComponentRef.Namespace, Name: skyService.ComponentRef.Name}, xi); err != nil {
+			return nil, errors.Wrap(err, "Error fetching XInstance for component: "+skyService.ComponentRef.Name)
 		}
 
-		// find requested ComputeProfile virtual service for this component
-		computeProfileList, err := r.findReqComputeProfile(dpPolicy.Namespace, cmpnt, dpPolicy)
+		svcsMap := map[string][][]hv1a1.VirtualServiceSelector{}
+		err := json.Unmarshal(skyService.Manifest.Raw, &svcsMap)
 		if err != nil {
-			return nil, errors.Wrap(err, "Error finding requested ComputeProfile.")
+			return nil, errors.Wrap(err, "Error unmarshalling virtual services.")
 		}
-		if len(computeProfileList) == 0 {
-			return nil, errors.New("No ComputeProfile found for component: " + cmpnt.ComponentRef.Name)
-		}
-		// computeProfileList contains a list of possible ComputeProfiles
-		// that satisfy the request. In some cases such as spot instances,
-		// a selected ComputeProfile may not be available at the time of provisioning.
-		// In such cases, we create multiple XInstance objects with different
-		// ComputeProfiles to increase the chance of successful provisioning.
-		computeProfile := computeProfileList[0]
-
-		fixedFlavor, err := fixFlavorVCPUsFormat(computeProfile.Spec.Raw)
-		if err != nil {
-			return nil, errors.Wrap(err, "Error fixing flavor VCPUs format.")
-		}
-		var computeProfileFlavor hv1a1.InstanceOffering
-		if err := json.Unmarshal(fixedFlavor, &computeProfileFlavor); err != nil {
-			return nil, errors.Wrap(err, "Error unmarshalling ComputeProfile spec.")
+		// the svcsMap may contain a list of possible ComputeProfiles
+		// that satisfy the request. For now we just use the first one.
+		computeProfile := svcsMap["services"][0][0]
+		if computeProfile.Kind != "ComputeProfile" {
+			return nil, errors.New("Expected ComputeProfile, got " + computeProfile.Kind)
 		}
 
-		platform := cmpnt.ProviderRef.Platform
-		region := cmpnt.ProviderRef.Region
-		zone := cmpnt.ProviderRef.Zone
+		platform := skyService.ProviderRef.Platform
+		region := skyService.ProviderRef.Region
+		zone := skyService.ProviderRef.Zone
 
 		// we need to create a XKube object
 		xrdObj := &unstructured.Unstructured{}
@@ -541,12 +440,8 @@ func (r *AtlasReconciler) generateVMManifests(appId string, provToIdx map[string
 		xrdObj.SetName(name)
 
 		spec := map[string]any{
-			"applicationId": appId,
-			"flavor": hv1a1.ComputeFlavor{
-				VCPUs: fmt.Sprintf("%d", computeProfileFlavor.VCPUs),
-				RAM:   computeProfileFlavor.RAM,
-				GPU:   computeProfileFlavor.GPU,
-			},
+			"applicationId":  appId,
+			"flavor":         computeProfile.Name,
 			"preferSpot":     xi.Spec.PreferSpot,
 			"image":          xi.Spec.Image,
 			"rootVolumes":    xi.Spec.RootVolumes,
@@ -682,7 +577,14 @@ func (r *AtlasReconciler) generateK8SManifests(appId string, provToIdx map[strin
 }
 
 // buildK8SSpec builds the spec map for XKube manifests
-func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtension, k8sMetadata map[string][]providerMetadata, pp cv1a1.ProviderProfile, idx int, znPrimary cv1a1.ZoneSpec, znSecondary *cv1a1.ZoneSpec) (map[string]any, error) {
+func (r *AtlasReconciler) buildK8SSpec(
+	appId string,
+	manifest *runtime.RawExtension,
+	k8sMetadata map[string][]providerMetadata,
+	pp cv1a1.ProviderProfile,
+	idx int,
+	znPrimary cv1a1.ZoneSpec,
+	znSecondary *cv1a1.ZoneSpec) (map[string]any, error) {
 	var k8sSpec map[string]any
 	if err := json.Unmarshal(manifest.Raw, &k8sSpec); err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling XKube spec.")

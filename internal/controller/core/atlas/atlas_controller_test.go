@@ -20,22 +20,28 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	lo "github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
 	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
 	pv1a1 "github.com/skycluster-project/skycluster-operator/api/policy/v1alpha1"
+	svcv1a1 "github.com/skycluster-project/skycluster-operator/api/svc/v1alpha1"
+	svcv1a1ctrl "github.com/skycluster-project/skycluster-operator/internal/controller/svc"
 	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
@@ -57,7 +63,15 @@ var _ = Describe("Atlas Controller", func() {
 
 		AfterEach(func() {
 			By("Cleanup the specific resource instance Atlas")
-			Expect(k8sClient.Delete(ctx, atlas)).To(Succeed())
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, atlas); err == nil {
+				Expect(k8sClient.Delete(ctx, atlas)).To(Succeed())
+			}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, dfPolicy); err == nil {
+				Expect(k8sClient.Delete(ctx, dfPolicy)).To(Succeed())
+			}
+			if err := k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, dpPolicy); err == nil {
+				Expect(k8sClient.Delete(ctx, dpPolicy)).To(Succeed())
+			}
 
 			By("Cleanup the deployments")
 			deployments := &appsv1.DeploymentList{}
@@ -67,6 +81,11 @@ var _ = Describe("Atlas Controller", func() {
 			for _, deployment := range deployments.Items {
 				Expect(k8sClient.Delete(ctx, &deployment)).To(Succeed())
 			}
+
+			Eventually(func() bool {
+				return errors.IsNotFound(k8sClient.Get(ctx, types.NamespacedName{
+					Name: resourceName, Namespace: namespace}, atlas))
+			}, time.Second*5, time.Millisecond*100).Should(BeTrue(), "Atlas should be deleted before next test starts")
 
 		})
 
@@ -200,7 +219,7 @@ var _ = Describe("Atlas Controller", func() {
 			atlas = createSampleAtlasResourceWithMultipleAlternatives(resourceName, namespace)
 			Expect(k8sClient.Create(ctx, atlas)).To(Succeed())
 
-			deployMap := createSampleDeployMapWithMultipleAlternatives(resourceName)
+			deployMap := createSampleDeployMapK8SEnvWithMultipleAlternatives(resourceName)
 
 			pManifests, provToMetadataIdx, err := reconciler.generateProviderManifests(resourceName, namespace, deployMap.Component)
 			Expect(err).NotTo(HaveOccurred())
@@ -271,13 +290,69 @@ var _ = Describe("Atlas Controller", func() {
 			Expect(k8sClient.Delete(ctx, dpPolicy)).To(Succeed())
 		})
 
+		It("should successfully generate VirtualMachine manifests for the resource with multiple alternatives", func() {
+			By("creating sample xinstance resource")
+			xinstance := createBasicXInstance(resourceName, namespace, false)
+			Expect(k8sClient.Create(ctx, xinstance)).To(Succeed())
+
+			svcReconciler := &svcv1a1ctrl.XInstanceReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[XInstance]"),
+			}
+			_, err := svcReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: types.NamespacedName{Name: resourceName, Namespace: namespace},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			By("verifying the deployment policy for the xinstance")
+			dp := &pv1a1.DeploymentPolicy{}
+			Expect(k8sClient.Get(ctx, types.NamespacedName{Name: resourceName, Namespace: namespace}, dp)).To(Succeed())
+			Expect(dp.Name).To(Equal(resourceName))
+
+			Expect(dp.Spec.ExecutionEnvironment).To(Equal("VirtualMachine"))
+			Expect(dp.Spec.DeploymentPolicies).To(HaveLen(1))
+			Expect(dp.Spec.DeploymentPolicies[0].ComponentRef.Kind).To(Equal("XInstance"))
+			Expect(dp.Spec.DeploymentPolicies[0].ComponentRef.Name).To(Equal(resourceName))
+			Expect(dp.Spec.DeploymentPolicies[0].VirtualServiceConstraint).To(HaveLen(1))
+			Expect(dp.Spec.DeploymentPolicies[0].VirtualServiceConstraint[0].AnyOf[0].VirtualService.Spec.Raw).To(Equal([]byte(
+				`{"gpu":{"model":"L4"}}`,
+			)))
+
+			By("verifying generated service manfiest for xinstance")
+			deployMap := createSampleDeployMapVmEnvWithMultipleAlternatives(resourceName, namespace)
+			reconciler := &AtlasReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
+			}
+
+			vmManifests, err := reconciler.generateVMManifests(resourceName, deployMap)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(vmManifests)).To(Equal(1))
+			Expect(vmManifests[0].ComponentRef.Kind).To(Equal("XInstance"))
+			Expect(vmManifests[0].Manifest.Raw).To(Not(BeNil()))
+
+			manifest := map[string]any{}
+			err = json.Unmarshal(vmManifests[0].Manifest.Raw, &manifest)
+			Expect(err).NotTo(HaveOccurred())
+
+			spec, found, err := unstructured.NestedMap(manifest, "spec")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(spec).To(HaveKeyWithValue("flavor", Equal("12vCPU-49GB-1xL4-24GB")))
+			Expect(vmManifests[0].ProviderRef.Platform).To(Equal("aws"))
+			Expect(vmManifests[0].ProviderRef.Region).To(Equal("us-east-1"))
+			Expect(vmManifests[0].ProviderRef.Zone).To(Equal("us-east-1a"))
+		})
 	})
 })
 
 func createSampleAtlasResource(resourceName, namespace string) *cv1a1.Atlas {
 	return &cv1a1.Atlas{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      resourceName + "-atlas",
+			Name:      resourceName,
 			Namespace: namespace,
 			Labels: map[string]string{
 				"skycluster.io/app-id": resourceName,
@@ -605,12 +680,12 @@ func createSampleAtlasResourceWithMultipleAlternatives(resourceName, namespace s
 				},
 				DeploymentPlanResourceVersion: "1.0.0",
 			},
-			DeployMap: createSampleDeployMapWithMultipleAlternatives(resourceName),
+			DeployMap: createSampleDeployMapK8SEnvWithMultipleAlternatives(resourceName),
 		},
 	}
 }
 
-func createSampleDeployMapWithMultipleAlternatives(resourceName string) cv1a1.DeployMap {
+func createSampleDeployMapK8SEnvWithMultipleAlternatives(resourceName string) cv1a1.DeployMap {
 	return cv1a1.DeployMap{
 		Component: []hv1a1.SkyService{
 			{
@@ -694,6 +769,78 @@ func createSampleDeployMapWithMultipleAlternatives(resourceName string) cv1a1.De
 					Type:        "cloud",
 					Zone:        "us-east1-a",
 				},
+			},
+		},
+	}
+}
+
+func createSampleDeployMapVmEnvWithMultipleAlternatives(resourceName, namespace string) cv1a1.DeployMap {
+	return cv1a1.DeployMap{
+		Component: []hv1a1.SkyService{
+			{
+				ComponentRef: hv1a1.ComponentRef{
+					APIVersion: "skycluster.io/v1alpha1",
+					Kind:       "XInstance",
+					Name:       resourceName,
+					Namespace:  namespace,
+				},
+				Manifest: &runtime.RawExtension{Raw: []byte(`
+					{
+						"services": [
+							[
+								{
+									"apiVersion": "skycluster.io/v1alpha1",
+									"count": "1",
+									"kind": "ComputeProfile",
+									"name": "12vCPU-49GB-1xL4-24GB",
+									"price": 0.4893
+								}
+							]
+						]
+					}
+				`)},
+				ProviderRef: hv1a1.ProviderRefSpec{
+					Name:        "aws-us-east-1a",
+					Platform:    "aws",
+					Region:      "us-east-1",
+					RegionAlias: "us-east",
+					Type:        "cloud",
+					Zone:        "us-east-1a",
+				},
+			},
+		},
+	}
+}
+
+func createBasicXInstance(resourceName, namespace string, preferSpot bool) *svcv1a1.XInstance {
+	return &svcv1a1.XInstance{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+		},
+		Spec: svcv1a1.XInstanceSpec{
+			ApplicationID: resourceName,
+			Flavor: hv1a1.ComputeFlavor{
+				// VCPUs: "2",
+				// RAM: "4GB",
+				GPU: hv1a1.GPU{
+					Model: "L4",
+					// Unit: "1",
+					// Memory: "32GB",
+				},
+			},
+			Image:      "ubuntu-24.04",
+			PreferSpot: preferSpot,
+			PublicKey:  "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQC8...user@example.com",
+			PublicIP:   false,
+			UserData:   "echo 'Hello, World!' > /tmp/hello.txt",
+			SecurityGroups: &svcv1a1.SecurityGroups{
+				TCPPorts: []svcv1a1.PortRange{
+					{FromPort: 22, ToPort: 22, Protocol: "tcp"},
+				},
+			},
+			RootVolumes: []svcv1a1.RootVolume{
+				{Size: "20", Type: "gp2"},
 			},
 		},
 	}
