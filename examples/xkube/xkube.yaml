@@ -21,16 +21,18 @@ spec:
   # Node groups
   nodeGroups:
     - instanceTypes:
-        - vcpus: "4"
-          ram: 16GB
-    - instanceTypes:
-        - vcpus: "4"
-          ram: 16GB
-          gpu:
+        - gpu:
             model: L4
+          # vcpus: "4"
+          # ram: 16GB
+    - instanceTypes:
+        # - vcpus: "4"
+        #   ram: 16GB
+        - gpu:
+            model: A10G
       publicAccess: false
       autoScaling:
-        minSize: 2
+        minSize: 1
         maxSize: 5
 
   # Principal performing control plane actions

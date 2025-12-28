@@ -5,6 +5,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+// VirtualServiceSelector is a selector for a virtual service
+// it is used to select a virtual service from a list of virtual services
+type VirtualServiceSelector struct {
+	Name       string                `json:"name,omitempty"`
+	Spec       *runtime.RawExtension `json:"spec,omitempty"`
+	ApiVersion string                `json:"apiVersion,omitempty"`
+	Kind       string                `json:"kind,omitempty"`
+	Count      string                `json:"count,omitempty"`
+	Price      float64               `json:"price,omitempty"`
+}
+
 // VirtualService represents a virtual service offered by a cloud provider
 // an example would be an ComputeProfile offered as a virtual machine
 // instance types.

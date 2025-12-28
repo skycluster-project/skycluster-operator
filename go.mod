@@ -3,6 +3,7 @@ module github.com/skycluster-project/skycluster-operator
 go 1.24.6
 
 require (
+	github.com/dghubble/ipnets v1.0.0
 	github.com/go-logr/logr v1.4.3
 	github.com/golang/protobuf v1.5.4
 	github.com/onsi/ginkgo/v2 v2.22.0

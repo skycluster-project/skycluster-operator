@@ -5,8 +5,8 @@ metadata:
 spec:
   applicationId: aws-us-east
   flavor: 
-    vcpus: "4"
-    ram: 16GB
+    # vcpus: "4"
+    # ram: 16GB
     gpu:
       model: L4
       # unit: "1"
