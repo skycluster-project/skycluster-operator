@@ -688,7 +688,7 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 		return nil, errors.Wrap(err, "Error unmarshalling XKube spec.")
 	}
 
-	svcsMap := map[string][]hv1a1.VirtualServiceSelector{}
+	svcsMap := map[string][][]hv1a1.VirtualServiceSelector{}
 	err := json.Unmarshal(manifest.Raw, &svcsMap)
 	if err != nil {
 		return nil, errors.Wrap(err, "Error unmarshalling virtual services.")
@@ -714,34 +714,36 @@ func (r *AtlasReconciler) buildK8SSpec(appId string, manifest *runtime.RawExtens
 		}(),
 		"nodeGroups": func() []map[string]any {
 			fields := make([]map[string]any, 0)
-			its := make([]string, 0)
-			count := 1
-			for _, svc := range svcsMap["services"] {
-				if svc.Kind != "ComputeProfile" {
-					continue
-				}
-				its = append(its, svc.Name)
-				if svc.Count != "" {
-					thisCount, err := strconv.Atoi(svc.Count)
-					if err != nil {
-						continue // skip if count is not a number
+			for _, altServiceSets := range svcsMap["services"] {
+				its := make([]string, 0)
+				count := 1
+				for _, svc := range altServiceSets {
+					if svc.Kind != "ComputeProfile" {
+						continue // skip if not a ComputeProfile
 					}
-					if thisCount > count {
-						count = thisCount
+					its = append(its, svc.Name)
+					if svc.Count != "" {
+						thisCount, err := strconv.Atoi(svc.Count)
+						if err != nil {
+							continue // skip if count is not a number
+						}
+						if thisCount > count {
+							count = thisCount
+						}
 					}
 				}
+				f := make(map[string]any)
+				f["instanceTypes"] = its
+				f["nodeCount"] = count
+				f["publicAccess"] = false
+				// set auto scalling to true by default
+				f["autoScaling"] = map[string]any{
+					"enabled": true,
+					"minSize": 1,
+					"maxSize": 10,
+				}
+				fields = append(fields, f)
 			}
-			f := make(map[string]any)
-			f["instanceTypes"] = its
-			f["nodeCount"] = count
-			f["publicAccess"] = false
-			// set auto scalling to true by default
-			f["autoScaling"] = map[string]any{
-				"enabled": true,
-				"minSize": 1,
-				"maxSize": 10,
-			} // max size is 10 nodes to prevent charging too much
-			fields = append(fields, f)
 			return fields
 		}(),
 

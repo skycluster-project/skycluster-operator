@@ -168,16 +168,20 @@ func (r *ILPTaskReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 							if len(services) == 0 {
 								continue
 							}
-							// Use the cheapest service (first one after sorting by price)
-							// selectedService := services[0]
-							topNServices := min(len(services), 5)
-							r.Logger.Info("Selected services for component", "component", componentName, "total", len(services))
 
 							// Find the existing component and update its manifest
 							for i := range deployPlan.Component {
 								if deployPlan.Component[i].ComponentRef.Name == componentName {
-									// set the first 5 services as the manifest
-									manifest := map[string]any{"services": services[:topNServices]}
+
+									manifest := make(map[string][]any)
+
+									// supporting alternative virtual service sets
+									for _, service := range services {
+										// set the first 5 services as the manifest for each alternative
+										topNServices := min(len(service), 5)
+										manifest["services"] = append(manifest["services"], service[:topNServices])
+									}
+
 									manifestBytes, err := json.Marshal(manifest)
 									if err != nil {
 										r.Logger.Error(err, "failed to marshal compute profile manifest", "component", componentName)
