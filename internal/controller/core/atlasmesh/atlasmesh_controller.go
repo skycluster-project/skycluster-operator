@@ -791,8 +791,8 @@ func derivePriorities(cmpnts []hv1a1.SkyService, edges []cv1a1.DeployMapEdge) ma
 	// For a match to be considered, all previous labels must match as well.
 
 	// The plan for selecting target deployment then is as follows:
-	// For each src deployment -> target deployment as selected by deployment plan
-	// We add same labels to target deployment and DestinationRule for target service endpoint
+	// For each (src deployment -> target deployment) as selected by deployment plan
+	// we add same labels to target deployment and DestinationRule for target service endpoint
 	// (in source deployment cluster)
 
 	// For a backup target deployment (if any, typically same zone/region as source deployment):
