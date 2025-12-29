@@ -565,6 +565,9 @@ func createSamplePoliciesForK8sExecEnvXNodeGroup(
 	return dpPolicy, dfPolicy
 }
 
+// In fact, the combination of XNodeGroup and Deployment is not common in practice.
+// But for the sake of testing, we create this function. The deployment policy
+// typically contains only XNodeGroup (for XKube object) or Deployment (for application deployment).
 func createSamplePoliciesForK8sExecEnvXNodeGroupWithMultipleAlternatives(
 	resourceName,
 	namespace string) (*pv1a1.DeploymentPolicy, *pv1a1.DataflowPolicy) {

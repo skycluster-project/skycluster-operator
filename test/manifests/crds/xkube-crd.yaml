@@ -1,0 +1,155 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: xkubes.skycluster.io
+spec:
+  group: skycluster.io
+  scope: Cluster
+  names:
+    kind: XKube
+    plural: xkubes
+    singular: xkube
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          description: XKube is the Schema for the XKube API.
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              description: XKubeSpec defines the desired state of XKube.
+              properties:
+                applicationId:
+                  type: string
+                controlPlane:
+                  type: object
+                  properties:
+                    autoScaling:
+                      type: object
+                      properties:
+                        enabled:
+                          type: boolean
+                        maxSize:
+                          type: number
+                        minSize:
+                          type: number
+                    deviceNodeName:
+                      type: string
+                    highAvailability:
+                      type: boolean
+                    instanceType:
+                      type: string
+                nodeCidr:
+                  type: string
+                nodeGroups:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      autoScaling:
+                        type: object
+                        properties:
+                          enabled:
+                            type: boolean
+                          maxSize:
+                            type: number
+                          minSize:
+                            type: number
+                      instanceType:
+                        type: string
+                      instanceTypes:
+                        type: array
+                        items:
+                          type: string
+                      nodeCount:
+                        type: number
+                      publicAccess:
+                        type: boolean
+                      type:
+                        type: string
+                nodes:
+                  type: array
+                  items:
+                    type: string
+                podCidr:
+                  type: object
+                  properties:
+                    cidr:
+                      type: string
+                    private:
+                      type: string
+                    public:
+                      type: string
+                principal:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                providerRef:
+                  type: object
+                  properties:
+                    platform:
+                      type: string
+                    region:
+                      type: string
+                    zones:
+                      type: object
+                      properties:
+                        primary:
+                          type: string
+                        secondary:
+                          type: string
+                serviceCidr:
+                  type: string
+            status:
+              type: object
+              description: XKubeStatus defines the observed state of XKube.
+              properties:
+                agents:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      privateIp:
+                        type: string
+                      publicAccess:
+                        type: boolean
+                      publicIp:
+                        type: string
+                clusterName:
+                  type: string
+                clusterSecretName:
+                  type: string
+                controllers:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      privateIp:
+                        type: string
+                      publicIp:
+                        type: string
+                externalClusterName:
+                  type: string
+                log:
+                  type: string
+                podCidr:
+                  type: string
+                providerConfigs:
+                  type: object
+                  properties:
+                    helm:
+                      type: string
+                    k8s:
+                      type: string
+                serviceCidr:
+                  type: string

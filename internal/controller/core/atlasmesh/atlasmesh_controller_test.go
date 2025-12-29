@@ -18,66 +18,436 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/types"
-
+	"github.com/samber/lo"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	corev1alpha1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	cv1a1 "github.com/skycluster-project/skycluster-operator/api/core/v1alpha1"
+	hv1a1 "github.com/skycluster-project/skycluster-operator/api/helper/v1alpha1"
+	pkglog "github.com/skycluster-project/skycluster-operator/pkg/v1alpha1/log"
 )
 
 var _ = Describe("AtlasMesh Controller", func() {
 	Context("When reconciling a resource", func() {
 		const resourceName = "test-resource"
+		const namespace = "my-app"
+		const appId = "my-app"
 
 		ctx := context.Background()
 
 		typeNamespacedName := types.NamespacedName{
 			Name:      resourceName,
-			Namespace: "default", // TODO(user):Modify as needed
+			Namespace: namespace,
 		}
-		atlasmesh := &corev1alpha1.AtlasMesh{}
+		var atlasmesh *cv1a1.AtlasMesh
 
-		BeforeEach(func() {
-			By("creating the custom resource for the Kind AtlasMesh")
-			err := k8sClient.Get(ctx, typeNamespacedName, atlasmesh)
-			if err != nil && errors.IsNotFound(err) {
-				resource := &corev1alpha1.AtlasMesh{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      resourceName,
-						Namespace: "default",
-					},
-					// TODO(user): Specify other spec details if needed.
-				}
-				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
+		BeforeEach(func() {})
+
+		AfterEach(func() {
+			By("Cleanup the specific resource instance AtlasMesh")
+			if err := k8sClient.Get(ctx, typeNamespacedName, atlasmesh); err == nil {
+				Expect(k8sClient.Delete(ctx, atlasmesh)).To(Succeed())
 			}
 		})
 
-		AfterEach(func() {
-			// TODO(user): Cleanup logic after each test, like removing the resource instance.
-			resource := &corev1alpha1.AtlasMesh{}
-			err := k8sClient.Get(ctx, typeNamespacedName, resource)
+		It("should successfully fetch provider profiles and match them with XKube and XSetup objects and return the provider config name map", func() {
+			atlasmesh = createSampleAtlasMeshResource(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			By("Reconciling the created resource")
+			atlasmesh = createSampleAtlasMeshResource(resourceName, namespace)
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+		})
+
+		It("should successfully generate namespace manifests", func() {
+			By("creating sample app manifests")
+			namespace := "my-app"
+			createSampleAppManifest(resourceName, namespace)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithDeployment(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			By("Reconciling the created resource")
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			nsManifests, err := reconciler.generateNamespaceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(nsManifests).NotTo(BeNil())
+			Expect(len(nsManifests)).To(Equal(1))
+			Expect(nsManifests[0].Manifest.Raw).NotTo(BeNil())
+
+			generatedNsManifest := map[string]any{}
+			err = json.Unmarshal(nsManifests[0].Manifest.Raw, &generatedNsManifest)
 			Expect(err).NotTo(HaveOccurred())
 
-			By("Cleanup the specific resource instance AtlasMesh")
-			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())
-		})
-		// It("should successfully reconcile the resource", func() {
-		// 	By("Reconciling the created resource")
-		// 	controllerReconciler := &AtlasMeshReconciler{
-		// 		Client: k8sClient,
-		// 		Scheme: k8sClient.Scheme(),
-		// 	}
+			v, found, err := unstructured.NestedString(generatedNsManifest, "kind")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(v).To(Equal("Namespace"))
 
-		// 	_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
-		// 		NamespacedName: typeNamespacedName,
-		// 	})
-		// 	Expect(err).NotTo(HaveOccurred())
-		// 	// TODO(user): Add more specific assertions depending on your controller's reconciliation logic.
-		// 	// Example: If you expect a certain status condition after reconciliation, verify it here.
-		// })
+			v, found, err = unstructured.NestedString(generatedNsManifest, "metadata", "name")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(v).To(Equal(namespace))
+
+			// cleanup
+			cleanupSampleAppManifest(namespace)
+		})
+
+		It("should successfully generate configmap manifests", func() {
+			By("creating sample app manifests")
+			namespace := "my-app"
+			createSampleAppManifest(resourceName, namespace)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithDeployment(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			By("Reconciling the created resource")
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			appId := resourceName
+			cdManifests, err := reconciler.generateConfigDataManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cdManifests).NotTo(BeNil())
+			Expect(len(cdManifests)).To(Equal(1))
+
+			generatedCdManifest := map[string]any{}
+			err = json.Unmarshal(cdManifests[0].Manifest.Raw, &generatedCdManifest)
+			Expect(err).NotTo(HaveOccurred())
+
+			v, found, err := unstructured.NestedString(generatedCdManifest, "kind")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(v).To(Equal("ConfigMap"))
+
+			v1, found, err := unstructured.NestedMap(generatedCdManifest, "data")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(lo.Keys(v1)).To(ConsistOf("config"))
+
+			// cleanup
+			cleanupSampleAppManifest(namespace)
+		})
 	})
 })
+
+func createSampleAppManifest(appId, namespace string) {
+	cm := createSampleConfigMap(appId, namespace, "configmap1")
+	Expect(k8sClient.Create(ctx, cm)).To(Succeed())
+
+	deployment := createSampleDeployment(appId, "deployment1", namespace)
+	Expect(k8sClient.Create(ctx, deployment)).To(Succeed())
+}
+
+func cleanupSampleAppManifest(namespace string) {
+	Expect(k8sClient.Delete(ctx, &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Name: "configmap1", Namespace: namespace}})).To(Succeed())
+
+	Expect(k8sClient.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "deployment1", Namespace: namespace}})).To(Succeed())
+}
+
+func createSampleConfigMap(appId, namespace, name string) *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "configmap1",
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    appId,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Data: map[string]string{
+			"config": "some-config",
+		},
+	}
+}
+
+func createSampleNamespace(appId string) *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: appId,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    appId,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+	}
+}
+
+func createSampleDeployment(appId, deployName, namespace string) *appsv1.Deployment {
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    appId,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: appsv1.DeploymentSpec{
+			Replicas: ptr.To(int32(1)),
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"app": "sample-deployment",
+				},
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app": "sample-deployment",
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "sample-container",
+							Image: "sample-image",
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("100m"),
+									corev1.ResourceMemory: resource.MustParse("128Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    resource.MustParse("500m"),
+									corev1.ResourceMemory: resource.MustParse("256Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func createSampleAtlasMeshResource(resourceName, namespace string) *cv1a1.AtlasMesh {
+	return &cv1a1.AtlasMesh{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id": resourceName,
+			},
+		},
+		Spec: cv1a1.AtlasMeshSpec{
+			Approve: false,
+			DataflowPolicyRef: cv1a1.DataflowPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DataflowResourceVersion: "1.0.0",
+			},
+			DeploymentPolicyRef: cv1a1.DeploymentPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DeploymentPlanResourceVersion: "1.0.0",
+			},
+			DeployMap: createXInstanceDeployMap(resourceName),
+		},
+	}
+}
+
+func createSampleAtlasMeshResourceWithDeployment(resourceName, namespace string) *cv1a1.AtlasMesh {
+	return &cv1a1.AtlasMesh{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id": resourceName,
+			},
+		},
+		Spec: cv1a1.AtlasMeshSpec{
+			Approve: false,
+			DataflowPolicyRef: cv1a1.DataflowPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DataflowResourceVersion: "1.0.0",
+			},
+			DeploymentPolicyRef: cv1a1.DeploymentPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DeploymentPlanResourceVersion: "1.0.0",
+			},
+			DeployMap: createDeploymentDeployMap(namespace),
+		},
+	}
+}
+
+func createSampleAtlasMeshResourceWithXNodeGroup(resourceName, namespace string) *cv1a1.AtlasMesh {
+	return &cv1a1.AtlasMesh{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      resourceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id": resourceName,
+			},
+		},
+		Spec: cv1a1.AtlasMeshSpec{
+			Approve: false,
+			DataflowPolicyRef: cv1a1.DataflowPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DataflowResourceVersion: "1.0.0",
+			},
+			DeploymentPolicyRef: cv1a1.DeploymentPolicyRef{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: resourceName,
+				},
+				DeploymentPlanResourceVersion: "1.0.0",
+			},
+			DeployMap: createXKubeDeployMap(resourceName),
+		},
+	}
+}
+
+func createXInstanceDeployMap(resourceName string) cv1a1.DeployMap {
+	return cv1a1.DeployMap{
+		Component: []hv1a1.SkyService{
+			{
+				ComponentRef: hv1a1.ComponentRef{
+					APIVersion: "skycluster.io/v1alpha1",
+					Kind:       "XInstance",
+					Name:       resourceName,
+				},
+				Manifest: &runtime.RawExtension{Raw: []byte(`
+					{
+						"services": [
+							[
+								{
+									"apiVersion": "skycluster.io/v1alpha1",
+									"count": "1",
+									"kind": "ComputeProfile",
+									"name": "12vCPU-49GB-1xL4-24GB",
+									"price": 0.4893
+								}
+							]
+						]
+					}
+				`)},
+				ProviderRef: hv1a1.ProviderRefSpec{
+					Name:        "aws-us-east-1a",
+					Platform:    "aws",
+					Region:      "us-east-1",
+					RegionAlias: "us-east",
+					Type:        "cloud",
+					Zone:        "us-east-1a",
+				},
+			},
+		},
+	}
+}
+
+func createXKubeDeployMap(resourceName string) cv1a1.DeployMap {
+	return cv1a1.DeployMap{
+		Component: []hv1a1.SkyService{
+			{
+				ComponentRef: hv1a1.ComponentRef{
+					APIVersion: "skycluster.io/v1alpha1",
+					Kind:       "XNodeGroup",
+					Name:       resourceName,
+				},
+				Manifest: &runtime.RawExtension{Raw: []byte(`
+					{
+						"services": [
+							[
+								{
+									"apiVersion": "skycluster.io/v1alpha1",
+									"count": "1",
+									"kind": "ComputeProfile",
+									"name": "12vCPU-49GB-1xL4-24GB",
+									"price": 0.4893
+								}
+							]
+						]
+					}
+				`)},
+				ProviderRef: hv1a1.ProviderRefSpec{
+					Name:        "aws-us-east-1a",
+					Platform:    "aws",
+					Region:      "us-east-1",
+					RegionAlias: "us-east",
+					Type:        "cloud",
+					Zone:        "us-east-1a",
+				},
+			},
+		},
+	}
+}
+
+func createDeploymentDeployMap(ns string) cv1a1.DeployMap {
+	return cv1a1.DeployMap{
+		Component: []hv1a1.SkyService{
+			{
+				ComponentRef: hv1a1.ComponentRef{
+					APIVersion: "apps/v1",
+					Kind:       "Deployment",
+					Name:       "deployment1",
+					Namespace:  ns,
+				},
+				Manifest: &runtime.RawExtension{Raw: []byte(`
+					{
+						"services": [
+							[
+								{
+									"apiVersion": "skycluster.io/v1alpha1",
+									"count": "1",
+									"kind": "ComputeProfile",
+									"name": "12vCPU-49GB-1xL4-24GB",
+									"price": 0.4893
+								}
+							]
+						]
+					}
+				`)},
+				ProviderRef: hv1a1.ProviderRefSpec{
+					Name:        "aws-us-east-1a",
+					Platform:    "aws",
+					Region:      "us-east-1",
+					RegionAlias: "us-east",
+					Type:        "cloud",
+					Zone:        "us-east-1a",
+				},
+			},
+		},
+	}
+}

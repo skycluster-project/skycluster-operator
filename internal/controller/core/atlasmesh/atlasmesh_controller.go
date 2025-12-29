@@ -88,7 +88,7 @@ func (r *AtlasMeshReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	provCfgNameMap, err := r.getProviderConfigNameMap(atlasmesh)
+	provCfgNameMap, err := r.getProviderConfigNameMap()
 	if err != nil {
 		return ctrl.Result{}, errors.Wrap(err, "failed to get provider config name map")
 	}
@@ -276,7 +276,7 @@ func equalManifests(a, b interface{}) bool {
 // This is the name of corresponding XKube "Object" provider config (the remote k8s cluster)
 // it returns a map of provider profile name to provider config name
 // the local cluster is mapped to "local" key
-func (r *AtlasMeshReconciler) getProviderConfigNameMap(atlasmesh cv1a1.AtlasMesh) (map[string]string, error) {
+func (r *AtlasMeshReconciler) getProviderConfigNameMap() (map[string]string, error) {
 	provProfiles, err := r.fetchProviderProfilesMap()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to fetch provider profiles")
@@ -294,7 +294,7 @@ func (r *AtlasMeshReconciler) getProviderConfigNameMap(atlasmesh cv1a1.AtlasMesh
 		},
 	)
 	if err := r.List(context.TODO(), cfgPerProvList); err != nil {
-		return nil, errors.Wrap(err, "failed to list XProvider objects")
+		return nil, errors.Wrap(err, "failed to list XKube objects")
 	}
 
 	for pName, pp := range provProfiles { // for each enabled provider profile
@@ -468,7 +468,6 @@ func (r *AtlasMeshReconciler) generateConfigDataManifests(ns string, appId strin
 }
 
 func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string, cmpnts []hv1a1.SkyService, provCfgNameMap map[string]string) ([]*hv1a1.SkyService, error) {
-	// manifests := make([]hv1a1.SkyService, 0)
 	manifests := make([]*hv1a1.SkyService, 0)
 	selectedNs := make([]string, 0)
 	selectedProvNames := make([]string, 0)
@@ -489,10 +488,10 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 			// collect all providers used in the deployment plan
 			selectedProvNames = append(selectedProvNames, deployItem.ProviderRef.Name)
 
-			if deploy.Namespace != "" { // capture namespace from the deployment if specified
+			if deploy.Namespace != "" && deploy.Namespace != "default" { // capture namespace from the deployment if specified
 				selectedNs = append(selectedNs, deploy.Namespace)
 			} else {
-				selectedNs = append(selectedNs, ns) // default
+				selectedNs = append(selectedNs, ns) // default as the namespace of the atlasmesh
 			}
 		}
 	}
@@ -501,7 +500,8 @@ func (r *AtlasMeshReconciler) generateNamespaceManifests(ns string, appId string
 	// selectedProvNames = append(selectedProvNames, "local") // Do we need this?
 
 	// now for each namespace, we create a namespace manifest
-	// along with its labels
+	// along with its labels, the namespaces must exist already in the local cluster
+	// i.e. the user must have applied the app manifests to the local cluster
 	nsList := &corev1.NamespaceList{}
 	if err := r.List(context.TODO(), nsList, client.MatchingLabels{
 		"skycluster.io/app-scope": "distributed",
