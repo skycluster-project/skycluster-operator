@@ -80,8 +80,7 @@ var _ = Describe("AtlasMesh Controller", func() {
 
 		It("should successfully generate namespace manifests", func() {
 			By("creating sample app manifests")
-			namespace := "my-app"
-			createSampleAppManifest(resourceName, namespace)
+			createSampleAppManifest(appId, namespace)
 
 			By("creating sample atlas mesh resource with deployment")
 			atlasmesh = createSampleAtlasMeshResourceWithDeployment(resourceName, namespace)
@@ -124,8 +123,7 @@ var _ = Describe("AtlasMesh Controller", func() {
 
 		It("should successfully generate configmap manifests", func() {
 			By("creating sample app manifests")
-			namespace := "my-app"
-			createSampleAppManifest(resourceName, namespace)
+			createSampleAppManifest(appId, namespace)
 
 			By("creating sample atlas mesh resource with deployment")
 			atlasmesh = createSampleAtlasMeshResourceWithDeployment(resourceName, namespace)
@@ -142,7 +140,6 @@ var _ = Describe("AtlasMesh Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
 
-			appId := resourceName
 			cdManifests, err := reconciler.generateConfigDataManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cdManifests).NotTo(BeNil())
@@ -165,11 +162,53 @@ var _ = Describe("AtlasMesh Controller", func() {
 			// cleanup
 			cleanupSampleAppManifest(namespace)
 		})
+
+		It("should successfully generate deployment manifests", func() {
+			By("creating sample app manifests")
+			createSampleAppManifest(appId, namespace)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithDeployment(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			By("Reconciling the created resource")
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			depManifests, err := reconciler.generateDeployManifests(atlasmesh.Namespace, atlasmesh.Spec.DeployMap, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(depManifests).NotTo(BeNil())
+			Expect(len(depManifests)).To(Equal(1))
+
+			generatedCdManifest := map[string]any{}
+			err = json.Unmarshal(depManifests[0].Manifest.Raw, &generatedCdManifest)
+			Expect(err).NotTo(HaveOccurred())
+
+			v, found, err := unstructured.NestedString(generatedCdManifest, "kind")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(v).To(Equal("Deployment"))
+
+			v1, found, err := unstructured.NestedString(generatedCdManifest, "metadata", "name")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(found).To(BeTrue())
+			Expect(v1).To(Equal("deployment1"))
+
+			// cleanup
+			cleanupSampleAppManifest(namespace)
+		})
 	})
 })
 
 func createSampleAppManifest(appId, namespace string) {
-	cm := createSampleConfigMap(appId, namespace, "configmap1")
+	cm := createSampleConfigMap(appId, namespace)
 	Expect(k8sClient.Create(ctx, cm)).To(Succeed())
 
 	deployment := createSampleDeployment(appId, "deployment1", namespace)
@@ -182,7 +221,7 @@ func cleanupSampleAppManifest(namespace string) {
 	Expect(k8sClient.Delete(ctx, &appsv1.Deployment{ObjectMeta: metav1.ObjectMeta{Name: "deployment1", Namespace: namespace}})).To(Succeed())
 }
 
-func createSampleConfigMap(appId, namespace, name string) *corev1.ConfigMap {
+func createSampleConfigMap(appId, namespace string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "configmap1",
@@ -449,5 +488,6 @@ func createDeploymentDeployMap(ns string) cv1a1.DeployMap {
 				},
 			},
 		},
+		Edges: []cv1a1.DeployMapEdge{},
 	}
 }

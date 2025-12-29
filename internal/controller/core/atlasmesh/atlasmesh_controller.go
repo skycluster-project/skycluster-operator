@@ -650,7 +650,11 @@ func (r *AtlasMeshReconciler) generateDeployManifests(ns string, dpMap cv1a1.Dep
 
 			deployItemUniqName := deployItem.ComponentRef.Name + "-" + deployItem.ProviderRef.Name
 			// pod labels get the all labels (its own + added by others for priority/failover)
-			allLabels := labels[deployItemUniqName].allLabels
+			allLabels := map[string]string{}
+			if _, ok := labels[deployItemUniqName]; ok {
+				allLabels = labels[deployItemUniqName].allLabels
+			}
+			// allLabels := lo.Ternary(labelOk, labels[deployItemUniqName].allLabels, map[string]string{})
 
 			// sourcelabels key is the destination deployment for the current deployment
 			// and the values are labels added to the destination
