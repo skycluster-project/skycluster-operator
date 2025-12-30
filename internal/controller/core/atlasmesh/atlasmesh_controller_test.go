@@ -19,10 +19,12 @@ package core
 import (
 	"context"
 	"encoding/json"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	istioClient "istio.io/client-go/pkg/apis/networking/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -60,6 +62,24 @@ var _ = Describe("AtlasMesh Controller", func() {
 			By("Cleanup the specific resource instance AtlasMesh")
 			if err := k8sClient.Get(ctx, typeNamespacedName, atlasmesh); err == nil {
 				Expect(k8sClient.Delete(ctx, atlasmesh)).To(Succeed())
+			}
+
+			By("Cleanup the deployments")
+			depList := &appsv1.DeploymentList{}
+			Expect(k8sClient.List(ctx, depList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": appId,
+			})).To(Succeed())
+			for _, dep := range depList.Items {
+				Expect(k8sClient.Delete(ctx, &dep)).To(Succeed())
+			}
+
+			By("Cleanup the services")
+			svcList := &corev1.ServiceList{}
+			Expect(k8sClient.List(ctx, svcList, client.InNamespace(namespace), client.MatchingLabels{
+				"skycluster.io/app-id": appId,
+			})).To(Succeed())
+			for _, svc := range svcList.Items {
+				Expect(k8sClient.Delete(ctx, &svc)).To(Succeed())
 			}
 		})
 
@@ -270,6 +290,200 @@ var _ = Describe("AtlasMesh Controller", func() {
 			// cleanup
 			cleanupSampleAppManifest(appId, namespace)
 		})
+
+		It("should successfully generate deployment manifests for multiple deployments", func() {
+			By("creating sample app manifests")
+			createSampleAppManifestMultipleDeployments(appId, namespace)
+
+			// A ─┐
+			//    ├─> X (primary)
+			// B ─┘
+			//    	└─> X (in GCP) (backup)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithMultipleDeployments(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			depManifests, err := reconciler.generateDeployManifests(atlasmesh.Namespace, atlasmesh.Spec.DeployMap, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(depManifests).NotTo(BeNil())
+			Expect(len(depManifests)).To(Equal(4))
+
+			depA := "dep-a-aws-us-east-1a"
+			depB := "dep-b-aws-us-east-1a"
+			depX := "dep-x-aws-us-east-1a"
+			depXBackup := "dep-x-gcp-us-east1-a"
+			for _, skyDeployment := range depManifests {
+
+				By("primary target must contain labels corresponding to the source-primary target pair as well as backup labels")
+				if strings.Contains(skyDeployment.Name, "dep-x") && skyDeployment.ProviderRef.Name == "aws-us-east-1a" {
+					dep := &appsv1.Deployment{}
+					err = json.Unmarshal(skyDeployment.Manifest.Raw, dep)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depA+"-"+depX,
+						utils.ShortenLabelKey(depA+"-"+depX),
+					))
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depA+"-"+depXBackup,
+						utils.ShortenLabelKey(depA+"-"+depXBackup)+"-backup",
+					))
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depB+"-"+depX,
+						utils.ShortenLabelKey(depB+"-"+depX),
+					))
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depB+"-"+depXBackup,
+						utils.ShortenLabelKey(depB+"-"+depXBackup)+"-backup",
+					))
+				}
+
+				By("backup target must contain labels corresponding to the source-primary target pair, and not the backup target itself")
+				if strings.Contains(skyDeployment.Name, "dep-x") && skyDeployment.ProviderRef.Name == "gcp-us-east1-a" {
+					dep := &appsv1.Deployment{}
+					err = json.Unmarshal(skyDeployment.Manifest.Raw, dep)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depA+"-"+depX,
+						utils.ShortenLabelKey(depA+"-"+depX),
+					))
+					Expect(dep.Spec.Template.ObjectMeta.Labels).To(HaveKeyWithValue(
+						"failover/"+depB+"-"+depX,
+						utils.ShortenLabelKey(depB+"-"+depX),
+					))
+				}
+			}
+
+			// cleanup
+			cleanupSampleAppManifest(appId, namespace)
+		})
+
+		It("should successfully generate service manifests for multiple deployments", func() {
+			By("creating sample app manifests")
+			createSampleAppManifestMultipleDeployments(appId, namespace)
+
+			// A ─┐
+			//    ├─> X (primary)
+			// B ─┘
+			//    	└─> X (in GCP) (backup)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithMultipleDeployments(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			svcManifests, err := reconciler.generateServiceManifests(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap.Component, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svcManifests).NotTo(BeNil())
+
+			By("must generate 2 service manifests, dep-x are deployed in both AWS and GCP")
+			Expect(len(svcManifests)).To(Equal(2))
+
+			// cleanup
+			cleanupSampleAppManifest(appId, namespace)
+		})
+
+		It("should successfully generate istio configuration manifests for multiple deployments", func() {
+			By("creating sample app manifests")
+			createSampleAppManifestMultipleDeployments(appId, namespace)
+
+			// A ─┐
+			//    ├─> X (primary)
+			// B ─┘
+			//    	└─> X (in GCP) (backup)
+
+			By("creating sample atlas mesh resource with deployment")
+			atlasmesh = createSampleAtlasMeshResourceWithMultipleDeployments(resourceName, namespace)
+			Expect(k8sClient.Create(ctx, atlasmesh)).To(Succeed())
+
+			reconciler := &AtlasMeshReconciler{
+				Client: k8sClient,
+				Scheme: k8sClient.Scheme(),
+				Logger: zap.New(pkglog.CustomLogger()).WithName("[AtlasMesh]"),
+			}
+
+			provCfgNameMap, err := reconciler.getProviderConfigNameMap()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(lo.Keys(provCfgNameMap)).To(ConsistOf("local", "aws-us-east-1a", "gcp-us-east1-a"))
+
+			istioManifests, err := reconciler.generateIstioConfig(atlasmesh.Namespace, appId, atlasmesh.Spec.DeployMap, provCfgNameMap)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(istioManifests).NotTo(BeNil())
+
+			istioVirtualServices := lo.Filter(istioManifests, func(skyService *hv1a1.SkyService, _ int) bool {
+				var obj *istioClient.VirtualService
+				if err = json.Unmarshal(skyService.Manifest.Raw, &obj); err != nil {
+					return false
+				}
+				if obj.Kind != "VirtualService" {
+					return false
+				}
+				return true
+			})
+			istioDstRules := lo.Filter(istioManifests, func(skyService *hv1a1.SkyService, _ int) bool {
+				var obj *istioClient.DestinationRule
+				if err = json.Unmarshal(skyService.Manifest.Raw, &obj); err != nil {
+					return false
+				}
+				if obj.Kind != "DestinationRule" {
+					return false
+				}
+				return true
+			})
+			// Istio's virtual services are created in each source provider for each (source-target) pair
+			// we have dep-a -> dep-x and dep-b -> dep-x, both sources are deployed in AWS us-east-1a
+			// so we expect 1 virtual services for AWS only
+			Expect(len(istioVirtualServices)).To(Equal(1))
+			var obj *istioClient.VirtualService
+			Expect(json.Unmarshal(istioVirtualServices[0].Manifest.Raw, &obj)).NotTo(HaveOccurred())
+			Expect(obj.Spec.Hosts).To(ConsistOf("dep-x"))
+			Expect(obj.Spec.Http).To(HaveLen(2))             // 2 HTTPRoutes, one for each source deployment
+			Expect(obj.Spec.Http[0].Name).To(Equal("dep-a")) // 1 match, for dep-a
+			Expect(obj.Spec.Http[1].Name).To(Equal("dep-b")) // 1 match, for dep-a
+
+			// Same for istio destination rules,
+			Expect(len(istioDstRules)).To(Equal(1))
+			var obj1 *istioClient.DestinationRule
+			Expect(json.Unmarshal(istioDstRules[0].Manifest.Raw, &obj1)).NotTo(HaveOccurred())
+			Expect(obj1.Spec.Subsets).To(HaveLen(2))             // 2 subsets, one for each source deployment
+			Expect(obj1.Spec.Subsets[0].Name).To(Equal("dep-a")) // 1 match, for dep-a
+			Expect(obj1.Spec.Subsets[1].Name).To(Equal("dep-b")) // 1 match, for dep-a
+
+			depA := "dep-a-aws-us-east-1a"
+			depX := "dep-x-aws-us-east-1a"
+			depXBackup := "dep-x-gcp-us-east1-a"
+			failoverLabels := obj1.Spec.Subsets[0].TrafficPolicy.LoadBalancer.LocalityLbSetting.FailoverPriority
+			Expect(failoverLabels).NotTo(BeNil())
+			Expect(failoverLabels).To(ConsistOf(
+				"failover/"+depA+"-"+depX+"="+utils.ShortenLabelKey(depA+"-"+depX),
+				"failover/"+depA+"-"+depXBackup+"="+utils.ShortenLabelKey(depA+"-"+depXBackup)+"-backup",
+			))
+
+			// cleanup
+			cleanupSampleAppManifest(appId, namespace)
+		})
+
 	})
 })
 
@@ -288,6 +502,32 @@ func createSampleAppManifestMultipleDeployments(appId, namespace string) {
 	// Deployment X (primary target)
 	deploymentX := createSampleDeployment(appId, "dep-x", namespace)
 	Expect(k8sClient.Create(ctx, deploymentX)).To(Succeed())
+
+	svcX := createSampleService(appId, "dep-x", namespace)
+	Expect(k8sClient.Create(ctx, svcX)).To(Succeed())
+}
+
+func createSampleService(appId, serviceName, namespace string) *corev1.Service {
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				"skycluster.io/app-id":    appId,
+				"skycluster.io/app-scope": "distributed",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Selector: map[string]string{
+				"app": serviceName,
+			},
+			Ports: []corev1.ServicePort{
+				{
+					Port: 80,
+				},
+			},
+		},
+	}
 }
 
 func createSampleAppManifest(appId, namespace string) {
@@ -358,13 +598,13 @@ func createSampleDeployment(appId, deployName, namespace string) *appsv1.Deploym
 			Replicas: ptr.To(int32(1)),
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"app": "sample-deployment",
+					"app": deployName,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": "sample-deployment",
+						"app": deployName,
 					},
 				},
 				Spec: corev1.PodSpec{

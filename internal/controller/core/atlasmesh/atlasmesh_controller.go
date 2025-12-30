@@ -1022,7 +1022,7 @@ func (r *AtlasMeshReconciler) generateIstioConfig(ns string, appId string, dpMap
 		}
 
 		for _, svc := range svcList.Items {
-			if deploymentHasLabels(dep, svc.Spec.Selector) {
+			if deploymentHasLabels(dep, svc.Spec.Selector) { // found the matching service
 
 				// Making a virtual service and destination rule for this service
 				// in the source deployment's cluster (from.ProviderRef)
