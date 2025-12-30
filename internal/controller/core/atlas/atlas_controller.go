@@ -205,7 +205,7 @@ func (r *AtlasReconciler) createManifests(appId string, ns string, atlas *cv1a1.
 
 	case "VirtualMachine":
 		r.Logger.Info("Generating VirtualMachine manifests.")
-		vmManifests, err := r.generateVMManifests(appId, deployMap)
+		vmManifests, err := r.generateVMManifests(appId, ns, deployMap)
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "Error generating VirtualMachine manifests.")
 		}
@@ -398,7 +398,7 @@ func (r *AtlasReconciler) generateProviderManifests(appId string, ns string, cmp
 }
 
 // Generates VM manifests based on deployment map
-func (r *AtlasReconciler) generateVMManifests(appId string, deployMap cv1a1.DeployMap) ([]hv1a1.SkyService, error) {
+func (r *AtlasReconciler) generateVMManifests(appId, ns string, deployMap cv1a1.DeployMap) ([]hv1a1.SkyService, error) {
 
 	manifests := make([]hv1a1.SkyService, 0)
 	for _, skyService := range deployMap.Component {
@@ -408,7 +408,7 @@ func (r *AtlasReconciler) generateVMManifests(appId string, deployMap cv1a1.Depl
 
 		// fetch refereced XInstance object
 		xi := &svccv1a1.XInstance{}
-		if err := r.Get(context.Background(), client.ObjectKey{Namespace: skyService.ComponentRef.Namespace, Name: skyService.ComponentRef.Name}, xi); err != nil {
+		if err := r.Get(context.Background(), client.ObjectKey{Namespace: ns, Name: skyService.ComponentRef.Name}, xi); err != nil {
 			return nil, errors.Wrap(err, "Error fetching XInstance for component: "+skyService.ComponentRef.Name)
 		}
 

@@ -141,7 +141,7 @@ func (r *XInstanceReconciler) ensureDeploymentPolicy(ctx context.Context, owner 
 					APIVersion: "skycluster.io/v1alpha1",
 					Kind:       "XInstance",
 					Name:       owner.Name,
-					// Namespace:  "", // cluster-scoped
+					Namespace:  owner.Namespace,
 				},
 				// a single VirtualServiceConstraint whose AnyOf contains ManagedKubernetes
 				VirtualServiceConstraint: []policyv1a1.VirtualServiceConstraint{

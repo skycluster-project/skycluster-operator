@@ -327,7 +327,7 @@ var _ = Describe("Atlas Controller", func() {
 				Logger: zap.New(pkglog.CustomLogger()).WithName("[Atlas]"),
 			}
 
-			vmManifests, err := reconciler.generateVMManifests(resourceName, deployMap)
+			vmManifests, err := reconciler.generateVMManifests(resourceName, namespace, deployMap)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(len(vmManifests)).To(Equal(1))

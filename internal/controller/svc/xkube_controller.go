@@ -176,7 +176,7 @@ func (r *XKubeReconciler) ensureDeploymentPolicy(ctx context.Context, owner *svc
 				APIVersion: "svc.skycluster.io/v1alpha1",
 				Kind:       "XNodeGroup",
 				Name:       fmt.Sprintf("%s-%d", owner.Name, i),
-				Namespace:  owner.Namespace, // namespace-scoped
+				Namespace:  owner.Namespace,
 			},
 			VirtualServiceConstraint: virtualServiceConstraints,
 			LocationConstraint:       locationConstraint,
